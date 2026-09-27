@@ -16,5 +16,6 @@ data class AppSource(
     val sha256Expected: String?,
     val description: String,
     val changelogUrl: String,
-    val patchIds: List<String>
+    val patchIds: List<String>,
+    val splitUrls: List<String> = emptyList()
 )

@@ -314,7 +314,26 @@ class PatcherPipelineTest {
         assertEquals(hermesPatches.size + 1, results.size)
         results.forEach {
             println("  [${it.status}] ${it.label}: ${it.detail ?: "OK"}")
-            assertEquals("Hermes patch must succeed: ${it.label}", StepStatus.OK, it.status)
+        }
+
+        // The Hermes function table layout is not yet verified, so no function stub may be
+        // written. A previous implementation "succeeded" here while overwriting ~3 KB of
+        // live bytecode at arbitrary offsets; this test exists to keep that from returning.
+        results.filter { it.title != "Nullifying JS Sentry DSN" }.forEach {
+            assertEquals("Hermes stub must be refused, not written: ${it.title}", StepStatus.FAIL, it.status)
+        }
+
+        // The only permitted difference is the length-preserving Sentry DSN substitution.
+        val changed = bundleBytes.indices.filter { bundleBytes[it] != patchedBundle[it] }
+        if (changed.isNotEmpty()) {
+            val first = changed.first()
+            val last = changed.last()
+            println("Changed byte range: $first..$last (${changed.size} bytes)")
+            val region = String(bundleBytes, first, last - first + 1, Charsets.ISO_8859_1)
+            assertTrue(
+                "Only the Sentry DSN region may change, found changes at $first..$last: $region",
+                region.contains("0.0.0.0") || region.contains("sentry.io")
+            )
         }
 
         // Verify SHA-1 footer

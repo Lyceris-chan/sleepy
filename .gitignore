@@ -14,3 +14,6 @@
 app/build/
 build-out/
 RELEASE_CHANGELOG.md
+
+# Kotlin compiler session data
+.kotlin/

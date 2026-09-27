@@ -74,6 +74,8 @@ class PatchViewModel(application: Application) : AndroidViewModel(application) {
             originalPackageName = source.packageName,
             customPackageName = finalCustomPackage,
             selectedPatchIds = _selectedPatchIds.value.toList(),
+            splitUrls = source.splitUrls,
+            expectedSha256 = source.sha256Expected,
             scope = viewModelScope
         )
     }

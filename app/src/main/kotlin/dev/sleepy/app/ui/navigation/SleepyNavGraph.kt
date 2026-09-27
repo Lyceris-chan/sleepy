@@ -1,15 +1,22 @@
 package dev.sleepy.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import dev.sleepy.app.ui.screens.*
+import dev.sleepy.app.ui.screens.HomeScreen
+import dev.sleepy.app.ui.screens.PatchSelectScreen
+import dev.sleepy.app.ui.screens.ProgressScreen
+import dev.sleepy.app.ui.screens.ResultScreen
+import dev.sleepy.app.ui.screens.SettingsScreen
 import dev.sleepy.app.viewmodel.HomeViewModel
 import dev.sleepy.app.viewmodel.PatchViewModel
 
+/** Wires the screens together and owns the navigation state. */
 @Composable
 fun SleepyNavGraph(
     navController: NavHostController,
@@ -72,7 +79,9 @@ fun SleepyNavGraph(
         }
 
         composable(Screen.Settings.route) {
+            val selectedSource by patchViewModel.selectedSource.collectAsState()
             SettingsScreen(
+                selectedSource = selectedSource,
                 onBack = {
                     navController.popBackStack()
                 }

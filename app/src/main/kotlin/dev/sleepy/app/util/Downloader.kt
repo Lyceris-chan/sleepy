@@ -26,6 +26,17 @@ object Downloader {
         url: String,
         onProgress: suspend (bytesDownloaded: Long, totalBytes: Long) -> Unit
     ): ByteArray = withContext(Dispatchers.IO) {
+        if (url.startsWith("file://", ignoreCase = true)) {
+            val file = java.io.File(java.net.URI(url).path)
+            if (!file.exists()) throw IOException("Local file not found: ${file.absolutePath}")
+            val bytes = file.readBytes()
+            if (bytes.size < 4 || bytes[0] != 0x50.toByte() || bytes[1] != 0x4B.toByte()) {
+                throw IOException("Local file is not a valid APK/ZIP archive (magic header check failed).")
+            }
+            onProgress(bytes.size.toLong(), bytes.size.toLong())
+            return@withContext bytes
+        }
+
         if (!url.startsWith("https://", ignoreCase = true)) {
             throw IllegalArgumentException("Insecure URL rejected by security policy: Only HTTPS is permitted.")
         }

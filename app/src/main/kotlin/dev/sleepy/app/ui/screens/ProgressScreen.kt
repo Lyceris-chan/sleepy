@@ -1,24 +1,58 @@
 package dev.sleepy.app.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.PatchProgress
+import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.ui.components.StepLogItem
 import dev.sleepy.app.viewmodel.PatchViewModel
 import kotlinx.coroutines.delay
 
+/**
+ * Live view of a patch run.
+ *
+ * The header answers "what is happening right now and why", and the list underneath is a
+ * plain-language account of every change. The exact class, method or function behind each
+ * line is one tap away rather than in the reader's face, but it is always there — this is a
+ * tool that rewrites someone's app, so the mechanism stays inspectable.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProgressScreen(
@@ -32,19 +66,16 @@ fun ProgressScreen(
     var showCancelDialog by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    // Auto-scroll log as steps are added
     LaunchedEffect(steps.size) {
         if (steps.isNotEmpty()) {
             listState.animateScrollToItem(steps.size - 1)
         }
     }
 
-    // Predictive back interceptor — protects user from losing running job
     BackHandler(enabled = isPatching) {
         showCancelDialog = true
     }
 
-    // When done or failed, advance to Result screen
     LaunchedEffect(progress) {
         if (progress is PatchProgress.Done || progress is PatchProgress.Failed) {
             delay(600)
@@ -52,14 +83,18 @@ fun ProgressScreen(
         }
     }
 
+    val appliedCount = steps.count { it.status == StepStatus.OK }
+    val skippedCount = steps.count { it.status == StepStatus.SKIP }
+    val failedCount = steps.count { it.status == StepStatus.FAIL }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Patching Pipeline",
+                        text = "Patching",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                 },
                 actions = {
@@ -67,7 +102,7 @@ fun ProgressScreen(
                         IconButton(onClick = { showCancelDialog = true }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Cancel Patch",
+                                contentDescription = "Stop patching",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -85,148 +120,51 @@ fun ProgressScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Current Operation Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                shape = MaterialTheme.shapes.large
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    val statusTitle = when (val p = progress) {
-                        is PatchProgress.Downloading -> "Downloading Source (${p.percent}%)"
-                        is PatchProgress.Decoding -> "Decompiling Bytecode"
-                        is PatchProgress.Patching -> "Patching Bytecode (${p.current}/${p.total})"
-                        is PatchProgress.Assembling -> "Assembling DEX Containers"
-                        is PatchProgress.Signing -> "Cryptographic Signing"
-                        is PatchProgress.Done -> "Complete"
-                        is PatchProgress.Failed -> "Failed"
-                        PatchProgress.Idle -> "Preparing"
-                    }
-
-                    val statusSubtext = when (val p = progress) {
-                        is PatchProgress.Downloading -> {
-                            val mbRec = p.bytesReceived / (1024 * 1024.0)
-                            val mbTot = p.bytesTotal / (1024 * 1024.0)
-                            if (p.bytesTotal > 0) {
-                                "%.1f MB / %.1f MB".format(mbRec, mbTot)
-                            } else {
-                                "%.1f MB downloaded".format(mbRec)
-                            }
-                        }
-                        is PatchProgress.Decoding -> p.step
-                        is PatchProgress.Patching -> p.step
-                        is PatchProgress.Assembling -> p.step
-                        is PatchProgress.Signing -> p.step
-                        is PatchProgress.Done -> "Signed APK generated successfully"
-                        is PatchProgress.Failed -> p.message
-                        PatchProgress.Idle -> "Initializing worker coroutines..."
-                    }
-
-                    Text(
-                        text = statusTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = statusSubtext,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    when (val p = progress) {
-                        is PatchProgress.Downloading -> {
-                            if (p.bytesTotal > 0) {
-                                LinearProgressIndicator(
-                                    progress = { p.percent / 100f },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp),
-                                    trackColor = MaterialTheme.colorScheme.surface,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            } else {
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp),
-                                    trackColor = MaterialTheme.colorScheme.surface,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                        is PatchProgress.Patching -> {
-                            val ratio = if (p.total > 0) p.current.toFloat() / p.total.toFloat() else 0f
-                            LinearProgressIndicator(
-                                progress = { ratio },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp),
-                                trackColor = MaterialTheme.colorScheme.surface,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        is PatchProgress.Done -> {
-                            LinearProgressIndicator(
-                                progress = { 1f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp),
-                                trackColor = MaterialTheme.colorScheme.surface,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                        else -> {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp),
-                                trackColor = MaterialTheme.colorScheme.surface,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    }
-                }
-            }
+            CurrentPhaseCard(progress = progress)
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text(
-                text = "Live Execution Log",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "What changed",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                if (steps.isNotEmpty()) {
+                    Text(
+                        text = buildString {
+                            append("$appliedCount applied")
+                            if (skippedCount > 0) append(" · $skippedCount skipped")
+                            if (failedCount > 0) append(" · $failedCount failed")
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                shape = MaterialTheme.shapes.medium
-            ) {
+            if (steps.isEmpty()) {
+                Text(
+                    text = "Starting up — nothing has been changed yet.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(steps) { step ->
                         StepLogItem(result = step)
@@ -243,14 +181,14 @@ fun ProgressScreen(
             onDismissRequest = { showCancelDialog = false },
             title = {
                 Text(
-                    text = "Cancel Patching?",
+                    text = "Stop patching?",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
                 Text(
-                    text = "The background patching operation will be terminated and all memory buffers discarded.",
+                    text = "Nothing will be installed. The app you started with is untouched — only the work in progress is discarded.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -262,17 +200,128 @@ fun ProgressScreen(
                     }
                 ) {
                     Text(
-                        text = "Cancel Patch",
+                        text = "Stop",
                         color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCancelDialog = false }) {
-                    Text("Keep Going")
+                    Text("Keep going")
                 }
             }
         )
+    }
+}
+
+/** The headline card: what phase we are in, and why that phase exists. */
+@Composable
+private fun CurrentPhaseCard(progress: PatchProgress) {
+    val title = when (val p = progress) {
+        is PatchProgress.Downloading -> "Downloading the app"
+        is PatchProgress.Decoding -> "Opening the package"
+        is PatchProgress.MergingSplits -> "Adding the missing native libraries"
+        is PatchProgress.Patching -> p.step
+        is PatchProgress.Assembling -> "Rebuilding the APK"
+        is PatchProgress.Signing -> "Signing the result"
+        is PatchProgress.Done -> "Finished"
+        is PatchProgress.Failed -> "Something went wrong"
+        PatchProgress.Idle -> "Getting ready"
+    }
+
+    val why = when (val p = progress) {
+        is PatchProgress.Downloading -> "Fetching the untouched original so every change can be traced."
+        is PatchProgress.Decoding -> "Reading the package in memory. The file on disk is never modified."
+        is PatchProgress.MergingSplits ->
+            if (p.librariesMerged > 0) {
+                "This build ships its native code separately. Putting it back is what stops the app crashing on launch."
+            } else {
+                "Checking the extra pieces this build was split into."
+            }
+        is PatchProgress.Patching -> p.explanation ?: "Applying the changes you selected."
+        is PatchProgress.Assembling -> "Putting the modified files back and re-aligning the archive."
+        is PatchProgress.Signing -> "Android refuses to install an unsigned app, and the result is verified afterwards."
+        is PatchProgress.Done -> "The patched app is ready to install."
+        is PatchProgress.Failed -> p.message
+        PatchProgress.Idle -> "Preparing the patching engine."
+    }
+
+    val detail: String? = when (val p = progress) {
+        is PatchProgress.Downloading -> {
+            val received = p.bytesReceived / (1024 * 1024.0)
+            val total = p.bytesTotal / (1024 * 1024.0)
+            if (p.bytesTotal > 0) "%.1f of %.1f MB".format(received, total) else "%.1f MB so far".format(received)
+        }
+        is PatchProgress.MergingSplits ->
+            if (p.librariesMerged > 0) "${p.librariesMerged} libraries for ${p.abis.joinToString(", ")}" else null
+        is PatchProgress.Patching ->
+            if (p.total > 0) "Step ${(p.current + 1).coerceAtMost(p.total)} of ${p.total}" else null
+        is PatchProgress.Failed -> p.detail?.lineSequence()?.take(3)?.joinToString("\n")
+        else -> null
+    }
+
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = why,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            AnimatedVisibility(visible = detail != null) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = detail.orEmpty(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            val ratio = when (val p = progress) {
+                is PatchProgress.Downloading -> if (p.bytesTotal > 0) p.percent / 100f else null
+                is PatchProgress.Patching -> if (p.total > 0) p.current.toFloat() / p.total.toFloat() else null
+                is PatchProgress.Done -> 1f
+                else -> null
+            }
+
+            if (ratio != null) {
+                LinearProgressIndicator(
+                    progress = { ratio },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp),
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp),
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
     }
 }

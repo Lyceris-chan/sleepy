@@ -2,6 +2,7 @@ package dev.sleepy.app.engine
 
 import android.content.Context
 import dev.sleepy.app.model.HermesPatch
+import dev.sleepy.app.model.HermesStubShape
 import dev.sleepy.app.model.StepResult
 import dev.sleepy.app.model.StepStatus
 import kotlinx.coroutines.Dispatchers
@@ -18,9 +19,6 @@ object HermesPatcher {
         0xc1.toByte(), 0x03.toByte(), 0x19.toByte(), 0x1f.toByte()
     )
 
-    private const val HEADER_SLOT_START = 128
-    private const val HEADER_SLOT_SIZE = 12
-    private const val FLAG_OVERFLOWED = 0x20
     private const val NOP_ASYNC_BREAK_CHECK = 0x7E.toByte()
 
     // HBC v98 / Modern opcodes
@@ -38,14 +36,6 @@ object HermesPatcher {
             if (bytes[i] != HERMES_MAGIC[i]) return false
         }
         return true
-    }
-
-    private fun readU32Le(bytes: ByteArray, offset: Int): Long {
-        val b0 = bytes[offset].toLong() and 0xFF
-        val b1 = bytes[offset + 1].toLong() and 0xFF
-        val b2 = bytes[offset + 2].toLong() and 0xFF
-        val b3 = bytes[offset + 3].toLong() and 0xFF
-        return b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
     }
 
     /**
@@ -77,7 +67,12 @@ object HermesPatcher {
             System.arraycopy(replBytes, 0, patched, startIndex, replBytes.size)
             recomputeSha1Footer(patched)
 
-            return patched to StepResult("hermes: In-place Sentry DSN nulling & SHA-1 footer re-hash", StepStatus.OK)
+            return patched to StepResult(
+                title = "Nullifying JS Sentry DSN",
+                explanation = "Replaces Sentry envelope ingest endpoint with invalid 0.0.0.0 in JavaScript bytecode to drop crash telemetry",
+                technicalTarget = "assets/index.android.bundle :: sentry.io/api -> https://0.0.0.0/...",
+                status = StepStatus.OK
+            )
         }
         return bundleBytes to null
     }
@@ -87,9 +82,15 @@ object HermesPatcher {
      * Rewrites function bytecode prologue with the stub and pads remaining bytes with AsyncBreakCheck (0x7E).
      */
     fun patchFunctionInPlace(bundleBytes: ByteArray, patch: HermesPatch): StepResult {
+        val title = patch.title ?: "hermes: ${patch.functionName} (fn ${patch.functionId})"
+        val explanation = patch.explanation
+        val technicalTarget = "Hermes fn ${patch.functionId} (${patch.functionName}) -> ${patch.hasmStub.trim().lines().firstOrNull() ?: "stub"}"
+
         if (!isHermesBytecode(bundleBytes)) {
             return StepResult(
-                label = "hermes: ${patch.functionName} (fn ${patch.functionId})",
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.SKIP,
                 detail = "Asset is not a Hermes bytecode bundle"
             )
@@ -97,61 +98,46 @@ object HermesPatcher {
 
         val fid = patch.functionId.toIntOrNull()
             ?: return StepResult(
-                label = "hermes: ${patch.functionName} (fn ${patch.functionId})",
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.FAIL,
                 detail = "Invalid function ID: ${patch.functionId}"
             )
 
-        val slot = HEADER_SLOT_START + fid * HEADER_SLOT_SIZE
-        if (slot + HEADER_SLOT_SIZE > bundleBytes.size) {
+        val location = HermesFunctionTable.locate(bundleBytes, fid)
+        if (location == null) {
             return StepResult(
-                label = "hermes: ${patch.functionName} (fn $fid)",
-                status = StepStatus.SKIP,
-                detail = "Function ID $fid header slot is out of bounds in HBC table"
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
+                status = StepStatus.FAIL,
+                detail = "Function $fid could not be located in this bundle's function table, so nothing was written. " +
+                    "Hermes does not document where that table lives or how its entries are packed, and guessing was " +
+                    "previously corrupting the JavaScript bytecode."
             )
         }
 
-        val flags = bundleBytes[slot + 11].toInt() and 0xFF
-        val isOverflowed = (flags and FLAG_OVERFLOWED) != 0
+        val bodyOffset = location.bodyOffset
+        val bcSize = location.bytecodeSize
 
-        val bodyOffset: Long
-        val bcSize: Long
-
-        if (isOverflowed) {
-            val b0 = bundleBytes[slot + 0].toInt() and 0xFF
-            val b1 = bundleBytes[slot + 1].toInt() and 0xFF
-            val b2 = bundleBytes[slot + 2].toInt() and 0xFF
-            val b5 = bundleBytes[slot + 5].toInt() and 0xFF
-            val b6 = bundleBytes[slot + 6].toInt() and 0xFF
-            val offset = b0 or (b1 shl 8) or (b2 shl 16)
-            val name = ((b5 ushr 6) and 0x03) or ((b6 and 0x3F) shl 2)
-            val largePtr = ((name shl 24) or offset).toLong() and 0xFFFFFFFFL
-
-            if (largePtr.toInt() + 16 > bundleBytes.size) {
-                return StepResult(
-                    label = "hermes: ${patch.functionName} (fn $fid)",
-                    status = StepStatus.FAIL,
-                    detail = "Large header pointer ($largePtr) out of bounds"
-                )
-            }
-            bodyOffset = readU32Le(bundleBytes, largePtr.toInt() + 0)
-            bcSize = readU32Le(bundleBytes, largePtr.toInt() + 12)
-        } else {
-            val b0 = bundleBytes[slot + 0].toInt() and 0xFF
-            val b1 = bundleBytes[slot + 1].toInt() and 0xFF
-            val b2 = bundleBytes[slot + 2].toInt() and 0xFF
-            val b3 = bundleBytes[slot + 3].toInt() and 0xFF
-            val b4 = bundleBytes[slot + 4].toInt() and 0xFF
-            val b5 = bundleBytes[slot + 5].toInt() and 0xFF
-            bodyOffset = (b0 or (b1 shl 8) or (b2 shl 16) or ((b3 and 0x01) shl 24)).toLong() and 0xFFFFFFFFL
-            bcSize = (b4 or ((b5 and 0x3F) shl 8)).toLong()
-        }
-
-        val stub = when {
-            patch.hasmStub.contains("LoadConstFalse", ignoreCase = true) -> STUB_LOAD_CONST_FALSE
-            patch.hasmStub.contains("LoadConstNull", ignoreCase = true) -> STUB_LOAD_CONST_NULL
-            patch.hasmStub.contains("LoadConstTrue", ignoreCase = true) -> STUB_LOAD_CONST_TRUE
-            else -> STUB_LOAD_CONST_UNDEFINED
+        // The shape is stated by the patch, never inferred from its documentation text.
+        // Inferring it silently turned an awaiting caller's promise into `undefined`, which
+        // is the failure mode the reference's PROMISE_TARGETS table exists to prevent.
+        val stub = when (patch.stubShape) {
+            HermesStubShape.UNDEFINED -> STUB_LOAD_CONST_UNDEFINED
+            HermesStubShape.FALSE -> STUB_LOAD_CONST_FALSE
+            HermesStubShape.TRUE -> STUB_LOAD_CONST_TRUE
+            HermesStubShape.NULL -> STUB_LOAD_CONST_NULL
+            HermesStubShape.ZERO, HermesStubShape.PROMISE -> return StepResult(
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
+                status = StepStatus.FAIL,
+                detail = "This patch needs a ${patch.stubShape.name.lowercase()}-shaped stub. That encoding has not been " +
+                    "verified against a real Hermes bundle yet, so no bytes were written rather than writing an " +
+                    "unverified return value into the bundle."
+            )
         }
 
         val start = bodyOffset.toInt()
@@ -159,7 +145,9 @@ object HermesPatcher {
 
         if (start < 0 || start + len > bundleBytes.size) {
             return StepResult(
-                label = "hermes: ${patch.functionName} (fn $fid)",
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.FAIL,
                 detail = "Function bytecode bounds [$start..${start + len}] exceed bundle size (${bundleBytes.size})"
             )
@@ -167,7 +155,9 @@ object HermesPatcher {
 
         if (len < stub.size) {
             return StepResult(
-                label = "hermes: ${patch.functionName} (fn $fid)",
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.SKIP,
                 detail = "Bytecode size ($len bytes) is smaller than stub (${stub.size} bytes)"
             )
@@ -180,14 +170,17 @@ object HermesPatcher {
         }
 
         return StepResult(
-            label = "hermes: ${patch.functionName} (fn $fid)",
+            title = title,
+            explanation = explanation,
+            technicalTarget = technicalTarget,
             status = StepStatus.OK
         )
     }
 
     fun applyPatches(
         bundleBytes: ByteArray,
-        patches: List<HermesPatch>
+        patches: List<HermesPatch>,
+        onPatchStart: ((HermesPatch) -> Unit)? = null
     ): Pair<ByteArray, List<StepResult>> {
         val results = mutableListOf<StepResult>()
 
@@ -213,6 +206,7 @@ object HermesPatcher {
 
         // 2. Pure Kotlin Modern12 in-place HBC function patching
         for (patch in patches) {
+            onPatchStart?.invoke(patch)
             val result = patchFunctionInPlace(currentBundle, patch)
             results.add(result)
             if (result.status == StepStatus.OK) {
@@ -231,8 +225,9 @@ object HermesPatcher {
     suspend fun applyPatches(
         context: Context,
         bundleBytes: ByteArray,
-        patches: List<HermesPatch>
+        patches: List<HermesPatch>,
+        onPatchStart: ((HermesPatch) -> Unit)? = null
     ): Pair<ByteArray, List<StepResult>> = withContext(Dispatchers.IO) {
-        applyPatches(bundleBytes, patches)
+        applyPatches(bundleBytes, patches, onPatchStart)
     }
 }

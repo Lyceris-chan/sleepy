@@ -39,6 +39,14 @@ object SourcesConfig {
                 ApkType.UNIVERSAL
             }
 
+            val splitUrlsArray = obj.optJSONArray("split_urls")
+            val splitUrls = mutableListOf<String>()
+            if (splitUrlsArray != null) {
+                for (j in 0 until splitUrlsArray.length()) {
+                    splitUrls.add(splitUrlsArray.getString(j))
+                }
+            }
+
             list.add(
                 AppSource(
                     id = obj.getString("id"),
@@ -53,7 +61,8 @@ object SourcesConfig {
                     } else null,
                     description = obj.getString("description"),
                     changelogUrl = obj.optString("changelog_url", ""),
-                    patchIds = patchIds
+                    patchIds = patchIds,
+                    splitUrls = splitUrls
                 )
             )
         }

@@ -17,9 +17,15 @@ object SmaliPatcher {
         smaliFiles: MutableMap<String, String>,
         patch: SmaliPatch
     ): StepResult {
+        val title = patch.title ?: (patch.methodSignature ?: patch.anchor ?: patch.switchCaseLabel ?: patch.smaliPath)
+        val explanation = patch.explanation
+        val technicalTarget = "${patch.smaliPath} :: ${patch.methodSignature ?: patch.anchor ?: patch.switchCaseLabel ?: ""}"
+
         val content = smaliFiles[patch.smaliPath]
             ?: return StepResult(
-                label = patch.smaliPath,
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.SKIP,
                 detail = "Smali file not found in disassembled DEX"
             )
@@ -36,7 +42,9 @@ object SmaliPatcher {
             }
             if (start == -1) {
                 return StepResult(
-                    label = "${patch.smaliPath} :: case ${patch.switchCaseLabel}",
+                    title = title,
+                    explanation = explanation,
+                    technicalTarget = technicalTarget,
                     status = StepStatus.SKIP,
                     detail = "Switch case label not found: ${patch.switchCaseLabel}"
                 )
@@ -52,7 +60,9 @@ object SmaliPatcher {
             }
             if (end == -1) {
                 return StepResult(
-                    label = "${patch.smaliPath} :: case ${patch.switchCaseLabel}",
+                    title = title,
+                    explanation = explanation,
+                    technicalTarget = technicalTarget,
                     status = StepStatus.FAIL,
                     detail = "Closing switch case label not found after ${patch.switchCaseLabel}"
                 )
@@ -64,7 +74,9 @@ object SmaliPatcher {
             smaliFiles[patch.smaliPath] = lines.joinToString("\n")
 
             return StepResult(
-                label = "${patch.smaliPath} :: case ${patch.switchCaseLabel}",
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.OK
             )
         }
@@ -73,7 +85,9 @@ object SmaliPatcher {
         if (patch.anchor != null && patch.replacement != null) {
             if (!content.contains(patch.anchor)) {
                 return StepResult(
-                    label = "${patch.smaliPath} :: anchor patch",
+                    title = title,
+                    explanation = explanation,
+                    technicalTarget = technicalTarget,
                     status = StepStatus.SKIP,
                     detail = "Anchor pattern not found in file"
                 )
@@ -83,7 +97,9 @@ object SmaliPatcher {
             smaliFiles[patch.smaliPath] = patched
 
             return StepResult(
-                label = "${patch.smaliPath} :: anchor patch",
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.OK
             )
         }
@@ -93,7 +109,9 @@ object SmaliPatcher {
             val sigIndex = content.indexOf(patch.methodSignature)
             if (sigIndex == -1) {
                 return StepResult(
-                    label = "${patch.smaliPath} :: ${patch.methodSignature}",
+                    title = title,
+                    explanation = explanation,
+                    technicalTarget = technicalTarget,
                     status = StepStatus.SKIP,
                     detail = "Anchor signature not found"
                 )
@@ -102,7 +120,9 @@ object SmaliPatcher {
             val endIndex = content.indexOf(".end method", sigIndex)
             if (endIndex == -1) {
                 return StepResult(
-                    label = "${patch.smaliPath} :: ${patch.methodSignature}",
+                    title = title,
+                    explanation = explanation,
+                    technicalTarget = technicalTarget,
                     status = StepStatus.FAIL,
                     detail = "Closing .end method not found after signature"
                 )
@@ -116,13 +136,17 @@ object SmaliPatcher {
             smaliFiles[patch.smaliPath] = patched
 
             return StepResult(
-                label = "${patch.smaliPath} :: ${patch.methodSignature}",
+                title = title,
+                explanation = explanation,
+                technicalTarget = technicalTarget,
                 status = StepStatus.OK
             )
         }
 
         return StepResult(
-            label = patch.smaliPath,
+            title = title,
+            explanation = explanation,
+            technicalTarget = technicalTarget,
             status = StepStatus.FAIL,
             detail = "Invalid patch configuration: no methodSignature, anchor, or switchCase defined"
         )

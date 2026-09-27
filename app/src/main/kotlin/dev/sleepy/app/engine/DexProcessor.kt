@@ -57,7 +57,8 @@ object DexProcessor {
     suspend fun patchDexSurgically(
         dexBytes: ByteArray,
         patches: List<SmaliPatch>,
-        apiLevel: Int = 28
+        apiLevel: Int = 28,
+        onPatchStart: ((SmaliPatch) -> Unit)? = null
     ): Pair<ByteArray, List<StepResult>> = withContext(Dispatchers.IO) {
         if (patches.isEmpty()) return@withContext dexBytes to emptyList()
 
@@ -112,6 +113,7 @@ object DexProcessor {
             // 2. Apply smali patches sequentially, accumulating changes in memory per file
             val smaliFilesMap = mutableMapOf<String, String>()
             patches.forEach { patch ->
+                onPatchStart?.invoke(patch)
                 val file = File(smaliDir, patch.smaliPath)
                 if (file.exists()) {
                     if (!smaliFilesMap.containsKey(patch.smaliPath)) {

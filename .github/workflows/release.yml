@@ -4,13 +4,19 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build & Publish Release
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,6 +27,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -28,66 +35,115 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
+      # The patcher engine tests self-check the ZIP alignment maths and the binary-XML
+      # attribute editor. Tests that need a local reference APK skip themselves when the
+      # file is absent, so this is safe on a clean runner.
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
 
-      - name: Sign APK with Release Keystore (or generate deterministic key if secret not provided)
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+
+  build-and-release:
+    name: Build & Publish Release
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Resolve tag name
+        id: vars
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Sign release APK
         id: sign_app
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          TAG: ${{ steps.vars.outputs.tag }}
         run: |
+          set -euo pipefail
           mkdir -p build-out
-          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*unsigned.apk" | head -n 1)
-          if [ -z "$UNSIGNED_APK" ]; then
-            UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          fi
-          
-          TAG_NAME="${{ github.ref_name }}"
-          SIGNED_APK="build-out/sleepy-${TAG_NAME}-signed.apk"
-          
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
-            $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
-              --ks release.jks \
-              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-              --ks-pass pass:"${{ secrets.STORE_PASSWORD }}" \
-              --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
-              --v1-signing-enabled true \
-              --v2-signing-enabled true \
-              --v3-signing-enabled true \
-              --out "$SIGNED_APK" \
-              "$UNSIGNED_APK"
-            rm -f release.jks
-          else
-            # Create a dedicated build key for automated release signing
-            keytool -genkeypair -v -keystore release.jks -alias sleepy \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass sleepypass -keypass sleepypass \
-              -dname "CN=sleepy, OU=Release, O=sleepy, L=Internet, ST=Earth, C=US"
-            $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
-              --ks release.jks \
-              --ks-key-alias sleepy \
-              --ks-pass pass:sleepypass \
-              --key-pass pass:sleepypass \
-              --v1-signing-enabled true \
-              --v2-signing-enabled true \
-              --v3-signing-enabled true \
-              --out "$SIGNED_APK" \
-              "$UNSIGNED_APK"
-            rm -f release.jks
-          fi
-          
-          sha256sum "$SIGNED_APK" > build-out/sha256.txt
-          echo "Signed APK created: $SIGNED_APK"
 
-      - name: Generate Release Notes from sources.json
-        run: |
-          python3 .github/scripts/gen_release_notes.py "${{ github.ref_name }}" > RELEASE_CHANGELOG.md
+          # Discover apksigner rather than assuming a build-tools revision.
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found under $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          echo "Using $APKSIGNER"
+
+          APK="$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)"
+          if [ -z "$APK" ]; then
+            echo "::error::no release APK produced"
+            exit 1
+          fi
+          echo "Signing $APK"
+
+          SIGNED_APK="build-out/sleepy-${TAG}.apk"
+
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is not set; refusing to publish an unsigned release"
+            exit 1
+          fi
+
+          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+          "$APKSIGNER" sign \
+            --ks release.jks \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$STORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out "$SIGNED_APK" \
+            "$APK"
+          rm -f release.jks
+
+          # Verify rather than assume, and fail the release if the signature is bad.
+          "$APKSIGNER" verify --verbose --print-certs "$SIGNED_APK"
+
+          sha256sum "$SIGNED_APK" | tee build-out/sha256.txt
+          echo "signed_apk=$SIGNED_APK" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes from sources.json
+        env:
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: python3 .github/scripts/gen_release_notes.py "$TAG" > RELEASE_CHANGELOG.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.vars.outputs.tag }}
           body_path: RELEASE_CHANGELOG.md
           files: |
-            build-out/sleepy-*-signed.apk
+            build-out/sleepy-*.apk
             build-out/sha256.txt
             sources.json
         env:
