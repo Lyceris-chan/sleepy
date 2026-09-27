@@ -148,7 +148,7 @@ object DiscordPatches {
     val HERMES = PatchSet(
         id = "discord_hermes",
         label = "Hermes JS Bytecode Telemetry Stubs",
-        description = "Rewrites index.android.bundle bytecode directly on-device using in-place Sentry DSN nulling and libhermes_decomp.so to stub central analytics emitters, Sentry breadcrumbs, and upsell banners:",
+        description = "Rewrites index.android.bundle bytecode directly on-device in pure Kotlin using Modern12 in-place opcode stubs and Sentry DSN nulling without native binary dependencies:",
         hermesPatches = listOf(
             HermesPatch(
                 functionId = "73760",
@@ -167,23 +167,15 @@ object DiscordPatches {
                 """.trimIndent()
             ),
             HermesPatch(
-                functionId = "41655",
-                functionName = "AppsFlyerLib.trackEvent",
+                functionId = "22947",
+                functionName = "SentryJS.addBreadcrumb",
                 hasmStub = """
                     LoadConstUndefined r0
                     Ret r0
                 """.trimIndent()
             ),
             HermesPatch(
-                functionId = "74900",
-                functionName = "SentryJS.captureBreadcrumb",
-                hasmStub = """
-                    LoadConstUndefined r0
-                    Ret r0
-                """.trimIndent()
-            ),
-            HermesPatch(
-                functionId = "74901",
+                functionId = "22943",
                 functionName = "SentryJS.captureException",
                 hasmStub = """
                     LoadConstUndefined r0
@@ -191,10 +183,82 @@ object DiscordPatches {
                 """.trimIndent()
             ),
             HermesPatch(
-                functionId = "62298",
-                functionName = "Quest Orb & Monetization Hook Predicate",
+                functionId = "22958",
+                functionName = "initSentry (Sentry JS SDK initialiser)",
+                hasmStub = """
+                    LoadConstUndefined r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "19432",
+                functionName = "handleFingerprint (fingerprint telemetry)",
+                hasmStub = """
+                    LoadConstUndefined r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "60648",
+                functionName = "handleTrack (science event action handler)",
+                hasmStub = """
+                    LoadConstUndefined r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "39965",
+                functionName = "initSessionHeartbeatScheduler (heartbeat timer)",
+                hasmStub = """
+                    LoadConstUndefined r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "62294",
+                functionName = "QuestHomeSetting.usePredicate (settings route gate)",
                 hasmStub = """
                     LoadConstFalse r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "62298",
+                functionName = "QuestHomeSetting (quest settings screen)",
+                hasmStub = """
+                    LoadConstFalse r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "49956",
+                functionName = "NitroUpsellButton (inline Nitro upsell button)",
+                hasmStub = """
+                    LoadConstNull r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "47719",
+                functionName = "openPremiumModal (upsell modal launcher)",
+                hasmStub = """
+                    LoadConstUndefined r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "42692",
+                functionName = "openPremiumUpsellActionSheet (action sheet upsell launcher)",
+                hasmStub = """
+                    LoadConstUndefined r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "45655",
+                functionName = "WrappedProfileEffect (animated profile card decoration)",
+                hasmStub = """
+                    LoadConstNull r0
                     Ret r0
                 """.trimIndent()
             )

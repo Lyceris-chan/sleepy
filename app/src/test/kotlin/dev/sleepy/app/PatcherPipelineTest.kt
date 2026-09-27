@@ -287,4 +287,43 @@ class PatcherPipelineTest {
         }
         println("All Discord Smali patches applied cleanly with status OK!")
     }
+
+    @Test
+    fun testDiscordPureKotlinHermesBytecodePatching() {
+        val apkFile = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
+        if (!apkFile.exists()) {
+            println("Discord base.apk not found, skipping Hermes test")
+            return
+        }
+
+        println("Extracting index.android.bundle from Discord APK...")
+        val zip = ZipFile(apkFile)
+        val entry = zip.getEntry("assets/index.android.bundle")
+        assertNotNull("assets/index.android.bundle must be present in Discord APK", entry)
+        val bundleBytes = zip.getInputStream(entry).readBytes()
+        zip.close()
+
+        println("Original bundle size: ${bundleBytes.size} bytes")
+        assertTrue("Must be valid Hermes bytecode", HermesPatcher.isHermesBytecode(bundleBytes))
+
+        val hermesPatches = dev.sleepy.app.patches.DiscordPatches.HERMES.hermesPatches
+        println("Applying ${hermesPatches.size} 1-to-1 Hermes patches in pure Kotlin...")
+        val (patchedBundle, results) = HermesPatcher.applyPatches(bundleBytes, hermesPatches)
+
+        assertEquals("Bundle size must be preserved byte-identically", bundleBytes.size, patchedBundle.size)
+        assertEquals(hermesPatches.size + 1, results.size)
+        results.forEach {
+            println("  [${it.status}] ${it.label}: ${it.detail ?: "OK"}")
+            assertEquals("Hermes patch must succeed: ${it.label}", StepStatus.OK, it.status)
+        }
+
+        // Verify SHA-1 footer
+        val payloadLen = patchedBundle.size - 20
+        val md = MessageDigest.getInstance("SHA-1")
+        md.update(patchedBundle, 0, payloadLen)
+        val expectedSha1 = md.digest()
+        val actualSha1 = patchedBundle.copyOfRange(payloadLen, patchedBundle.size)
+        assertTrue("Hermes SHA-1 footer must be valid and recomputed", expectedSha1.contentEquals(actualSha1))
+        println("All 14 Discord Hermes function stubs and Sentry DSN nulling passed with status OK!")
+    }
 }
