@@ -1,0 +1,62 @@
+package dev.sleepy.app.util
+
+import android.content.Context
+import dev.sleepy.app.model.ApkType
+import dev.sleepy.app.model.AppSource
+import org.json.JSONObject
+import java.io.InputStreamReader
+
+object SourcesConfig {
+
+    fun load(context: Context): List<AppSource> {
+        return try {
+            val jsonString = context.assets.open("sources.json").use { stream ->
+                InputStreamReader(stream, Charsets.UTF_8).readText()
+            }
+            parseJson(jsonString)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun parseJson(jsonString: String): List<AppSource> {
+        val root = JSONObject(jsonString)
+        val array = root.getJSONArray("sources")
+        val list = mutableListOf<AppSource>()
+
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val patchIdsArray = obj.getJSONArray("patch_ids")
+            val patchIds = mutableListOf<String>()
+            for (j in 0 until patchIdsArray.length()) {
+                patchIds.add(patchIdsArray.getString(j))
+            }
+
+            val apkTypeStr = obj.optString("apk_type", "universal")
+            val apkType = if (apkTypeStr.equals("split_base", ignoreCase = true)) {
+                ApkType.SPLIT_BASE
+            } else {
+                ApkType.UNIVERSAL
+            }
+
+            list.add(
+                AppSource(
+                    id = obj.getString("id"),
+                    displayName = obj.getString("display_name"),
+                    packageName = obj.getString("package_name"),
+                    versionName = obj.getString("version_name"),
+                    versionCode = obj.getInt("version_code"),
+                    url = obj.getString("url"),
+                    apkType = apkType,
+                    sha256Expected = if (obj.has("sha256_expected") && !obj.isNull("sha256_expected")) {
+                        obj.getString("sha256_expected")
+                    } else null,
+                    description = obj.getString("description"),
+                    changelogUrl = obj.optString("changelog_url", ""),
+                    patchIds = patchIds
+                )
+            )
+        }
+        return list
+    }
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "app_name": "sleepy",
+  "sources": [
+    {
+      "id": "discord_348205",
+      "display_name": "Discord Alpha 348.5",
+      "package_name": "com.discord",
+      "version_name": "348.5 Alpha",
+      "version_code": 348205,
+      "url": "https://tracker.vendetta.rocks/tracker/download/348205/base",
+      "apk_type": "split_base",
+      "sha256_expected": null,
+      "description": "Discord Alpha from Vendetta tracker (Play Store delivery proxy). Patches remove telemetry, Sentry crash reporters, ads, and shared OkHttp cache thrashing.",
+      "changelog_url": "https://discord.com/blog",
+      "patch_ids": [
+        "discord_telemetry",
+        "discord_sentry",
+        "discord_perf",
+        "discord_hermes",
+        "discord_manifest"
+      ]
+    },
+    {
+      "id": "octogram_360",
+      "display_name": "OctoGram 3.6.0 arm64",
+      "package_name": "it.octogram.android",
+      "version_name": "3.6.0",
+      "version_code": 38215,
+      "url": "https://github.com/OctoGramApp/OctoGram/releases/download/v3.6.0_3827/OctoGram_arm64.apk",
+      "apk_type": "universal",
+      "sha256_expected": null,
+      "description": "OctoGram Telegram client arm64. Patches remove sponsored messages, photo viewer ads, search ads, Firebase telemetry registrars, and OTA updater pings.",
+      "changelog_url": "https://github.com/OctoGramApp/OctoGram/releases/tag/v3.6.0_3827",
+      "patch_ids": [
+        "octogram_sponsored_msgs",
+        "octogram_photo_viewer_ads",
+        "octogram_search_ads",
+        "octogram_ota_updater",
+        "octogram_firebase_abt",
+        "octogram_firebase_remoteconfig",
+        "octogram_firebase_remoteconfig_ktx",
+        "octogram_firebase_datatransport"
+      ]
+    }
+  ]
+}

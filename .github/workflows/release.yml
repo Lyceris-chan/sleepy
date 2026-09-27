@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Sign APK with Release Keystore (or generate deterministic key if secret not provided)
+        id: sign_app
+        run: |
+          mkdir -p build-out
+          UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*unsigned.apk" | head -n 1)
+          if [ -z "$UNSIGNED_APK" ]; then
+            UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          fi
+          
+          TAG_NAME="${{ github.ref_name }}"
+          SIGNED_APK="build-out/sleepy-${TAG_NAME}-signed.apk"
+          
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
+            $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
+              --ks release.jks \
+              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+              --ks-pass pass:"${{ secrets.STORE_PASSWORD }}" \
+              --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --v3-signing-enabled true \
+              --out "$SIGNED_APK" \
+              "$UNSIGNED_APK"
+            rm -f release.jks
+          else
+            # Create a dedicated build key for automated release signing
+            keytool -genkeypair -v -keystore release.jks -alias sleepy \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass sleepypass -keypass sleepypass \
+              -dname "CN=sleepy, OU=Release, O=sleepy, L=Internet, ST=Earth, C=US"
+            $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
+              --ks release.jks \
+              --ks-key-alias sleepy \
+              --ks-pass pass:sleepypass \
+              --key-pass pass:sleepypass \
+              --v1-signing-enabled true \
+              --v2-signing-enabled true \
+              --v3-signing-enabled true \
+              --out "$SIGNED_APK" \
+              "$UNSIGNED_APK"
+            rm -f release.jks
+          fi
+          
+          sha256sum "$SIGNED_APK" > build-out/sha256.txt
+          echo "Signed APK created: $SIGNED_APK"
+
+      - name: Generate Release Notes from sources.json
+        run: |
+          python3 .github/scripts/gen_release_notes.py "${{ github.ref_name }}" > RELEASE_CHANGELOG.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_CHANGELOG.md
+          files: |
+            build-out/sleepy-*-signed.apk
+            build-out/sha256.txt
+            sources.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
