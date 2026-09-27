@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+# Runs on the GitHub-hosted Ubuntu image. An Alpine container was tried and rejected:
+# GitHub provides no Alpine runner, and Android's build tools — aapt2, d8, apksigner — are
+# glibc-linked binaries, so running the build under musl depends on a compatibility shim
+# that is not worth the risk to a release pipeline.
 jobs:
   test:
     name: Test
@@ -32,15 +36,15 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
       # compileSdk 37 resolves to the minor-versioned package platforms;android-37.0,
       # which a default runner image does not carry. Install it rather than assume.
       - name: Install required SDK packages
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       # The patcher engine tests self-check the ZIP alignment maths and the binary-XML
       # attribute editor. Tests that need a local reference APK skip themselves when the
@@ -74,13 +78,13 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
       - name: Install required SDK packages
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Resolve tag name
         id: vars
@@ -144,7 +148,7 @@ jobs:
           sha256sum "$SIGNED_APK" | tee build-out/sha256.txt
           echo "signed_apk=$SIGNED_APK" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release notes from sources.json
+      - name: Generate release notes
         env:
           TAG: ${{ steps.vars.outputs.tag }}
         run: python3 .github/scripts/gen_release_notes.py "$TAG" > RELEASE_CHANGELOG.md
