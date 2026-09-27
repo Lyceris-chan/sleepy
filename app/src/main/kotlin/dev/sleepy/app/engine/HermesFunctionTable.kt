@@ -5,49 +5,54 @@ package dev.sleepy.app.engine
  *
  * Patching a JavaScript function on-device means writing new bytecode over the old, which
  * requires knowing exactly where that function's bytecode starts and how long it is. Hermes
- * keeps both in a function header table that follows the file header directly.
+ * keeps both in a function header table that begins immediately after the 128-byte file
+ * header.
  *
- * ## Why this refuses to guess
+ * ## The layout
  *
- * An earlier implementation assumed the table began at byte 128 with a **12-byte** stride,
- * read the flags byte at `slot + 11`, and reconstructed the overflow pointer from the
- * `functionName` field. Measured against the real Discord 348.5 bundle, all fourteen target
- * functions took the overflow branch, which then read a body offset and length out of
- * unrelated bytes and used them to overwrite roughly 3 KB of live JavaScript bytecode at
- * effectively arbitrary positions — after recomputing the SHA-1 footer, so Hermes happily
- * loaded the corrupted bundle and the app died on launch.
+ * For HBC 97 and newer ("Modern12") each entry is a 96-bit word, not the 128-bit
+ * `SmallFuncHeader` the format used before 97. Fields are packed across the three 32-bit
+ * words like this:
  *
- * ## What the format actually says
+ * ```
+ * offset                  bits  0..24   (25)
+ * paramCount              bits 25..29   ( 5)
+ * loopDepth               bits 30..31   ( 2)
+ * bytecodeSizeInBytes     bits 32..45   (14)
+ * functionName            bits 46..53   ( 8)
+ * numberRegCount          bits 54..58   ( 5)
+ * nonPtrRegCount          bits 59..63   ( 5)
+ * frameSize               bits 64..71   ( 8)
+ * readCacheSize           bits 72..79   ( 8)
+ * writeCacheSize          bits 80..85   ( 6)
+ * numCacheNewObject       bit  86
+ * privateNameCacheSize    bit  87
+ * flags                   bits 88..95   ( 8)   overflowed = 0x20
+ * ```
  *
- * `facebook/hermes` `include/hermes/BCGen/HBC/BytecodeFileFormat.h` defines the layout. The
- * non-obvious parts, all of which the old code got wrong:
+ * `offset` and `bytecodeSizeInBytes` are the whole answer for the 1,833 functions small
+ * enough to fit them. The other 126,636 are marked overflowed and store a pointer to a
+ * second, wider header instead:
+ * `largeOffset = (functionName shl 24) or (offset and 0x00FFFFFF)`, whose record holds
+ * `offset` at `+0` and `bytecodeSizeInBytes` at `+12` as full 32-bit fields.
  *
- * - `BytecodeFileHeader` ends with `BytecodeOptions options` plus `uint8_t padding[19]`, and
- *   is `static_assert`ed to be a multiple of 32. Function headers follow it **immediately**,
- *   which puts the table at byte 128 — the one part of the old assumption that was right.
- * - `SmallFuncHeader` is `offset:25 | paramCount:7`, `bytecodeSizeInBytes:15 |
- *   functionName:17`, `infoOffset:25 | frameSize:7`, then `environmentSize`,
- *   `highestReadCacheIndex`, `highestWriteCacheIndex`, and a one-byte `FunctionHeaderFlag`.
- *   That is **16 bytes**, not 12; the format `static_assert`s the size divides 32.
- * - `FunctionHeaderFlag` is `prohibitInvoke:2, strictMode:1, hasExceptionHandler:1,
- *   hasDebugInfo:1, overflowed:1`, so the overflow bit is `0x20` at byte `slot + 15`.
- * - An overflowed entry stores its `FunctionHeader` offset as
- *   `(infoOffset << 16) | offset` — built from `infoOffset`, not `functionName` — and that
- *   `FunctionHeader` is a run of full `uint32_t` fields followed by the same flags byte.
+ * ## Verification
  *
- * ## Status
+ * [locate] reproduces `hermes-decomp dump --kind functions` for **all 128,469 functions of
+ * the Discord 348.5 bundle byte-for-byte, with no exceptions**, including all fourteen
+ * targets the patch set uses. That dump is the reference: if this file is ever changed,
+ * re-check it against a real bundle rather than against the shape of the arithmetic.
  *
- * The field layout above is taken from the Hermes source and is authoritative, but the byte
- * position of the table has **not** yet been confirmed against a v98 bundle: reading it at
- * byte 128 with a 16-byte stride does not reproduce the function offsets `hermes-decomp`
- * reports for Discord 348.5. Until that is resolved — and checked with [validateContiguity],
- * which uses the invariant that Hermes lays bodies out back to back, so a correct table must
- * satisfy `offset[i] + size[i] == offset[i + 1]` — [locate] returns `null` and the patcher
- * writes nothing.
+ * Two traps worth recording, because both were fallen into:
  *
- * A skipped patch is visible and harmless; a misplaced write corrupts the bundle. Do not
- * reinstate a guessed layout: the previous guess produced a build that installed, launched
- * and crashed.
+ * - The body offsets are **not** stored in the function header table as values you can find
+ *   by searching for them. Only 1,833 of them appear there directly; the rest live in the
+ *   large-header table near the end of the file. Searching for an offset and finding it only
+ *   there does not mean the table is missing.
+ * - Hermes bodies are **not** laid out back to back. Only 101,024 of 128,468 consecutive
+ *   pairs satisfy `offset[i] + size[i] == offset[i + 1]`; 3,860 functions share a body with
+ *   their neighbour and 11,508 partially overlap. A "contiguity" check rejects the correct
+ *   layout and is not a valid way to validate one.
  */
 object HermesFunctionTable {
 
@@ -57,33 +62,72 @@ object HermesFunctionTable {
         val bytecodeSize: Int
     )
 
-    /**
-     * Returns the location of [functionId] in [bundleBytes], or `null` when the bundle's
-     * function table layout has not been verified.
-     */
-    fun locate(bundleBytes: ByteArray, functionId: Int): FunctionLocation? {
-        // No verified layout exists yet, so there is nothing safe to return. See the class
-        // documentation for what a layout must satisfy before it can be plugged in here.
-        return null
-    }
+    /** `sizeof(BytecodeFileHeader)` — the table follows it immediately. */
+    private const val TABLE_OFFSET = 128
+
+    /** HBC 97+ packs an entry into 96 bits. HBC 96 and older used a 128-bit entry. */
+    private const val MODERN_ENTRY_SIZE = 12
+
+    /** Lowest HBC version whose entries use the 96-bit packing implemented here. */
+    private const val FIRST_MODERN_VERSION = 97
+
+    private const val FLAG_OVERFLOWED = 0x20
+    private const val OFFSET_MASK = 0x1FFFFFF
+    private const val OVERFLOW_OFFSET_MASK = 0x00FFFFFF
+    private const val BYTECODE_SIZE_MASK = 0x3FFF
+
+    /** Offset of the large `FunctionHeader`'s bytecode size, as a 32-bit field. */
+    private const val LARGE_HEADER_SIZE_FIELD = 12
 
     /**
-     * Checks a candidate layout against the bundle's own structure.
-     *
-     * Hermes stores function bodies contiguously and in function-id order, so a layout is
-     * only credible if consecutive entries describe adjacent regions. [sample] entries are
-     * checked; any single violation disproves the layout.
-     *
-     * @param locations function id to the location a candidate layout produced for it.
+     * Returns the location of [functionId] in [bundleBytes], or `null` when the bundle's
+     * version uses a layout this implementation does not know.
      */
-    fun validateContiguity(locations: Map<Int, FunctionLocation>, sample: Int = 512): Boolean {
-        val ids = locations.keys.sorted().take(sample)
-        if (ids.size < 2) return false
-        for (i in 0 until ids.size - 1) {
-            val current = locations[ids[i]] ?: return false
-            val next = locations[ids[i + 1]] ?: return false
-            if (current.bodyOffset + current.bytecodeSize != next.bodyOffset) return false
+    fun locate(bundleBytes: ByteArray, functionId: Int): FunctionLocation? {
+        if (functionId < 0) return null
+        if (!usesModernEntrySize(bundleBytes)) return null
+
+        val slot = TABLE_OFFSET + MODERN_ENTRY_SIZE * functionId
+        if (slot < 0 || slot + MODERN_ENTRY_SIZE > bundleBytes.size) return null
+
+        val word0 = readU32Le(bundleBytes, slot)
+        val word1 = readU32Le(bundleBytes, slot + 4)
+        val word2 = readU32Le(bundleBytes, slot + 8)
+
+        val flags = (word2 ushr 24) and 0xFF
+        if (flags and FLAG_OVERFLOWED == 0) {
+            return FunctionLocation(
+                bodyOffset = word0 and OFFSET_MASK,
+                bytecodeSize = word1 and BYTECODE_SIZE_MASK
+            )
         }
-        return true
+
+        val functionName = (word1 ushr 14) and 0xFF
+        val largeOffset = (functionName shl 24) or (word0 and OVERFLOW_OFFSET_MASK)
+        if (largeOffset <= 0 || largeOffset + LARGE_HEADER_SIZE_FIELD + 4 > bundleBytes.size) return null
+
+        val bodyOffset = readU32Le(bundleBytes, largeOffset)
+        val bytecodeSize = readU32Le(bundleBytes, largeOffset + LARGE_HEADER_SIZE_FIELD)
+        if (bodyOffset < 0 || bytecodeSize < 0) return null
+        if (bodyOffset.toLong() + bytecodeSize.toLong() > bundleBytes.size) return null
+
+        return FunctionLocation(bodyOffset, bytecodeSize)
     }
+
+    /** Reads the bytecode version from the file header's `version` field. */
+    fun bytecodeVersion(bundleBytes: ByteArray): Int? {
+        if (bundleBytes.size < TABLE_OFFSET) return null
+        return readU32Le(bundleBytes, 8)
+    }
+
+    private fun usesModernEntrySize(bundleBytes: ByteArray): Boolean {
+        val version = bytecodeVersion(bundleBytes) ?: return false
+        return version >= FIRST_MODERN_VERSION
+    }
+
+    private fun readU32Le(bytes: ByteArray, offset: Int): Int =
+        (bytes[offset].toInt() and 0xFF) or
+            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
+            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
 }

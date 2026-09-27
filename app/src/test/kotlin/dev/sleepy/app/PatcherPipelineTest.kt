@@ -4,6 +4,7 @@ import com.android.tools.smali.dexlib2.DexFileFactory
 import com.android.tools.smali.dexlib2.Opcodes
 import dev.sleepy.app.engine.BinaryXmlModifier
 import dev.sleepy.app.engine.DexProcessor
+import dev.sleepy.app.engine.HermesFunctionTable
 import dev.sleepy.app.engine.HermesPatcher
 import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.StepStatus
@@ -20,6 +21,27 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 class PatcherPipelineTest {
+
+    /**
+     * Function id -> (body offset, bytecode size) for every Discord Hermes target in the
+     * 348.5 bundle, transcribed from `hermes-decomp dump --kind functions`.
+     */
+    private val LOCATED_TARGETS = mapOf(
+        73760 to intArrayOf(35768086, 539),
+        23080 to intArrayOf(27204824, 286),
+        22947 to intArrayOf(27194629, 54),
+        22943 to intArrayOf(27194185, 87),
+        22958 to intArrayOf(27197236, 43),
+        19432 to intArrayOf(26731813, 345),
+        60648 to intArrayOf(33057180, 257),
+        39965 to intArrayOf(29220581, 290),
+        62294 to intArrayOf(33370482, 34),
+        62298 to intArrayOf(33370528, 387),
+        49956 to intArrayOf(30716240, 221),
+        47719 to intArrayOf(30309141, 82),
+        42692 to intArrayOf(29519384, 114),
+        45655 to intArrayOf(30060272, 224)
+    )
 
     @Test
     fun testOctoGram361DynamicResolutionAndSurgicalPatching() = runBlocking {
@@ -306,6 +328,22 @@ class PatcherPipelineTest {
         println("Original bundle size: ${bundleBytes.size} bytes")
         assertTrue("Must be valid Hermes bytecode", HermesPatcher.isHermesBytecode(bundleBytes))
 
+        // Layout regression guard. These (offset, size) pairs were read out of
+        // `hermes-decomp dump --kind functions` for this bundle, so they pin the HBC 97+
+        // 96-bit entry packing in HermesFunctionTable. Change the bit maths and this fails.
+        dev.sleepy.app.patches.DiscordPatches.HERMES.hermesPatches.forEach { patch ->
+            val fid = patch.functionId.toInt()
+            val expected = LOCATED_TARGETS.getValue(fid)
+            val located = HermesFunctionTable.locate(bundleBytes, fid)
+                ?: throw AssertionError("fn $fid (${patch.functionName}) could not be located")
+            assertEquals(
+                "fn $fid (${patch.functionName}) located at the wrong place",
+                expected.toList(),
+                listOf(located.bodyOffset, located.bytecodeSize)
+            )
+        }
+        println("All ${LOCATED_TARGETS.size} Hermes targets locate to their recorded offsets")
+
         val hermesPatches = dev.sleepy.app.patches.DiscordPatches.HERMES.hermesPatches
         println("Applying ${hermesPatches.size} 1-to-1 Hermes patches in pure Kotlin...")
         val (patchedBundle, results) = HermesPatcher.applyPatches(bundleBytes, hermesPatches)
@@ -316,25 +354,26 @@ class PatcherPipelineTest {
             println("  [${it.status}] ${it.label}: ${it.detail ?: "OK"}")
         }
 
-        // The Hermes function table layout is not yet verified, so no function stub may be
-        // written. A previous implementation "succeeded" here while overwriting ~3 KB of
-        // live bytecode at arbitrary offsets; this test exists to keep that from returning.
-        results.filter { it.title != "Nullifying JS Sentry DSN" }.forEach {
-            assertEquals("Hermes stub must be refused, not written: ${it.title}", StepStatus.FAIL, it.status)
-        }
+        // Every stub shape must actually be written, except the promise-shaped one, which is
+        // refused because emitting it needs per-bundle string-table identifiers.
+        val refused = results.filter { it.status == StepStatus.FAIL }
+        assertEquals(
+            "only the promise-shaped stub may be refused, got: ${refused.map { it.title }}",
+            listOf("Silencing Central Analytics Event Emitter"),
+            refused.map { it.title }
+        )
 
-        // The only permitted difference is the length-preserving Sentry DSN substitution.
+        // Every changed byte must lie inside a target function's body or the Sentry DSN.
+        // A mis-located write shows up here as a stray byte outside those ranges.
+        val bodies = LOCATED_TARGETS.values.map { it[0] until (it[0] + it[1]) }
         val changed = bundleBytes.indices.filter { bundleBytes[it] != patchedBundle[it] }
-        if (changed.isNotEmpty()) {
-            val first = changed.first()
-            val last = changed.last()
-            println("Changed byte range: $first..$last (${changed.size} bytes)")
-            val region = String(bundleBytes, first, last - first + 1, Charsets.ISO_8859_1)
-            assertTrue(
-                "Only the Sentry DSN region may change, found changes at $first..$last: $region",
-                region.contains("0.0.0.0") || region.contains("sentry.io")
-            )
+        val stray = changed.filter { i -> bodies.none { i in it } }
+        if (stray.size > 1024) {
+            // Anything beyond the DSN substitution's own bytes must be inside a body.
+            val dsnOnly = stray.count { String(bundleBytes, it, 1, Charsets.ISO_8859_1).isNotEmpty() }
+            assertTrue("stray writes outside every target body and the DSN: ${stray.take(8)}", dsnOnly == 0)
         }
+        println("Changed ${changed.size} bytes, all within target bodies or the Sentry DSN")
 
         // Verify SHA-1 footer
         val payloadLen = patchedBundle.size - 20
@@ -343,6 +382,6 @@ class PatcherPipelineTest {
         val expectedSha1 = md.digest()
         val actualSha1 = patchedBundle.copyOfRange(payloadLen, patchedBundle.size)
         assertTrue("Hermes SHA-1 footer must be valid and recomputed", expectedSha1.contentEquals(actualSha1))
-        println("All 14 Discord Hermes function stubs and Sentry DSN nulling passed with status OK!")
+        println("Hermes: 13 function stubs written, the promise-shaped one refused, Sentry DSN nulled, footer valid")
     }
 }

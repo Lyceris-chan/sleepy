@@ -21,11 +21,14 @@ object HermesPatcher {
 
     private const val NOP_ASYNC_BREAK_CHECK = 0x7E.toByte()
 
-    // HBC v98 / Modern opcodes
+    // HBC v98 opcodes, taken from hermes-decomp's own Bytecode98.json rather than from
+    // memory: LoadConstUInt8 = 0x8b, LoadConstUndefined = 0x93, LoadConstNull = 0x94,
+    // LoadConstTrue = 0x95, LoadConstFalse = 0x96, Ret = 0x76. Each takes a Reg8 operand.
     private val STUB_LOAD_CONST_UNDEFINED = byteArrayOf(0x93.toByte(), 0x00, 0x76.toByte(), 0x00) // LoadConstUndefined r0; Ret r0
     private val STUB_LOAD_CONST_FALSE = byteArrayOf(0x96.toByte(), 0x00, 0x76.toByte(), 0x00)     // LoadConstFalse r0; Ret r0
     private val STUB_LOAD_CONST_NULL = byteArrayOf(0x94.toByte(), 0x00, 0x76.toByte(), 0x00)      // LoadConstNull r0; Ret r0
     private val STUB_LOAD_CONST_TRUE = byteArrayOf(0x95.toByte(), 0x00, 0x76.toByte(), 0x00)      // LoadConstTrue r0; Ret r0
+    private val STUB_LOAD_CONST_ZERO = byteArrayOf(0x8b.toByte(), 0x00, 0x00, 0x76.toByte(), 0x00) // LoadConstUInt8 r0, 0; Ret r0
 
     /**
      * Validates whether [bytes] begins with the Hermes bytecode magic header.
@@ -112,9 +115,8 @@ object HermesPatcher {
                 explanation = explanation,
                 technicalTarget = technicalTarget,
                 status = StepStatus.FAIL,
-                detail = "Function $fid could not be located in this bundle's function table, so nothing was written. " +
-                    "Hermes does not document where that table lives or how its entries are packed, and guessing was " +
-                    "previously corrupting the JavaScript bytecode."
+                detail = "Function $fid is outside this bundle's function table, or the bundle uses a Hermes bytecode " +
+                    "version whose header layout is not implemented, so nothing was written."
             )
         }
 
@@ -129,14 +131,16 @@ object HermesPatcher {
             HermesStubShape.FALSE -> STUB_LOAD_CONST_FALSE
             HermesStubShape.TRUE -> STUB_LOAD_CONST_TRUE
             HermesStubShape.NULL -> STUB_LOAD_CONST_NULL
-            HermesStubShape.ZERO, HermesStubShape.PROMISE -> return StepResult(
+            HermesStubShape.ZERO -> STUB_LOAD_CONST_ZERO
+            HermesStubShape.PROMISE -> return StepResult(
                 title = title,
                 explanation = explanation,
                 technicalTarget = technicalTarget,
                 status = StepStatus.FAIL,
-                detail = "This patch needs a ${patch.stubShape.name.lowercase()}-shaped stub. That encoding has not been " +
-                    "verified against a real Hermes bundle yet, so no bytes were written rather than writing an " +
-                    "unverified return value into the bundle."
+                detail = "This stub has to return a resolved promise, which means emitting GetGlobalObject/TryGetById/" +
+                    "GetByIdShort against the bundle's own string table — the identifiers for \"Promise\" and " +
+                    "\"resolve\" are per-bundle, and resolving them is not implemented. Returning undefined instead " +
+                    "would break every caller that awaits this function, so nothing was written."
             )
         }
 
