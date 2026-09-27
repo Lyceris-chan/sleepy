@@ -1,0 +1,137 @@
+# sleepy
+
+sleepy is an Android app that patches Discord and OctoGram on your phone. You choose the changes you want, and sleepy downloads the original app, applies them and saves a patched APK that you install. Everything happens on your device, and sleepy sends nothing anywhere.
+
+## What sleepy changes
+
+### Discord
+
+Each change below has its own switch, so you can apply all of them, one of them, or any combination.
+
+- **Stops crash reporting.** Discord stops sending crash reports, and sleepy also removes the crash reporter's own libraries from the APK, so the mechanism is gone rather than switched off.
+- **Stops analytics.** Discord stops sending usage, performance and advertising data, and stops reading your advertising ID and how you installed the app.
+- **Blocks tracking servers.** Requests to 20 tracking, advertising, survey and payment-monitoring hosts, and to 61 Discord API paths, are answered with an empty response instead of being sent. This deliberately includes Spotify, so the Spotify integration stops working.
+- **Stops device fingerprinting.** Discord stops reading your contact list, stops fetching contact photos and stops listing the other apps installed on your phone.
+- **Removes gift buttons.**
+- **Removes quests**, including the Quests entry in Settings.
+- **Removes Nitro upsells**: the inline buttons, the action sheets and the pop-up dialogs.
+- **Removes the shop**: collectibles, the storefront, promotions, the wishlist and the billing rows in Settings.
+- **Removes animated profile card effects**, which are video loops that drain the battery.
+- **Silences debug logging** and stops Discord capturing device logs in the background for crash reports.
+- **Removes the app-rating survey pop-ups.**
+- **Stops background update downloads.** Discord keeps the version of its own code that shipped inside this APK instead of downloading a newer one that would undo the changes above.
+- **Makes calls and media more reliable.** Voice calls stay alive when you leave the app, the video player stops blocking the interface while it starts up, and media failures are reported instead of silently dropped.
+- **Uses less memory and fewer downloads.** The image cache is smaller, screen-by-screen performance tracking is off, and all of Discord's network clients share one disk cache instead of competing over the same folder.
+
+### OctoGram
+
+- **Removes sponsored messages** from public channels, including the request that fetches them.
+- **Removes the full-screen adverts** shown while you swipe through photos and videos in a channel.
+- **Removes sponsored channels and bots** from search results.
+- **Stops the update check** that contacts GitHub in the background.
+- **Stops Firebase analytics**: A/B testing, remote configuration and telemetry uploads are all disabled.
+- **Silences OctoGram's logging** and the diagnostic files it uploads, at the flag that controls logging everywhere in the app.
+- **Reduces the premium paywall.** Most entry points to the premium screen are blocked. Some remain; see [Known limitations](#known-limitations).
+
+## Choose which patches to apply
+
+The patch screen lists a set for each part of the app. Expand a set to see the individual changes inside it.
+
+- Each change has its own switch. Turn it on or off on its own.
+- A set's own switch reports whether none, some or all of its changes are selected. If you select a few changes inside a set, the set's switch shows that rather than rounding up or down.
+- Tapping a partly selected set selects every change inside it. Tapping a fully selected set clears it.
+- Some switches are greyed out and state the reason. Two reasons appear:
+  - **Already covered by …** names a rule you already have switched on that blocks every request this one would block. Switch that one off and this switch starts working again.
+  - **Required …** marks one of the two checks the blocklist cannot work without. Those checks always run.
+- The counts above the list and on the button at the bottom tell you how many changes you have selected.
+- **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
+
+The 142 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
+
+## Install and use sleepy
+
+sleepy needs Android 8.0 (API level 26) or newer.
+
+1. Download `sleepy-v<version>.apk` from the [sleepy releases page](https://github.com/Lyceris-chan/sleepy/releases).
+2. Install it. Android asks you to allow installing apps from your browser or file manager the first time.
+3. Open sleepy and pick a target: Discord or OctoGram.
+4. Choose the changes you want on the patch screen. Expand a set to select individual changes.
+5. Tap **Patch APK**.
+6. Watch the step list. If you stop partway through, nothing is installed and the app you started with is untouched.
+7. When it finishes, tap **Save to Downloads** or **Share APK**.
+8. Install the saved APK from the file manager or the sharing app you sent it to.
+
+### Uninstall the official app first
+
+sleepy signs the patched APK with its own key, not the publisher's. Android treats an app as the same app only when the package name **and** the signing key match, so the patched Discord is a different app to Android even though it has the same name. Uninstall the official Discord before you install the patched one; otherwise the install fails.
+
+The same applies to updates: the patched app will not receive official updates from Discord, and you cannot install an official update over it.
+
+If you would rather keep both, turn on **Clone app** before patching. That gives the patched APK a package name of its own, so the official app and the patched one can live side by side. The cloned app keeps the code that shipped inside the APK, because sleepy stops it downloading a newer copy of its own code.
+
+Patching Discord is memory-heavy: sleepy holds the base APK, its 74 MB of ARM64 libraries and the rebuilt APK in memory at the same time. Close other apps if you are on a phone with little free memory.
+
+## Supported builds
+
+sleepy patches one exact build of each app. The list below is what this version supports.
+
+| App | Version | Version code | Downloaded from |
+| :--- | :--- | :--- | :--- |
+| Discord | 348.5 Alpha | 348205 | [Vendetta tracker](https://tracker.vendetta.rocks/tracker/download/348205/base), plus its ARM64 split |
+| OctoGram | 3.6.1 Beta 2 | 38275 | [OctoGram releases on GitHub](https://github.com/OctoGramApp/OctoGram/releases/download/v3.6.0_3827/OctoGram_arm64.apk) |
+
+The Discord source is a base APK plus a separate file holding the ARM64 native libraries. sleepy downloads both and merges them, so the patched APK runs on ARM64 phones.
+
+Every download URL, version number and hash is declared in [the `sources.json` manifest](https://github.com/Lyceris-chan/sleepy/blob/main/sources.json). sleepy downloads the original APK from the source named there and patches it on your device. sleepy does not host or redistribute Discord or OctoGram.
+
+Where the publisher provides a SHA-256 hash, as OctoGram does, sleepy checks the download against it and refuses a file that does not match. For Discord, the tracker publishes no hash, and the app says so rather than claiming a check it cannot make. The Settings screen lists the exact hosts that will be contacted before anything is downloaded.
+
+## Known limitations
+
+Stated plainly, because a limitation left unsaid reads as a guarantee.
+
+**Discord**
+
+- JavaScript changes are written for one exact Discord release, 348.5. A different release's code is refused instead of being patched, because the identifiers these changes use are numbered per release and would point at unrelated code in another build.
+- The blocklist is built from the APK you selected rather than shipped as fixed text, because three of the names it needs are renamed by the app's own obfuscation on every release. A build where these cannot be found is skipped, with the reason shown, instead of being patched with names from another release.
+- Most edits to the app's manifest file are not implemented yet. The split declarations and the native library setting are handled; removing dead permissions, the crash reporter's providers, Play split metadata and the AppsFlyer link query is not.
+- New entries cannot be added to the app's resource table. The desktop build adds some video player image aliases that sleepy cannot add. Discord's own APK ships without them and runs, so this matches what Discord itself ships.
+- Four media changes from the reference build stay switched off, for the reasons that build documents: they crash the camera, shrink recorded video below what the encoder expects, remove a string that is still in use, or pass a value the media engine does not document.
+- Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates.
+
+**OctoGram**
+
+- Two changes in the list target OctoGram 3.6.0, and no 3.6.0 download is registered, so they never run on this build.
+- The update check is switched off and the logger is silenced, but the rewritten methods use a register count that differs from the reference build's. The assembled code is equivalent; the text is not identical.
+- Premium paywall removal is partial. Most entry points are blocked, but the premium rows on a profile, the premium feature cells and the limit preview screens still appear.
+- Signed with sleepy's own key, so it installs as a different app identity and will not receive official updates.
+
+## Build sleepy from source
+
+You need:
+
+- JDK 17.
+- The Android SDK, with `platforms;android-37.0` and `build-tools;36.0.0` installed.
+- The Gradle wrapper in this repository, which uses Gradle 9.8.
+
+Run the unit tests:
+
+```bash
+./gradlew :app:testDebugUnitTest
+```
+
+Build a release APK:
+
+```bash
+./gradlew :app:assembleRelease
+```
+
+Some engine tests check the patcher against a reference APK. They skip themselves when that file is not on your machine, so the test task passes on a clean checkout. The tests for merging the Discord split need a 3 GB heap, which the build sets for them.
+
+The Gradle build signs the release APK with a debug key. The published releases are re-signed by the release workflow with the project's own key.
+
+## Source and licence
+
+sleepy is open source. The source is at [github.com/Lyceris-chan/sleepy](https://github.com/Lyceris-chan/sleepy), which is this project's repository and not the repository of any app it patches.
+
+The repository does not currently include a licence file, so no licence is granted for reuse.
