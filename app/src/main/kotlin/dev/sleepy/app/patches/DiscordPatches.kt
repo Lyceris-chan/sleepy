@@ -6,10 +6,30 @@ import dev.sleepy.app.model.SmaliPatch
 
 object DiscordPatches {
 
+    val BUNDLE_LOCK = PatchSet(
+        id = "discord_ota_bundle",
+        label = "Lock APK Hermes JS Bundle",
+        description = "Neutralizes Discord's BundleUpdater pref keys (`key_android_js_bundle`) so Discord is forced to execute our patched APK asset bundle instead of silently downloading an unpatched bundle that restores all telemetry.",
+        smaliPatches = listOf(
+            SmaliPatch(
+                dexName = "classes.dex",
+                smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
+                methodSignature = ".method public final isLoaded()Z",
+                replacementBody = """.method public final isLoaded()Z
+    .locals 1
+
+    const/4 v0, 0x1
+
+    return v0
+.end method"""
+            )
+        )
+    )
+
     val SENTRY = PatchSet(
         id = "discord_sentry",
-        label = "Disable Sentry Crash Reporting",
-        description = "Stubs out Sentry NDK native library loading and Java crash reporter initialization.",
+        label = "Disable Sentry Crash Reporting (NDK & Java)",
+        description = "Stubs out Sentry NDK native shared library loading (`SentryNdk.loadNativeLibraries()`) and gates Java crash reporter initialization so crash dumps, thread states, and device info are never sent to Sentry.",
         smaliPatches = listOf(
             SmaliPatch(
                 dexName = "classes.dex",
@@ -20,14 +40,24 @@ object DiscordPatches {
 
     return-void
 .end method"""
+            ),
+            SmaliPatch(
+                dexName = "classes.dex",
+                smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
+                methodSignature = ".method public final init(Landroid/content/Context;)V",
+                replacementBody = """.method public final init(Landroid/content/Context;)V
+    .locals 0
+
+    return-void
+.end method"""
             )
         )
     )
 
     val TELEMETRY = PatchSet(
         id = "discord_telemetry",
-        label = "Kill Native Telemetry & NetStats",
-        description = "Suppresses AppsFlyer and background network statistics telemetry logging.",
+        label = "Disable Native Telemetry & NetStats",
+        description = "Stubs native AppsFlyer event dispatching, NetStats network traffic profiling, and native logging call sites in Java/Kotlin DEX bytecode.",
         smaliPatches = listOf(
             SmaliPatch(
                 dexName = "classes.dex",
@@ -42,17 +72,10 @@ object DiscordPatches {
         )
     )
 
-    val PERF = PatchSet(
-        id = "discord_perf",
-        label = "Optimize OkHttp Cache Sharing",
-        description = "Prevents React Native OkHttp instances from thrashing the shared disk cache.",
-        smaliPatches = emptyList()
-    )
-
     val HERMES = PatchSet(
         id = "discord_hermes",
         label = "Hermes JS Bytecode Telemetry Stubs",
-        description = "Directly modifies index.android.bundle bytecode to stub the central analytics emitter and trackers.",
+        description = "Rewrites index.android.bundle bytecode directly on-device using libhermes_decomp.so to stub central analytics emitters, Sentry breadcrumbs, and upsell banners:",
         hermesPatches = listOf(
             HermesPatch(
                 functionId = "73760",
@@ -65,6 +88,14 @@ object DiscordPatches {
             HermesPatch(
                 functionId = "23080",
                 functionName = "AnalyticsStore.track closure",
+                hasmStub = """
+                    LoadConstUndefined r0
+                    Ret r0
+                """.trimIndent()
+            ),
+            HermesPatch(
+                functionId = "41655",
+                functionName = "AppsFlyerLib.trackEvent",
                 hasmStub = """
                     LoadConstUndefined r0
                     Ret r0
@@ -88,7 +119,7 @@ object DiscordPatches {
             ),
             HermesPatch(
                 functionId = "62298",
-                functionName = "Orb / Monetization Setting Predicate",
+                functionName = "Quest Orb & Monetization Hook Predicate",
                 hasmStub = """
                     LoadConstFalse r0
                     Ret r0
@@ -97,18 +128,10 @@ object DiscordPatches {
         )
     )
 
-    val MANIFEST = PatchSet(
-        id = "discord_manifest",
-        label = "Manifest Permission Hygiene",
-        description = "Disables dead tracking permissions (ADSERVICES, CONTACTS, INSTALL_REFERRER).",
-        smaliPatches = emptyList()
-    )
-
     val ALL = listOf(
+        BUNDLE_LOCK,
         SENTRY,
         TELEMETRY,
-        PERF,
-        HERMES,
-        MANIFEST
+        HERMES
     )
 }

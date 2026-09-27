@@ -11,14 +11,13 @@
       "url": "https://tracker.vendetta.rocks/tracker/download/348205/base",
       "apk_type": "split_base",
       "sha256_expected": null,
-      "description": "Discord Alpha from Vendetta tracker (Play Store delivery proxy). Patches remove telemetry, Sentry crash reporters, ads, and shared OkHttp cache thrashing.",
+      "description": "Discord Alpha from Vendetta tracker (Play Store delivery proxy). Patches remove telemetry, Sentry crash reporters, ads, and lock the patched JS bundle.",
       "changelog_url": "https://discord.com/blog",
       "patch_ids": [
-        "discord_telemetry",
+        "discord_ota_bundle",
         "discord_sentry",
-        "discord_perf",
-        "discord_hermes",
-        "discord_manifest"
+        "discord_telemetry",
+        "discord_hermes"
       ]
     },
     {

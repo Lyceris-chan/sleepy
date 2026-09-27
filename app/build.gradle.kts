@@ -97,4 +97,7 @@ dependencies {
 
     // Network
     implementation(libs.okhttp)
+
+    // Testing
+    testImplementation("junit:junit:4.13.2")
 }

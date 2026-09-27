@@ -80,41 +80,26 @@ class PatchingPipeline(private val context: Context) {
 
         currentCoroutineContext().ensureActive()
 
-        // 3. Disassemble required DEX in parallel
-        _progress.value = PatchProgress.Decoding("Disassembling target DEX bytecode in parallel")
-        val disassembledDexMaps = DexProcessor.disassembleAll(dexToDisassemble).toMutableMap()
-        log(StepResult("Disassembled ${disassembledDexMaps.size} targeted DEX files", StepStatus.OK))
+        // 3. Apply surgical DEX patches in parallel
+        _progress.value = PatchProgress.Patching("Applying surgical DEX bytecode modifications", 0, smaliPatches.size)
+        val repackedDexMap = mutableMapOf<String, ByteArray>()
+        val groupedPatches = smaliPatches.groupBy { it.dexName }
 
-        currentCoroutineContext().ensureActive()
-
-        // 4. Apply Smali patches
-        _progress.value = PatchProgress.Patching("Applying smali bytecode surgery", 0, smaliPatches.size)
-        var appliedCount = 0
-
-        smaliPatches.forEachIndexed { index, patch ->
+        for ((dexName, patchesForDex) in groupedPatches) {
             currentCoroutineContext().ensureActive()
-            val dexSmali = disassembledDexMaps[patch.dexName]?.toMutableMap()
-            if (dexSmali == null) {
-                log(StepResult(patch.smaliPath, StepStatus.SKIP, "DEX ${patch.dexName} not found"))
-                return@forEachIndexed
+            val dexBytes = dexEntries[dexName]
+            if (dexBytes == null) {
+                patchesForDex.forEach {
+                    log(StepResult(it.smaliPath, StepStatus.SKIP, "DEX $dexName not found in APK"))
+                }
+                continue
             }
 
-            val result = SmaliPatcher.apply(dexSmali, patch)
-            disassembledDexMaps[patch.dexName] = dexSmali
-            log(result)
-
-            if (result.status == StepStatus.OK) {
-                appliedCount++
-            }
-            _progress.value = PatchProgress.Patching(patch.smaliPath, index + 1, smaliPatches.size)
+            _progress.value = PatchProgress.Patching("Patching $dexName (${patchesForDex.size} edits)", 0, patchesForDex.size)
+            val (patchedBytes, dexResults) = DexProcessor.patchDexSurgically(dexBytes, patchesForDex)
+            repackedDexMap[dexName] = patchedBytes
+            dexResults.forEach { log(it) }
         }
-
-        currentCoroutineContext().ensureActive()
-
-        // 5. Reassemble patched DEX files in parallel
-        _progress.value = PatchProgress.Assembling("Reassembling DEX bytecode in parallel")
-        val repackedDexMap = DexProcessor.assembleAll(disassembledDexMaps)
-        log(StepResult("Reassembled ${repackedDexMap.size} patched DEX files", StepStatus.OK))
 
         currentCoroutineContext().ensureActive()
 
