@@ -13,6 +13,7 @@ import dev.sleepy.app.patches.DiscordBlocklistPatch
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
+import dev.sleepy.app.patches.OctoGramPatchItems
 import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.patches.PermissionCatalog
 
@@ -66,8 +67,9 @@ enum class InertKind {
  * @property inertKind which of the two ways the switch is fixed, or null when it can be moved.
  * @property inertReason why the switch is fixed, in full. Never blank when [inertKind] is set:
  *   a greyed row with no reason is exactly what this carries it to avoid.
- * @property technicalTarget the exact thing the patch touches — the emitted smali literal, or the
- *   function and its byte count — shown one tap away rather than in the row's face.
+ * @property technicalTarget the exact thing the patch touches — the emitted smali literal, the
+ *   function and its byte count, or the OctoGram class and the shape of each edit in it — shown one
+ *   tap away rather than in the row's face.
  * @property detail the longer explanation behind [technicalTarget], or null when there is none.
  */
 data class PatchRow(
@@ -288,7 +290,9 @@ object PatchRows {
     ): PatchRow {
         val technical = when {
             ruleRow != null -> constString(ruleRow.rule.pattern)
-            else -> hermesTarget(item)
+            // Each of the three kinds of item knows its own target, and an item of a kind with
+            // nothing to name keeps the row without one rather than showing a blank where it goes.
+            else -> hermesTarget(item) ?: octoGramTarget(item)
         }
         return PatchRow(
             key = item.key,
@@ -301,7 +305,9 @@ object PatchRows {
             inertKind = if (ruleRow?.coveredBy != null) InertKind.COVERED else null,
             inertReason = ruleRow?.lockedReason,
             technicalTarget = technical,
-            detail = ruleRow?.let { ruleDetail(item, it) } ?: hermesDetail(item)
+            detail = ruleRow?.let { ruleDetail(item, it) }
+                ?: hermesDetail(item)
+                ?: octoGramDetail(item)
         )
     }
 
@@ -334,6 +340,12 @@ object PatchRows {
         val patch = HERMES_PATCH_BY_KEY[item.key] ?: return null
         return "index.android.bundle · function ${patch.functionId} · ${patch.originalSize} bytes"
     }
+
+    /** The exact thing an OctoGram item rewrites: its class, and the shape of each edit in it. */
+    private fun octoGramTarget(item: PatchItem): String? = OctoGramPatchItems.technicalTarget(item)
+
+    /** The longer text behind an OctoGram item's target, from the item table's own entry. */
+    private fun octoGramDetail(item: PatchItem): String? = OctoGramPatchItems.detail(item)
 
     /** Why this JavaScript function is stubbed, from the audit note when the reference has one. */
     private fun hermesDetail(item: PatchItem): String? {

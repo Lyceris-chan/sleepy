@@ -4,12 +4,17 @@ import dev.sleepy.app.engine.BinaryXmlModifier
 import dev.sleepy.app.engine.DexProcessor
 import dev.sleepy.app.engine.HermesFunctionTable
 import dev.sleepy.app.engine.HermesPatcher
+import dev.sleepy.app.model.PatchSelection
+import dev.sleepy.app.model.SelectivePatchGenerator
 import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.StepStatus
+import dev.sleepy.app.model.TargetApk
 import dev.sleepy.app.patches.OctoGramPatches
+import dev.sleepy.app.patches.PatchItemCatalog
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -80,24 +85,36 @@ class PatcherPipelineTest {
 
         println("Class-to-DEX index verified successfully across 4 DEX files!")
 
-        // 3. Filter and resolve all 1-to-1 OctoGram patches for this APK
+        // 3. Filter and resolve every OctoGram edit for this APK, through the path the pipeline
+        // takes: a selection naming every item of every set, handed to each set's own generator.
+        // A set resolves its own patches from the selection, so this is also what proves the item
+        // table and the edit groups line up for a build this app offers.
         val isOctoGram361 = classToDex.containsKey("Lorg/telegram/ui/e6;")
+        val selection = PatchSelection.fromSavedIds(OctoGramPatches.ALL.map { it.id }, PatchItemCatalog)
+        val target = TargetApk(classToDex, dexEntries)
         val patchesToApply = mutableListOf<SmaliPatch>()
         for (patchSet in OctoGramPatches.ALL) {
-            val matching = patchSet.smaliPatches.filter { patch ->
+            val generated = (patchSet.generator as SelectivePatchGenerator).generate(target, selection)
+            assertNull("${patchSet.id} has nothing to apply", generated.skipReason)
+            val matching = generated.patches.filter { patch ->
                 if (patch.versionTag == "3.6.1" && !isOctoGram361) return@filter false
                 if (patch.versionTag == "3.6.0" && isOctoGram361) return@filter false
                 val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val actualDex = patch.dexName ?: classToDex[desc]
                 actualDex != null && dexEntries.containsKey(actualDex)
             }
-            assertTrue("PatchSet '${patchSet.label}' must have applicable patches in 3.6.1 APK", matching.isNotEmpty())
+            assertEquals(
+                "every edit of ${patchSet.id} must resolve on this build",
+                generated.patches.size,
+                matching.size
+            )
             matching.forEach { patch ->
                 val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val actualDex = patch.dexName ?: classToDex[desc]!!
                 patchesToApply.add(patch.copy(dexName = actualDex))
             }
         }
+        assertEquals("the catalogue is thirty-six edits", 36, patchesToApply.size)
 
         println("Total 1-to-1 patch edits queued: ${patchesToApply.size}")
 
@@ -116,7 +133,15 @@ class PatcherPipelineTest {
 
         // 5. Test surgical patching on classes3.dex
         val dex3Patches = patchesToApply.filter { it.dexName == "classes3.dex" }
-        assertTrue("classes3.dex must have patches", dex3Patches.isNotEmpty())
+        assertEquals("thirty-two edits, the other four being the Firebase registrars", 32, dex3Patches.size)
+        // The two the reference scripts this app had not yet transcribed carry, named so that a
+        // patch that silently stopped resolving shows up as a missing class here.
+        listOf("yb3.smali", "org/telegram/ui/ProfileActivity.smali").forEach { path ->
+            assertTrue(
+                "$path must be among the edits this build gets",
+                dex3Patches.any { it.smaliPath == path }
+            )
+        }
         val (patchedClasses3Dex, dex3Results) = DexProcessor.patchDexSurgically(
             dexBytes = dexEntries["classes3.dex"]!!,
             patches = dex3Patches
@@ -169,14 +194,25 @@ class PatcherPipelineTest {
         // A build this old gets what is not pinned to a version, and nothing else: every tagged
         // entry here names 3.6.1, and the 3.6.0-only entries the reference scripts carry are not
         // ported at all, so no patch claims to run on a build it cannot find its classes in.
+        // A generator with no selection to honour produces its whole set, which is what this asks
+        // for from each set before dropping what the version filter does not allow.
+        val target = TargetApk(classToDex, dexEntries)
         val patchesToApply = mutableListOf<SmaliPatch>()
         for (patchSet in OctoGramPatches.ALL) {
-            val matching = patchSet.smaliPatches.filter { patch ->
+            val generated = requireNotNull(patchSet.generator) { "${patchSet.id} has no generator" }
+                .generate(target)
+            assertNull("${patchSet.id} has nothing to apply", generated.skipReason)
+            val matching = generated.patches.filter { patch ->
                 if (patch.versionTag != null) return@filter false
                 val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val actualDex = patch.dexName ?: classToDex[desc]
                 actualDex != null && dexEntries.containsKey(actualDex)
             }
+            assertEquals(
+                "only the one version-less registrar is left of ${patchSet.id} here",
+                if (patchSet.id.startsWith("octogram_firebase")) 1 else 0,
+                matching.size
+            )
             matching.forEach { patch ->
                 val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val actualDex = patch.dexName ?: classToDex[desc]!!

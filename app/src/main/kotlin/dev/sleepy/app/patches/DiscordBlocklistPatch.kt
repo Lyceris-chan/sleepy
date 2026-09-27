@@ -13,6 +13,7 @@ import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SelectivePatchGenerator
 import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.TargetApk
+import dev.sleepy.app.model.TargetWrittenGenerator
 
 /**
  * The network blocklist interceptor for Discord, transcribed from
@@ -117,7 +118,7 @@ object DiscordBlocklistPatch {
     }
 
     /** The generator, usable with a selection and without one. */
-    private object BlocklistGenerator : PatchGenerator, SelectivePatchGenerator {
+    private object BlocklistGenerator : PatchGenerator, SelectivePatchGenerator, TargetWrittenGenerator {
 
         override fun generate(target: TargetApk): GeneratedPatches = generate(
             target = target,

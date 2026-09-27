@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- OctoGram's own crash reporter can be switched off. It installs a crash handler of its own while the app starts, which writes the stack trace of a crash into the app's storage and raises an "OctoGram just crashed!" notification the next time the app opens; with it switched off the handler is never installed, so a crash leaves nothing behind. It is a switch of its own because that handler is installed regardless of the logging flag the logging switch pins false.
+- The premium rows in the profile's settings list can be hidden: the Telegram Premium row, the Send a Gift row, and the combined premium-sections row that would otherwise appear in their place. It is one switch rather than three, because hiding the first row on its own puts a different premium row on screen instead.
+
 ### Changed
 
+- Every OctoGram set is now listed change by change, with a switch of its own, as the Discord sets already were. Silencing OctoGram's log is two choices rather than one — its emitters and the helpers that would upload a log off the device — and the paywall's two code paths are separate choices too.
 - The OctoGram sets are described in the same terms as the Discord ones: what you lose or gain, rather than the name of the code the change edits. Each of OctoGram's twelve diagnostic log emitters now says what it would have written and at which level, instead of sharing one sentence between them.
 - The technical panel under a set now lists every change with its own title and what it does, so a set whose changes are not listed one by one can still be read before you patch.
-- The notes on what is left running are more precise. The app ships no Firebase analytics library, so the set switches off A/B testing, remote configuration and the telemetry transport rather than an analytics library; and OctoGram's own crash reporter, which writes a crash log and raises a notification, is named as something this version does not patch.
+- The notes on what is left running are more precise. The app ships no Firebase analytics library, so the set switches off A/B testing, remote configuration and the telemetry transport rather than an analytics library; and the profile's premium rows are named as hidden by a switch of their own rather than by the paywall patch.
 
 ### Removed
 

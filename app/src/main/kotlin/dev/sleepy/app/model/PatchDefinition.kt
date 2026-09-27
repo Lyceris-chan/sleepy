@@ -103,6 +103,19 @@ fun interface PatchGenerator {
 }
 
 /**
+ * A [PatchGenerator] whose patch text is written from the target APK.
+ *
+ * Not every generator does that. A generator for a set whose edits are switched one at a time
+ * selects among edits written down ahead of time, and the method it produces is assembled from that
+ * text; a generator for a method that names this build's own internals writes the text itself. The
+ * distinction is one the UI states out loud — "the names it has to spell out are read from the APK
+ * being patched" is true only of the second kind, and saying it about the first would be a false
+ * claim about the build — so a generator that writes its own text declares it here rather than the
+ * UI inferring it from whether the set happens to hold patches.
+ */
+interface TargetWrittenGenerator
+
+/**
  * A [PatchGenerator] that can also generate for a subset of its set's items.
  *
  * Generators were written to produce the whole set, because the set was the only switch there was.

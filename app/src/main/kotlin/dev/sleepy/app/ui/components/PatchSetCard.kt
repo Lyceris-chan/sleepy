@@ -46,6 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
+import dev.sleepy.app.model.TargetWrittenGenerator
+import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.ui.state.PatchRows
 import dev.sleepy.app.ui.state.PatchSetRows
 import dev.sleepy.app.ui.state.TriState
@@ -74,7 +76,11 @@ fun PatchSetCard(
     modifier: Modifier = Modifier
 ) {
     var technicalExpanded by remember(set.id) { mutableStateOf(false) }
-    val hookCount = set.smaliPatches.size + set.hermesPatches.size
+    // A set whose edits are switched one at a time carries no patches of its own — the engine takes
+    // them from its generator — so the targets it touches are read from the item table as well, or
+    // the panel would report "0 hooks" for the set with the most of them.
+    val itemPatches = remember(set.id) { PatchItemCatalog.itemPatches(set.id) }
+    val hookCount = set.smaliPatches.size + set.hermesPatches.size + itemPatches.size
     val selected = rows.triState != TriState.NONE
     val summary = selectionSummary(rows)
 
@@ -205,7 +211,7 @@ fun PatchSetCard(
             )
 
             AnimatedVisibility(visible = technicalExpanded) {
-                PatchTechnicalTargets(set = set)
+                PatchTechnicalTargets(set = set, itemPatches = itemPatches)
             }
         }
     }
@@ -301,9 +307,14 @@ private fun targetLine(patch: SmaliPatch): String? = when {
  * This is the audit trail the app has always shown — which classes, methods and function ids a set
  * rewrites — kept rather than replaced by the per-item list: the item list says what each switch
  * does, and this says what the set would touch on the build being patched.
+ *
+ * [itemPatches] are the entries a set's items carry, for the sets that hand the engine a generator
+ * instead of declaring patches. They are listed under the same heading because to this reader they
+ * are the same fact — the set's own patches first, then the ones behind its switches.
  */
 @Composable
-private fun PatchTechnicalTargets(set: PatchSet) {
+private fun PatchTechnicalTargets(set: PatchSet, itemPatches: List<SmaliPatch>) {
+    val smaliPatches = set.smaliPatches + itemPatches
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -313,14 +324,14 @@ private fun PatchTechnicalTargets(set: PatchSet) {
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (set.smaliPatches.isNotEmpty()) {
+        if (smaliPatches.isNotEmpty()) {
             Text(
                 text = "SMALI METHOD SURGERY TARGETS",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
-            set.smaliPatches.forEach { smaliPatch ->
+            smaliPatches.forEach { smaliPatch ->
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     // The entry's own title and explanation are shown here rather than left to the
                     // progress log. A set with one item has no expanded rows to carry them, so for
@@ -392,8 +403,11 @@ private fun PatchTechnicalTargets(set: PatchSet) {
             }
         }
 
-        if (set.generator != null) {
-            if (set.smaliPatches.isNotEmpty() || set.hermesPatches.isNotEmpty()) {
+        // Only a generator that writes its patch text from the target APK may claim to: a generator
+        // that selects among patches written ahead of time solves a different problem, and the
+        // sentence below would be false about it.
+        if (set.generator is TargetWrittenGenerator) {
+            if (smaliPatches.isNotEmpty() || set.hermesPatches.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             Text(
