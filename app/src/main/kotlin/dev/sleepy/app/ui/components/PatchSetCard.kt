@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.PatchSet
+import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.ui.state.PatchRows
 import dev.sleepy.app.ui.state.PatchSetRows
 import dev.sleepy.app.ui.state.TriState
@@ -278,6 +279,23 @@ private fun DisclosureRow(
 }
 
 /**
+ * What one smali entry rewrites, as the one line under its class path.
+ *
+ * An entry replaces a method, slices a case out of a switch, or splices around an anchor, and only
+ * the first has a method signature. A line reading "Method: null" would be noise exactly where the
+ * precise target belongs, so each shape is named as itself and a shape with nothing to name gets no
+ * line at all.
+ */
+private fun targetLine(patch: SmaliPatch): String? = when {
+    !patch.methodSignature.isNullOrBlank() -> "Method: ${patch.methodSignature}"
+    !patch.switchCaseLabel.isNullOrBlank() -> "Slices switch case ${patch.switchCaseLabel}"
+    !patch.anchor.isNullOrBlank() ->
+        "Splices around: " + patch.anchor.lines().joinToString(" ; ") { it.trim() }.trim(' ', ';')
+
+    else -> null
+}
+
+/**
  * The exact bytecode and bytecode-stub targets behind a set.
  *
  * This is the audit trail the app has always shown — which classes, methods and function ids a set
@@ -303,19 +321,45 @@ private fun PatchTechnicalTargets(set: PatchSet) {
                 color = MaterialTheme.colorScheme.primary
             )
             set.smaliPatches.forEach { smaliPatch ->
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    // The entry's own title and explanation are shown here rather than left to the
+                    // progress log. A set with one item has no expanded rows to carry them, so for
+                    // those sets this panel is the only place the text can be read before patching.
+                    smaliPatch.title?.takeIf { it.isNotBlank() }?.let { title ->
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    smaliPatch.explanation?.takeIf { it.isNotBlank() }?.let { explanation ->
+                        Text(
+                            text = explanation,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // The dex is resolved at patch time, so an entry that names one says which, and
+                    // an entry that leaves it to the pipeline does not read "[null]".
                     Text(
-                        text = "• [${smaliPatch.dexName}] ${smaliPatch.smaliPath}",
+                        text = smaliPatch.dexName?.takeIf { it.isNotBlank() }
+                            ?.let { "• [$it] ${smaliPatch.smaliPath}" }
+                            ?: "• ${smaliPatch.smaliPath}",
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = "  Method: ${smaliPatch.methodSignature}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    // Not every entry rewrites a whole method: some slice one case out of a
+                    // dispatcher and some splice around an anchor, and those have no signature.
+                    targetLine(smaliPatch)?.let { target ->
+                        Text(
+                            text = "  $target",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

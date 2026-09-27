@@ -61,10 +61,12 @@ android {
 
 }
 
-// The merge tests hold a ~96 MB base split, ~74 MB of native libraries and the ~131 MB
-// repacked archive at once, which is the point: it exercises the same peak the device hits.
+// The merge test walks the real Discord splits — a 96 MB base and a 74 MB ABI split — end to
+// end, and that is the point of it: it exercises the same peak the device hits. The heap is
+// capped at what a phone grants an app with `largeHeap` so a repack that quietly holds the
+// whole archive, or the libraries it is merging, fails here instead of on someone's phone.
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
-    maxHeapSize = "3g"
+    maxHeapSize = "512m"
 }
 
 kotlin {

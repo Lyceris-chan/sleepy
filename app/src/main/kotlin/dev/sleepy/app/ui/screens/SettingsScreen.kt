@@ -337,8 +337,8 @@ private fun ArchitectureCard() {
 
             ArchitectureRow(
                 icon = Icons.Default.Key,
-                title = "Android Keystore (v1 + v2 + v3)",
-                body = "RSA-2048 signing via the official Google apksig engine"
+                title = "On-device signing key (v1 + v2 + v3)",
+                body = "An RSA-2048 key generated on this device and kept as a PKCS12 file, used with Google's apksig engine"
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

@@ -8,22 +8,23 @@ import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.patches.PatchRegistry
+import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.util.Downloader
 import dev.sleepy.app.util.HashUtils
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.io.ByteArrayInputStream
+import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
 /**
  * Runs a full patch job: download, unpack, patch, reassemble, sign, verify.
  *
- * The pipeline is deliberately storage-agnostic — everything happens in memory — but the
- * steps are ordered so that a wrong assumption fails loudly instead of producing an APK
+ * The steps are ordered so that a wrong assumption fails loudly instead of producing an APK
  * that installs and then crashes:
  *
  * - A split base APK is merged with its configuration splits **before** anything is
@@ -31,7 +32,13 @@ import java.util.zip.ZipInputStream
  *   libraries and declares `requiredSplitTypes` the platform enforces at install time.
  * - Every patch reports OK, SKIP or FAIL with the reason it reached that verdict, so the
  *   UI can show what actually happened rather than what was attempted.
- * - Signature and alignment claims come from [ApkVerifier] reading the finished bytes.
+ * - Signature and alignment claims come from [ApkVerifier] reading the finished file.
+ *
+ * Only what is being edited is held in memory. A Discord job is 96 MB of base split, 74 MB of
+ * native libraries and a 131 MB result, and no two of those are ever bytes at the same time:
+ * the download lands in [Context.getCacheDir], the split libraries are merged out to files
+ * there, and the archive is rebuilt and signed file to file. That is what keeps the peak
+ * inside the heap a phone grants an app rather than the 3 GB a desktop test JVM can be given.
  */
 class PatchingPipeline(private val context: Context) {
 
@@ -63,9 +70,13 @@ class PatchingPipeline(private val context: Context) {
         currentJob?.cancel()
         _stepLog.value = emptyList()
 
+        // Scratch space for the job, owned by it alone so a cancelled job cannot delete the
+        // directory of the one replacing it. Everything too large to hold lives in here.
+        val workDir = File(context.cacheDir, "sleepy_work_${System.currentTimeMillis()}")
+
         currentJob = scope.launch(Dispatchers.IO) {
             try {
-                execute(sourceUrl, originalPackageName, customPackageName, selectedPatchIds, selection, splitUrls, expectedSha256)
+                execute(sourceUrl, originalPackageName, customPackageName, selectedPatchIds, selection, splitUrls, expectedSha256, workDir)
             } catch (e: CancellationException) {
                 _progress.value = PatchProgress.Idle
             } catch (e: Exception) {
@@ -73,6 +84,8 @@ class PatchingPipeline(private val context: Context) {
                     message = e.message ?: "An unexpected error occurred during patching",
                     detail = e.stackTraceToString()
                 )
+            } finally {
+                workDir.deleteRecursively()
             }
         }
     }
@@ -80,6 +93,36 @@ class PatchingPipeline(private val context: Context) {
     fun cancel() {
         currentJob?.cancel()
         _progress.value = PatchProgress.Idle
+    }
+
+    /**
+     * The permissions the build at [sourceUrl] declares, in the order it declares them.
+     *
+     * This reads the target APK's own manifest rather than a list kept anywhere, which is the
+     * whole point: what a build declares is a fact about that build, and a list written down here
+     * would be wrong the first time either app updated. It costs the same download the patch does,
+     * so a caller reads it once and shows the result; [execute] reads it again from the bytes it
+     * has already fetched, and that second read is the one the removed declarations come from.
+     *
+     * An APK with no manifest, or one that cannot be read, declares nothing here: the failure is
+     * reported as "nothing to remove" rather than as an error, because that is the safe reading —
+     * a build whose permissions could not be read is a build whose permissions are left alone.
+     */
+    suspend fun readDeclaredPermissions(sourceUrl: String): List<String> = withContext(Dispatchers.IO) {
+        // The download lands in a file rather than a local: this reads ~100 MB to look at one
+        // 100 KB manifest, and the archive should not be on the heap while it does.
+        val apk = File.createTempFile("sleepy_permissions_", ".apk", context.cacheDir)
+        try {
+            apk.writeBytes(Downloader.download(sourceUrl) { _, _ -> })
+            val manifest = extractManifest(apk) ?: return@withContext emptyList()
+            BinaryXmlEditor.readElementAttributeValues(
+                xml = manifest,
+                namePrefix = BinaryXmlEditor.ELEMENT_USES_PERMISSION,
+                attributeId = BinaryXmlEditor.ATTR_NAME
+            )
+        } finally {
+            apk.delete()
+        }
     }
 
     /**
@@ -97,51 +140,17 @@ class PatchingPipeline(private val context: Context) {
         selectedPatchIds: List<String>,
         selection: PatchSelection?,
         splitUrls: List<String>,
-        expectedSha256: String?
+        expectedSha256: String?,
+        workDir: File
     ) {
-        // 1. Download the base APK.
+        // 1. Download the base APK, and 2. check the published hash, if the source publishes
+        // one. Both happen inside a call of their own so that the downloaded bytes are not a
+        // local of this coroutine: it suspends, which makes its locals fields of the
+        // continuation, and 96 MB that stays reachable for the rest of the job is the whole
+        // reason this pipeline ran out of heap. On disk the archive can sit until the repack.
         _progress.value = PatchProgress.Downloading(0, 0, 0)
-        val apkBytes = Downloader.download(sourceUrl) { received, total ->
-            val pct = if (total > 0) ((received * 100) / total).toInt() else 0
-            _progress.value = PatchProgress.Downloading(pct, received, total)
-        }
-        log(
-            StepResult(
-                title = "Downloaded the original APK",
-                explanation = "Fetched the unmodified build so every change in the result can be traced back to a known starting point.",
-                technicalTarget = sourceUrl,
-                status = StepStatus.OK,
-                detail = "${apkBytes.size / (1024 * 1024)} MB"
-            )
-        )
-
-        // 2. Check the published hash, if the source publishes one.
-        if (expectedSha256 != null) {
-            val actual = HashUtils.sha256Hex(apkBytes)
-            if (!actual.equals(expectedSha256, ignoreCase = true)) {
-                throw IllegalStateException(
-                    "Source integrity check failed: expected SHA-256 $expectedSha256 but the downloaded file hashes to $actual. " +
-                        "The download was modified or the published hash is stale, so nothing was patched."
-                )
-            }
-            log(
-                StepResult(
-                    title = "Verified the download against its published SHA-256",
-                    explanation = "Confirmed the file is byte-for-byte the build the source published, so nothing unexpected entered the pipeline.",
-                    technicalTarget = "SHA-256 $actual",
-                    status = StepStatus.OK
-                )
-            )
-        } else {
-            log(
-                StepResult(
-                    title = "No published hash to verify against",
-                    explanation = "This source does not publish a SHA-256, so the download could not be checked. The patches below still report exactly what they changed.",
-                    technicalTarget = "sha256_expected is null",
-                    status = StepStatus.SKIP
-                )
-            )
-        }
+        val sourceApk = File(workDir, "source.apk")
+        downloadSource(sourceUrl, expectedSha256, sourceApk)
 
         currentCoroutineContext().ensureActive()
 
@@ -158,11 +167,13 @@ class PatchingPipeline(private val context: Context) {
                     librariesMerged = mergedLibraries,
                     abis = abis.toList()
                 )
-                val splitBytes = Downloader.download(splitUrl) { _, _ -> }
-                val report = SplitMerger.mergeNativeLibraries(splitBytes)
+                // Each library is merged straight to a file, and the map holds where each one
+                // is rather than what it weighs: the entries themselves are what the repack
+                // streams back in, so the 74 MB of an ABI split never has to be bytes.
+                val report = fetchSplitLibraries(splitUrl, index, workDir)
                 for (entry in report.entries) {
                     nativeLibraryEntries[entry.name] = ZipRepacker.AdditionalEntry(
-                        data = entry.data,
+                        file = entry.file,
                         method = ZipEntry.DEFLATED
                     )
                 }
@@ -183,7 +194,7 @@ class PatchingPipeline(private val context: Context) {
                         explanation = "An App Bundle base split ships without any lib/ directory — the ARM64 shared libraries live in a separate " +
                             "configuration split. Without them the app dies on its first System.loadLibrary call, which is why a base-only APK " +
                             "crashes the moment it opens.",
-                        technicalTarget = "$mergedLibraries libraries for ${abis.joinToString(", ")}, ~${nativeLibraryEntries.values.sumOf { it.data.size.toLong() } / (1024 * 1024)} MB",
+                        technicalTarget = "$mergedLibraries libraries for ${abis.joinToString(", ")}, ~${nativeLibraryEntries.values.sumOf { it.size } / (1024 * 1024)} MB",
                         status = StepStatus.OK
                     )
                 )
@@ -201,20 +212,40 @@ class PatchingPipeline(private val context: Context) {
 
         currentCoroutineContext().ensureActive()
 
-        // 4. Inspect the APK in memory.
+        // 4. Inspect the APK. Only the entries that are going to be edited are read out of it:
+        // the DEX files, the JS bundle and the manifest, not the resources and assets beside
+        // them, which the repack copies straight through from the file.
         _progress.value = PatchProgress.Decoding("Reading the APK in memory")
-        val dexEntries = extractDexEntries(apkBytes)
-        val bundleBytes = extractBundle(apkBytes)
-        var manifestBytes = extractManifest(apkBytes)
+        val dexEntries = extractDexEntries(sourceApk)
+        val bundleBytes = extractBundle(sourceApk)
+        var manifestBytes = extractManifest(sourceApk)
 
         log(
             StepResult(
                 title = "Opened the APK and located its code",
-                explanation = "Everything is unpacked in memory only — the original APK on disk is never modified.",
+                explanation = "Only the parts being patched are unpacked — the original APK file is never modified.",
                 technicalTarget = "${dexEntries.size} DEX files, JS bundle ${if (bundleBytes != null) "present" else "absent"}",
                 status = StepStatus.OK
             )
         )
+
+        // What this build declares, read from the manifest that was just extracted rather than
+        // from a table kept anywhere: the selection names permissions by the name the build
+        // writes, and reading them from the build is what keeps the two from drifting apart.
+        val declaredPermissions = manifestBytes?.let { manifest ->
+            BinaryXmlEditor.readElementAttributeValues(
+                xml = manifest,
+                namePrefix = BinaryXmlEditor.ELEMENT_USES_PERMISSION,
+                attributeId = BinaryXmlEditor.ATTR_NAME
+            )
+        } ?: emptyList()
+        // A selection that names no permission removes none of them, whatever the build declares
+        // — see PermissionCatalog.removals, which decides this and is where the two locks live.
+        val permissionRemovals = if (selection == null) {
+            emptyList()
+        } else {
+            PermissionCatalog.removals(declaredPermissions, selection)
+        }
 
         val classToDexIndex = DexProcessor.buildClassToDexIndex(dexEntries)
         val detectedOctoGramVersion = when {
@@ -414,6 +445,105 @@ class PatchingPipeline(private val context: Context) {
             replacements["assets/index.android.bundle"] = finalBundle
         }
 
+        // The manifest is edited before the clone rename, because a removal is matched on the
+        // permission name exactly as the build writes it and the rename rewrites every string
+        // that begins with the package name — including the one permission whose name is built
+        // from it.
+        val permissionSelectors = permissionRemovals.map { permission ->
+            BinaryXmlEditor.ElementSelector(
+                namePrefix = BinaryXmlEditor.ELEMENT_USES_PERMISSION,
+                attributeId = BinaryXmlEditor.ATTR_NAME,
+                attributeValue = permission
+            )
+        }
+
+        // One pass over the manifest for both reasons there is to edit it: a merged APK is no
+        // longer a split, so the split declarations must go and the native libraries are now
+        // DEFLATE-compressed so they must be extracted at install; and a permission the user
+        // switched off must be declared no more.
+        if (manifestBytes != null && (mergedLibraries > 0 || permissionSelectors.isNotEmpty())) {
+            val edit = if (mergedLibraries > 0) {
+                BinaryXmlEditor.makeStandaloneManifest(manifestBytes, permissionSelectors)
+            } else {
+                // Nothing was merged, so nothing needs making standalone: this pass is the
+                // permission removals and nothing else. Turning extractNativeLibs on here would
+                // change an attribute the user never asked about.
+                BinaryXmlEditor.edit(manifestBytes, removeElements = permissionSelectors)
+            }
+            manifestBytes = edit.bytes
+
+            if (mergedLibraries > 0) {
+                if (edit.attributesRemoved.isNotEmpty() || edit.attributesRewritten.isNotEmpty()) {
+                    log(
+                        StepResult(
+                            title = "Made the manifest standalone",
+                            explanation = "The base split declares that it requires the ABI and density splits. The platform refuses to launch an app " +
+                                "whose required splits are missing, so those declarations are removed now that the libraries are inside this APK. " +
+                                "extractNativeLibs is turned on so the compressed libraries are unpacked at install time.",
+                            technicalTarget = buildString {
+                                if (edit.attributesRemoved.isNotEmpty()) append("removed requiredSplitTypes/splitTypes")
+                                if (edit.attributesRewritten.isNotEmpty()) {
+                                    if (isNotEmpty()) append(", ")
+                                    append("extractNativeLibs=true")
+                                }
+                            },
+                            status = StepStatus.OK
+                        )
+                    )
+                } else {
+                    log(
+                        StepResult(
+                            title = "Manifest needed no split changes",
+                            explanation = "No split declarations were present, so nothing had to be removed.",
+                            technicalTarget = "requiredSplitTypes / splitTypes absent",
+                            status = StepStatus.SKIP
+                        )
+                    )
+                }
+                if (edit.missing.isNotEmpty()) {
+                    log(
+                        StepResult(
+                            title = "Some expected manifest attributes were absent",
+                            explanation = "These attributes were not present in the manifest, so they were left alone.",
+                            technicalTarget = edit.missing.joinToString { "0x%08x".format(it) },
+                            status = StepStatus.SKIP
+                        )
+                    )
+                }
+            }
+
+            if (permissionSelectors.isNotEmpty()) {
+                val removedCount = edit.elementsRemoved.size
+                log(
+                    StepResult(
+                        title = "Removed $removedCount permission ${if (removedCount == 1) "declaration" else "declarations"} from the manifest",
+                        explanation = "Android grants an app only the permissions its manifest declares, and an installed app cannot declare " +
+                            "another one later, so these are gone for good: the app can never ask for them again. The declarations themselves " +
+                            "were deleted — the rest of the manifest, its string pool and every other attribute, is byte-for-byte what the build shipped.",
+                        technicalTarget = edit.elementsRemoved
+                            .take(6)
+                            .joinToString(", ")
+                            .let { if (removedCount > 6) "$it and ${removedCount - 6} more" else it },
+                        status = if (edit.elementsMissing.isEmpty()) StepStatus.OK else StepStatus.SKIP,
+                        detail = edit.elementsMissing.take(5).takeIf { it.isNotEmpty() }
+                            ?.joinToString("; ") { "$it is not declared by this build, so there was nothing to remove" }
+                    )
+                )
+            }
+        }
+
+        if (permissionSelectors.isEmpty() && selection != null && PermissionCatalog.isEngaged(selection)) {
+            log(
+                StepResult(
+                    title = "Kept every permission this build declares",
+                    explanation = "Permissions were chosen about but none of them was switched off, so every declaration the build shipped is " +
+                        "still in the manifest that was produced.",
+                    technicalTarget = "${declaredPermissions.size} declarations, none removed",
+                    status = StepStatus.SKIP
+                )
+            )
+        }
+
         if (!customPackageName.isNullOrBlank() && customPackageName != originalPackageName && manifestBytes != null) {
             manifestBytes = BinaryXmlModifier.modifyPackageName(
                 manifestBytes = manifestBytes,
@@ -430,50 +560,6 @@ class PatchingPipeline(private val context: Context) {
             )
         }
 
-        // A merged APK is no longer a split, so the split declarations must go, and the
-        // native libraries are now DEFLATE-compressed so they must be extracted at install.
-        if (mergedLibraries > 0 && manifestBytes != null) {
-            val edit = BinaryXmlEditor.makeStandaloneManifest(manifestBytes)
-            if (edit.attributesRemoved.isNotEmpty() || edit.attributesRewritten.isNotEmpty()) {
-                manifestBytes = edit.bytes
-                log(
-                    StepResult(
-                        title = "Made the manifest standalone",
-                        explanation = "The base split declares that it requires the ABI and density splits. The platform refuses to launch an app " +
-                            "whose required splits are missing, so those declarations are removed now that the libraries are inside this APK. " +
-                            "extractNativeLibs is turned on so the compressed libraries are unpacked at install time.",
-                        technicalTarget = buildString {
-                            if (edit.attributesRemoved.isNotEmpty()) append("removed requiredSplitTypes/splitTypes")
-                            if (edit.attributesRewritten.isNotEmpty()) {
-                                if (isNotEmpty()) append(", ")
-                                append("extractNativeLibs=true")
-                            }
-                        },
-                        status = StepStatus.OK
-                    )
-                )
-            } else {
-                log(
-                    StepResult(
-                        title = "Manifest needed no split changes",
-                        explanation = "No split declarations were present, so nothing had to be removed.",
-                        technicalTarget = "requiredSplitTypes / splitTypes absent",
-                        status = StepStatus.SKIP
-                    )
-                )
-            }
-            if (edit.missing.isNotEmpty()) {
-                log(
-                    StepResult(
-                        title = "Some expected manifest attributes were absent",
-                        explanation = "These attributes were not present in the manifest, so they were left alone.",
-                        technicalTarget = edit.missing.joinToString { "0x%08x".format(it) },
-                        status = StepStatus.SKIP
-                    )
-                )
-            }
-        }
-
         if (manifestBytes != null) {
             replacements["AndroidManifest.xml"] = manifestBytes
         }
@@ -486,12 +572,21 @@ class PatchingPipeline(private val context: Context) {
             emptySet()
         }
 
-        val repack = ZipRepacker.repack(
-            inputApkBytes = apkBytes,
-            replacements = replacements,
-            additionalEntries = nativeLibraryEntries,
-            droppedEntries = droppedArtefacts
-        )
+        // The rebuild reads the source file entry by entry and writes the result straight to
+        // another file, so the ~131 MB archive exists once. Materialising it here instead is
+        // what made this step the peak: an output buffer sized for the whole archive plus the
+        // copy `toByteArray()` makes of it, while the base APK and the merged libraries were
+        // still live.
+        val rebuiltApk = File(workDir, "rebuilt.apk")
+        val repack = FileOutputStream(rebuiltApk).use { output ->
+            ZipRepacker.repackTo(
+                inputApk = sourceApk,
+                output = output,
+                replacements = replacements,
+                additionalEntries = nativeLibraryEntries,
+                droppedEntries = droppedArtefacts
+            )
+        }
         log(
             StepResult(
                 title = "Rebuilt the APK with correct alignment",
@@ -504,9 +599,12 @@ class PatchingPipeline(private val context: Context) {
 
         currentCoroutineContext().ensureActive()
 
-        // 8. Sign.
+        // 8. Sign. apksig reads the rebuilt file and writes the signed one, and the signed one
+        // is the artefact the user gets, so this is the last place the archive is copied — and
+        // it is copied by the filesystem rather than by the heap.
         _progress.value = PatchProgress.Signing("Signing the APK")
-        val signedApkBytes = ApkSignerHelper.sign(context, repack.bytes)
+        val outputFile = File(context.cacheDir, "sleepy_patched_${System.currentTimeMillis()}.apk")
+        ApkSignerHelper.sign(context, rebuiltApk, outputFile)
         log(
             StepResult(
                 title = "Signed the APK",
@@ -517,9 +615,10 @@ class PatchingPipeline(private val context: Context) {
             )
         )
 
-        // 9. Verify what was actually produced.
+        // 9. Verify what was actually produced. The finished APK is read where it lies, so
+        // checking it does not mean loading it back into memory.
         _progress.value = PatchProgress.Signing("Verifying the signed result")
-        val verification = ApkVerifier.verify(signedApkBytes)
+        val verification = ApkVerifier.verify(outputFile)
         log(
             StepResult(
                 title = "Checked the signatures on the finished APK",
@@ -541,10 +640,7 @@ class PatchingPipeline(private val context: Context) {
             )
         )
 
-        val outputFile = File(context.cacheDir, "sleepy_patched_${System.currentTimeMillis()}.apk").apply {
-            writeBytes(signedApkBytes)
-        }
-        val sha256 = HashUtils.sha256Hex(signedApkBytes)
+        val sha256 = HashUtils.sha256Hex(outputFile)
 
         val applied = _stepLog.value.filter { it.status == StepStatus.OK }.map { it.title }
         val skipped = _stepLog.value.filter { it.status == StepStatus.SKIP }.map { it.title }
@@ -560,7 +656,7 @@ class PatchingPipeline(private val context: Context) {
                 zipalignPassed = verification.zipalignPassed,
                 sourceIntegrityVerified = expectedSha256?.let { true },
                 mergedNativeLibraries = mergedLibraries,
-                outputBytes = signedApkBytes.size.toLong(),
+                outputBytes = outputFile.length(),
                 patchesApplied = applied,
                 patchesSkipped = skipped,
                 patchesFailed = failed
@@ -572,12 +668,88 @@ class PatchingPipeline(private val context: Context) {
         _stepLog.value = _stepLog.value + result
     }
 
-    private fun extractDexEntries(apkBytes: ByteArray): Map<String, ByteArray> {
+    /**
+     * Fetches the base APK to [destination], checking it against [expectedSha256] when the
+     * source publishes one, and returns how large it was.
+     *
+     * The body lives outside [execute] on purpose: `execute` is a suspend function, so its
+     * locals are fields of the continuation, and a 96 MB array parked there stays reachable
+     * for the whole job. Here it dies with the call.
+     */
+    private suspend fun downloadSource(url: String, expectedSha256: String?, destination: File): Long {
+        val bytes = Downloader.download(url) { received, total ->
+            val pct = if (total > 0) ((received * 100) / total).toInt() else 0
+            _progress.value = PatchProgress.Downloading(pct, received, total)
+        }
+        log(
+            StepResult(
+                title = "Downloaded the original APK",
+                explanation = "Fetched the unmodified build so every change in the result can be traced back to a known starting point.",
+                technicalTarget = url,
+                status = StepStatus.OK,
+                detail = "${bytes.size / (1024 * 1024)} MB"
+            )
+        )
+
+        if (expectedSha256 != null) {
+            val actual = HashUtils.sha256Hex(bytes)
+            if (!actual.equals(expectedSha256, ignoreCase = true)) {
+                throw IllegalStateException(
+                    "Source integrity check failed: expected SHA-256 $expectedSha256 but the downloaded file hashes to $actual. " +
+                        "The download was modified or the published hash is stale, so nothing was patched."
+                )
+            }
+            log(
+                StepResult(
+                    title = "Verified the download against its published SHA-256",
+                    explanation = "Confirmed the file is byte-for-byte the build the source published, so nothing unexpected entered the pipeline.",
+                    technicalTarget = "SHA-256 $actual",
+                    status = StepStatus.OK
+                )
+            )
+        } else {
+            log(
+                StepResult(
+                    title = "No published hash to verify against",
+                    explanation = "This source does not publish a SHA-256, so the download could not be checked. The patches below still report exactly what they changed.",
+                    technicalTarget = "sha256_expected is null",
+                    status = StepStatus.SKIP
+                )
+            )
+        }
+
+        destination.parentFile?.mkdirs()
+        destination.writeBytes(bytes)
+        return bytes.size.toLong()
+    }
+
+    /**
+     * Downloads configuration split [index] and merges its native libraries into [workDir].
+     *
+     * The split itself is a file for the length of the merge and then deleted: it is another
+     * tens of megabytes, and only the libraries inside it are wanted. As with
+     * [downloadSource], the split's bytes never become a local of [execute].
+     */
+    private suspend fun fetchSplitLibraries(
+        url: String,
+        index: Int,
+        workDir: File
+    ): SplitMerger.MergeReport<SplitMerger.MergedFileEntry> {
+        val splitApk = File(workDir, "split_$index.apk")
+        try {
+            splitApk.writeBytes(Downloader.download(url) { _, _ -> })
+            return SplitMerger.mergeNativeLibrariesToDir(splitApk, workDir)
+        } finally {
+            splitApk.delete()
+        }
+    }
+
+    private fun extractDexEntries(apk: File): Map<String, ByteArray> {
         val result = mutableMapOf<String, ByteArray>()
-        ZipInputStream(ByteArrayInputStream(apkBytes)).use { zis ->
+        ZipInputStream(BufferedInputStream(apk.inputStream())).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
-                if (entry.name.matches(Regex("classes\\d*\\.dex"))) {
+                if (DEX_ENTRY_NAME.matches(entry.name)) {
                     result[entry.name] = zis.readBytes()
                 }
                 zis.closeEntry()
@@ -587,12 +759,13 @@ class PatchingPipeline(private val context: Context) {
         return result
     }
 
-    private fun extractBundle(apkBytes: ByteArray): ByteArray? = extractEntry(apkBytes, "assets/index.android.bundle")
+    private fun extractBundle(apk: File): ByteArray? = extractEntry(apk, BUNDLE_ENTRY)
 
-    private fun extractManifest(apkBytes: ByteArray): ByteArray? = extractEntry(apkBytes, "AndroidManifest.xml")
+    private fun extractManifest(apk: File): ByteArray? = extractEntry(apk, MANIFEST_ENTRY)
 
-    private fun extractEntry(apkBytes: ByteArray, name: String): ByteArray? {
-        ZipInputStream(ByteArrayInputStream(apkBytes)).use { zis ->
+    /** Reads one entry out of [apk], stopping as soon as it is found. */
+    private fun extractEntry(apk: File, name: String): ByteArray? {
+        ZipInputStream(BufferedInputStream(apk.inputStream())).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
                 if (entry.name == name) return zis.readBytes()
@@ -601,5 +774,13 @@ class PatchingPipeline(private val context: Context) {
             }
         }
         return null
+    }
+
+    private companion object {
+        /** Matches `classes.dex`, `classes2.dex`, ... — the DEX files of a single APK. */
+        val DEX_ENTRY_NAME = Regex("classes\\d*\\.dex")
+
+        const val BUNDLE_ENTRY = "assets/index.android.bundle"
+        const val MANIFEST_ENTRY = "AndroidManifest.xml"
     }
 }

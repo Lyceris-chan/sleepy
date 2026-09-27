@@ -7,12 +7,14 @@ import dev.sleepy.app.model.HermesPatch
 import dev.sleepy.app.model.PatchItem
 import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.PatchSet
+import dev.sleepy.app.model.PermissionRow
 import dev.sleepy.app.model.groupedByFeature
 import dev.sleepy.app.patches.DiscordBlocklistPatch
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchItemCatalog
+import dev.sleepy.app.patches.PermissionCatalog
 
 /**
  * The state a patch set's own switch can be in.
@@ -141,6 +143,12 @@ object PatchRows {
     /** The key of a group heading inside a set's expanded body. */
     fun groupKey(setId: String, groupLabel: String): String = "group:$setId:$groupLabel"
 
+    /** The key of the permission section's card in the lazy list. */
+    fun permissionCardKey(): String = "permissions"
+
+    /** The key of the group heading above the permission rows. */
+    fun permissionGroupKey(): String = "permissions:group"
+
     /** Bundle patches by item key, so a row can say which function and how many bytes it replaces. */
     private val HERMES_PATCH_BY_KEY: Map<String, DiscordHermesBundlePatch.FunctionPatch> =
         DiscordHermesBundlePatch.PATCHES.associateBy {
@@ -199,6 +207,50 @@ object PatchRows {
             selectedItemCount = selection.selected(items).size,
             triState = triState(items, selection)
         )
+    }
+
+    /**
+     * The permission section's rows: one per permission the build declares, in the order its
+     * manifest declares them.
+     *
+     * These are the same rows an expanded set has, rendered by the same row and greyed by the same
+     * mechanism, because a permission that cannot be switched off is the same kind of claim as a
+     * blocklist gate: [InertKind.REQUIRED], the model's own reason, and no switch to move. What
+     * differs is only where the list comes from — the APK's manifest rather than a table.
+     *
+     * The switch reads "kept", so a permission is removed by switching it off, and the rows are
+     * derived from the selection on every read like everything else here: the last permission
+     * standing starts refusing the moment it is the last, and stops the moment another is
+     * switched back on.
+     */
+    fun permissionRows(declared: List<String>, selection: PatchSelection): List<PatchRow> {
+        val items = PermissionCatalog.itemsOf(declared).associateBy { it.identity }
+        return PermissionCatalog.rows(declared, selection).map { row ->
+            val item = items.getValue(row.permission.identity)
+            PatchRow(
+                key = item.key,
+                label = row.permission.label,
+                description = row.permission.description,
+                enabled = row.kept,
+                // A locked permission has no item behind it for the same reason a gate has none:
+                // there is nothing the user could do with it.
+                item = item.takeIf { row.switchable },
+                inertKind = if (row.lockedReason != null) InertKind.REQUIRED else null,
+                inertReason = row.lockedReason,
+                technicalTarget = "android:name=\"${row.permission.name}\"",
+                detail = permissionDetail(item, row)
+            )
+        }
+    }
+
+    /** Where a permission row's declaration is, and what the row's current state does to it. */
+    private fun permissionDetail(item: PatchItem, row: PermissionRow): String {
+        val effect = if (row.switchable && !row.kept) {
+            "Switched off, so this declaration is deleted from the manifest of the build this run produces."
+        } else {
+            "Left declared, so the app keeps this permission."
+        }
+        return "Declared by this build in its own AndroidManifest.xml. $effect Selection key ${item.key}."
     }
 
     /**

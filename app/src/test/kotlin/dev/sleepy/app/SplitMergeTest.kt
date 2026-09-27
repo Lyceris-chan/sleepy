@@ -11,8 +11,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.file.Files
 import java.io.File
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
@@ -145,8 +147,17 @@ class SplitMergeTest {
 
     /**
      * The full path that produced the alignment report: merge the real Discord ABI split
-     * into the real base split and repack. The output is written to a temporary file so it
-     * can be handed to the actual `zipalign` binary, which is the authority on this.
+     * into the real base split and repack, all of it the way the pipeline does it — the
+     * libraries merged out to files, the archive rebuilt file to file, and the result checked
+     * where it lies.
+     *
+     * That is also what makes this runnable in a phone-sized heap: the base split is 96 MB and
+     * the libraries are 74 MB, so neither can be a `ByteArray` while the 131 MB output is being
+     * written. This test is the one that caught the repack holding all three at once, so it is
+     * deliberately the path that has to keep fitting.
+     *
+     * The output is left in `/tmp` so it can be handed to the real `zipalign` binary, which is
+     * the authority on whether the alignment is actually right.
      */
     @Test
     fun mergedDiscordApkPassesAlignment() {
@@ -158,22 +169,42 @@ class SplitMergeTest {
             return
         }
 
-        val merge = SplitMerger.mergeNativeLibraries(split.readBytes())
-        assertTrue("the ABI split must carry libraries", merge.libraryCount > 0)
+        val workDir = Files.createTempDirectory("sleepy-merge-test").toFile()
+        try {
+            val merge = SplitMerger.mergeNativeLibrariesToDir(split, workDir)
+            assertTrue("the ABI split must carry libraries", merge.libraryCount > 0)
 
-        val additional = merge.entries.associate { entry ->
-            entry.name to ZipRepacker.AdditionalEntry(entry.data, ZipEntry.DEFLATED)
+            val additional = merge.entries.associate { entry ->
+                entry.name to ZipRepacker.AdditionalEntry(entry.file, ZipEntry.DEFLATED)
+            }
+            val out = File("/tmp/sleepy-merged-test.apk")
+            FileOutputStream(out).use { stream ->
+                ZipRepacker.repackTo(base, stream, emptyMap(), additional)
+            }
+
+            val result = ApkVerifier.verify(out)
+            assertTrue(
+                "merged APK must pass the alignment check, misaligned: ${result.misalignedEntries}",
+                result.zipalignPassed
+            )
+
+            // Our own checker was once wrong about which entries need aligning, so the real
+            // one gets the last word when it is on this machine.
+            val zipalign = File("/home/sleepy/portable-tools/android-sdk/build-tools/36.0.0/zipalign")
+            if (zipalign.canExecute()) {
+                val check = ProcessBuilder(zipalign.absolutePath, "-c", "-v", "4", out.absolutePath)
+                    .redirectErrorStream(true)
+                    .start()
+                val report = check.inputStream.bufferedReader().readText()
+                assertEquals("zipalign must accept the merged APK:\n$report", 0, check.waitFor())
+            } else {
+                println("zipalign not found, skipping the external alignment check")
+            }
+
+            println("Merged ${merge.libraryCount} libraries -> ${out.length()} bytes, alignment OK, wrote $out")
+        } finally {
+            workDir.deleteRecursively()
         }
-        val repacked = ZipRepacker.repack(base.readBytes(), emptyMap(), additional)
-
-        val result = ApkVerifier.verify(repacked.bytes)
-        assertTrue(
-            "merged APK must pass the alignment check, misaligned: ${result.misalignedEntries}",
-            result.zipalignPassed
-        )
-        val out = File("/tmp/sleepy-merged-test.apk")
-        out.writeBytes(repacked.bytes)
-        println("Merged ${merge.libraryCount} libraries -> ${repacked.bytes.size} bytes, alignment OK, wrote $out")
     }
 
     @Test

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The OctoGram sets are described in the same terms as the Discord ones: what you lose or gain, rather than the name of the code the change edits. Each of OctoGram's twelve diagnostic log emitters now says what it would have written and at which level, instead of sharing one sentence between them.
+- The technical panel under a set now lists every change with its own title and what it does, so a set whose changes are not listed one by one can still be read before you patch.
+- The notes on what is left running are more precise. The app ships no Firebase analytics library, so the set switches off A/B testing, remote configuration and the telemetry transport rather than an analytics library; and OctoGram's own crash reporter, which writes a crash log and raises a notification, is named as something this version does not patch.
+
+### Removed
+
+- The five OctoGram changes written for 3.6.0. Only a 3.6.1 build can be downloaded here, so they could never run, and listing them suggested otherwise.
+
+### Fixed
+
+- Patching Discord no longer runs the phone out of memory while the merged APK is rebuilt. The merged native libraries, the base APK and the archive being written were all held as byte arrays at once, which is more than a phone's heap; they now move through disk one at a time, so the rebuild's peak is a buffer rather than an archive.
+
 ## [1.3.0] - 2026-09-27
 
 ### Added

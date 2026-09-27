@@ -371,7 +371,9 @@ object DiscordPatches {
         "lib/x86/libsentry-android.so",
         "lib/x86_64/libsentry.so",
         "lib/x86_64/libsentry-android.so",
-        "META-INF/io.sentry/sentry-android-replay/verification.properties",
+        // Note the separator differs between these two entries in the real APK: this one is
+        // a path segment, the one below is a dot inside a filename. They cannot be unified.
+        "META-INF/io/sentry/sentry-android-replay/verification.properties",
         "META-INF/native-image/io.sentry/sentry/native-image.properties",
         "META-INF/sentry-android-replay_release.kotlin_module",
         "io/sentry/android/core/internal/tombstone/tombstone.proto"

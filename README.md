@@ -29,8 +29,8 @@ Each change below has its own switch, so you can apply all of them, one of them,
 - **Removes the full-screen adverts** shown while you swipe through photos and videos in a channel.
 - **Removes sponsored channels and bots** from search results.
 - **Stops the update check** that contacts GitHub in the background.
-- **Stops Firebase analytics**: A/B testing, remote configuration and telemetry uploads are all disabled.
-- **Silences OctoGram's logging** and the diagnostic files it uploads, at the flag that controls logging everywhere in the app.
+- **Stops Firebase's telemetry stack**: A/B testing, remote configuration and the transport that telemetry would travel over are all disabled. The app ships no Firebase analytics library, so there is none to switch off.
+- **Silences OctoGram's logging**: its own log class, which writes to logcat and to a file, and the app-wide switch that gates Telegram's logging, with the five helpers that upload a diagnostic log stubbed.
 - **Reduces the premium paywall.** Most entry points to the premium screen are blocked. Some remain; see [Known limitations](#known-limitations).
 
 ## Choose which patches to apply
@@ -101,9 +101,10 @@ Stated plainly, because a limitation left unsaid reads as a guarantee.
 
 **OctoGram**
 
-- Two changes in the list target OctoGram 3.6.0, and no 3.6.0 download is registered, so they never run on this build.
+- Only 3.6.1 builds can be patched. The reference scripts also carry changes for 3.6.0, and sleepy does not ship them: with no 3.6.0 download registered, they could never run, and a change listed in the app that never does anything reads as a promise it does not keep.
 - The update check is switched off and the logger is silenced, but the rewritten methods use a register count that differs from the reference build's. The assembled code is equivalent; the text is not identical.
-- Premium paywall removal is partial. Most entry points are blocked, but the premium rows on a profile, the premium feature cells and the limit preview screens still appear.
+- Premium paywall removal is partial: 53 of the 61 places the app can present the paywall are blocked, and the remaining eight still open it as a sheet. The premium rows on a profile, the premium feature cells and the limit preview screens still appear, and a subscriber loses the screen where they manage their subscription.
+- OctoGram's own crash reporter is not switched off. OctoGram writes the stack trace of a crash to a file in its own storage and raises an "OctoGram just crashed!" notification. sleepy silences the log lines around that, and the logging switch it pins off also stops Telegram's own crash handler from being installed, but OctoGram's reporter installs a handler of its own that never consults that switch, and sleepy does not patch it yet. A crash therefore still leaves a crash log on the device and still raises its notification.
 - Signed with sleepy's own key, so it installs as a different app identity and will not receive official updates.
 
 ## Build sleepy from source

@@ -78,7 +78,6 @@ object BinaryXmlModifier {
             }
         }
 
-        // Replace occurrences of old package name with new package name
         val modifiedStrings = strings.map { s ->
             s.replace(oldPackageName, newPackageName)
         }

@@ -13,8 +13,8 @@ package dev.sleepy.app.model
  * @property identity the item's identity *within* its set. This is what a saved selection
  *   records, so it has to be stable across releases and across app restarts: never an index into
  *   a list, and never a display label. A Hermes function is identified by its function id (the
- *   names are not unique — this bundle has three functions called `track` and ten with no name
- *   at all), and a blocklist rule by its own pattern, which is all there is of the rule.
+ *   names are not unique — this bundle has three functions called `track`), and a blocklist rule
+ *   by its own pattern, which is all there is of the rule.
  * @property label the item's name as the UI shows it. Free to change; nothing persists it.
  * @property group the user-facing feature the item belongs to, named so it says what it covers.
  * @property description one line saying what switching the item on does to the app.

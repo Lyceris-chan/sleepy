@@ -5,8 +5,6 @@ import androidx.compose.ui.graphics.Color
 // M3 Expressive palette for sleepy, all derived from one purple seed so both colour schemes
 // keep the same identity. Dark values are listed first, then the light counterparts.
 
-// Purple seed.
-val SleepyPurple          = Color(0xFF9B5DE5)
 val SleepyPurpleLight     = Color(0xFFD6BAFF)
 val SleepyPurpleDark      = Color(0xFF56119E)
 val SleepyPurpleContainer = Color(0xFF38006B)

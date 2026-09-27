@@ -86,7 +86,7 @@ object DiscordBlocklistRules {
      * Rules matched only on Discord API URLs - those containing `/api/` and not `/external/`.
      *
      * Without that gate a rule such as `/track` would also answer a CDN attachment called
-     * `track1.mp3` with a 204 and break it; see [DiscordBlocklistPatch.GATES].
+     * `track1.mp3` with a 204 and break it; see [GATES].
      */
     val API_RULES: List<BlocklistRule> = listOf(
         rule(BlocklistRuleKind.API, "/science", "Discord's science-event collector: every analytics event the client " +

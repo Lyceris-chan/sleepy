@@ -1,7 +1,5 @@
 package dev.sleepy.app
 
-import com.android.tools.smali.dexlib2.DexFileFactory
-import com.android.tools.smali.dexlib2.Opcodes
 import dev.sleepy.app.engine.BinaryXmlModifier
 import dev.sleepy.app.engine.DexProcessor
 import dev.sleepy.app.engine.HermesFunctionTable
@@ -168,11 +166,13 @@ class PatcherPipelineTest {
         val isOctoGram361 = classToDex.containsKey("Lorg/telegram/ui/e6;")
         assertEquals(false, isOctoGram361)
 
+        // A build this old gets what is not pinned to a version, and nothing else: every tagged
+        // entry here names 3.6.1, and the 3.6.0-only entries the reference scripts carry are not
+        // ported at all, so no patch claims to run on a build it cannot find its classes in.
         val patchesToApply = mutableListOf<SmaliPatch>()
         for (patchSet in OctoGramPatches.ALL) {
             val matching = patchSet.smaliPatches.filter { patch ->
-                if (patch.versionTag == "3.6.1" && !isOctoGram361) return@filter false
-                if (patch.versionTag == "3.6.0" && isOctoGram361) return@filter false
+                if (patch.versionTag != null) return@filter false
                 val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val actualDex = patch.dexName ?: classToDex[desc]
                 actualDex != null && dexEntries.containsKey(actualDex)
@@ -183,13 +183,19 @@ class PatcherPipelineTest {
                 patchesToApply.add(patch.copy(dexName = actualDex))
             }
         }
+        assertEquals(
+            "the four version-less Firebase registrars are the whole of what a 3.6.0 build gets",
+            4,
+            patchesToApply.size
+        )
+        val dexName = patchesToApply.first().dexName!!
+        val patchedDexEntries = patchesToApply.filter { it.dexName == dexName }
+        assertEquals("and they all live in the same DEX here", 4, patchedDexEntries.size)
 
-        val dex4Patches = patchesToApply.filter { it.dexName == "classes4.dex" }
-        assertEquals(2, dex4Patches.size)
-        val (patched4, res4) = DexProcessor.patchDexSurgically(dexEntries["classes4.dex"]!!, dex4Patches)
-        assertTrue(patched4.isNotEmpty())
-        res4.forEach { assertEquals(StepStatus.OK, it.status) }
-        println("3.6.0 classes4.dex: all patches OK!")
+        val (patchedDex, results) = DexProcessor.patchDexSurgically(dexEntries[dexName]!!, patchedDexEntries)
+        assertTrue(patchedDex.isNotEmpty())
+        results.forEach { assertEquals(StepStatus.OK, it.status) }
+        println("3.6.0 $dexName: all ${results.size} version-less patches applied OK!")
     }
 
     @Test

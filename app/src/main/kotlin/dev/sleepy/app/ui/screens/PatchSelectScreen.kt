@@ -18,9 +18,13 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,9 +50,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sleepy.app.model.PermissionScan
 import dev.sleepy.app.patches.PatchRegistry
+import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.ui.components.PatchItemRow
 import dev.sleepy.app.ui.components.PatchSetCard
+import dev.sleepy.app.ui.state.PatchRow
 import dev.sleepy.app.ui.state.PatchRows
 import dev.sleepy.app.viewmodel.PatchViewModel
 
@@ -104,6 +111,16 @@ fun PatchSelectScreen(
 
     val isCloneMode by viewModel.isCloneMode.collectAsState()
     val customPackageName by viewModel.customPackageName.collectAsState()
+    val permissionScan by viewModel.permissions.collectAsState()
+
+    // Recomputed from the selection like the patch rows, so the last permission standing starts
+    // refusing as soon as it is the last and stops as soon as another is switched back on.
+    val permissionRows = remember(permissionScan, selection) {
+        (permissionScan as? PermissionScan.Read)
+            ?.let { PatchRows.permissionRows(it.declared, selection) }
+            .orEmpty()
+    }
+    val permissionRemovalCount = permissionRows.count { it.switchable && !it.enabled }
 
     val selectedItemCount = rowsBySet.values.sumOf { it.selectedItemCount }
     val totalItemCount = rowsBySet.values.sumOf { it.itemCount }
@@ -148,7 +165,10 @@ fun PatchSelectScreen(
                             viewModel.startPatch()
                             onStartPatch()
                         },
-                        enabled = selectedItemCount > 0,
+                        // A run that removes permissions and applies no patch is still a run: the
+                        // declarations are edited either way, so the removals count towards being
+                        // able to start one.
+                        enabled = selectedItemCount > 0 || permissionRemovalCount > 0,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
@@ -161,8 +181,7 @@ fun PatchSelectScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Patch APK (${selectedItemCount} " +
-                                "${if (selectedItemCount == 1) "item" else "items"} selected)",
+                            text = patchButtonLabel(selectedItemCount, permissionRemovalCount),
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
@@ -252,10 +271,249 @@ fun PatchSelectScreen(
                 }
             }
 
+            item(key = PatchRows.permissionCardKey(), contentType = "permissions") {
+                PermissionCard(
+                    scan = permissionScan,
+                    rows = permissionRows,
+                    expanded = PermissionCatalog.SET_ID in expandedSetIds,
+                    onRead = { viewModel.readPermissions() },
+                    onExpandedChange = {
+                        expandedSetIds = if (PermissionCatalog.SET_ID in expandedSetIds) {
+                            expandedSetIds - PermissionCatalog.SET_ID
+                        } else {
+                            expandedSetIds + PermissionCatalog.SET_ID
+                        }
+                    }
+                )
+            }
+
+            if (permissionRows.isNotEmpty() && PermissionCatalog.SET_ID in expandedSetIds) {
+                item(key = PatchRows.permissionGroupKey(), contentType = "group") {
+                    GroupHeading(label = PermissionCatalog.DECLARED_GROUP, itemCount = permissionRows.size)
+                }
+                items(
+                    items = permissionRows,
+                    key = { it.key },
+                    contentType = { "row" }
+                ) { row ->
+                    PatchItemRow(
+                        row = row,
+                        onToggle = { viewModel.toggleItem(it) }
+                    )
+                }
+            }
+
             item(key = "footer") {
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
+    }
+}
+
+/**
+ * The patch button's label — "3 items selected", and what else the run will do when permission
+ * declarations are being removed.
+ *
+ * The item count is the patch items and nothing else, so it keeps meaning what it always meant;
+ * the permission removals are named separately rather than folded into it, because a run that
+ * removes a permission and applies no patch is otherwise a run reporting "0 items selected".
+ */
+private fun patchButtonLabel(selectedItems: Int, permissionRemovals: Int): String {
+    val items = "$selectedItems ${if (selectedItems == 1) "item" else "items"} selected"
+    if (permissionRemovals == 0) return "Patch APK ($items)"
+    val permissions = "$permissionRemovals ${if (permissionRemovals == 1) "permission" else "permissions"} removed"
+    return "Patch APK ($items, $permissions)"
+}
+
+/**
+ * The permission section: which of the declarations the build being patched makes it keeps.
+ *
+ * The list is read from the APK the source publishes — its own manifest — and never from a table
+ * in the app, so it cannot offer a permission this build does not declare or hide one it does.
+ * Reading it costs a download of that build, which is why it is a button rather than something
+ * that happens when the screen opens, and why nothing can be switched off before it has run: the
+ * engine reads the manifest again when it patches, so a build whose permissions were never read is
+ * a build whose permissions are left exactly as they are.
+ *
+ * There is deliberately no switch for the whole section. Everywhere else a set's header carries
+ * one, and a header switch here would put "remove every permission this build declares" behind one
+ * tap — a state that cannot be undone on an installed app, and one the model refuses anyway once
+ * the last permission stands. The rows are the only way in.
+ *
+ * The section appears for every source, because the only way to know whether a build declares
+ * permissions is to read it; a build that declares none says so in one line rather than showing an
+ * empty list of switches.
+ */
+@Composable
+private fun PermissionCard(
+    scan: PermissionScan,
+    rows: List<PatchRow>,
+    expanded: Boolean,
+    onRead: () -> Unit,
+    onExpandedChange: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Permissions",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (rows.isNotEmpty()) {
+                    IconButton(onClick = onExpandedChange) {
+                        Icon(
+                            imageVector = if (expanded) {
+                                Icons.Default.ExpandLess
+                            } else {
+                                Icons.Default.ExpandMore
+                            },
+                            contentDescription = if (expanded) {
+                                "Hide the permissions"
+                            } else {
+                                "Show the permissions"
+                            },
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Read from this build's own manifest, so it is exactly what this release " +
+                    "declares — not a list of names that could go stale.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            when (scan) {
+                PermissionScan.NotRead -> {
+                    Text(
+                        text = "Nothing is known about this build's permissions yet. Reading them " +
+                            "downloads the same APK the patch does and reads its manifest.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = onRead, shape = MaterialTheme.shapes.large) {
+                        Text("Read this build's permissions")
+                    }
+                }
+
+                PermissionScan.Reading -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Downloading the build and reading its manifest…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                is PermissionScan.Failed -> {
+                    Text(
+                        text = scan.reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Nothing was read, so this run would leave every declaration alone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = onRead, shape = MaterialTheme.shapes.large) {
+                        Text("Try again")
+                    }
+                }
+
+                is PermissionScan.Read -> PermissionSummary(rows)
+            }
+        }
+    }
+}
+
+/**
+ * What the read list currently means: how many declarations are kept, how many are locked, and what
+ * removing the rest will do.
+ *
+ * The effect is stated rather than implied, because it is the one thing in this screen that cannot
+ * be undone on the installed app: a declaration that is deleted cannot be re-declared by the app
+ * later, so the permission is not "off" — it is gone.
+ */
+@Composable
+private fun PermissionSummary(rows: List<PatchRow>) {
+    if (rows.isEmpty()) {
+        Text(
+            text = "This build declares no permissions, so there is nothing here to remove.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+
+    val kept = rows.count { it.enabled }
+    val locked = rows.count { !it.switchable }
+    val removals = rows.count { it.switchable && !it.enabled }
+
+    Text(
+        text = "$kept of ${rows.size} kept" +
+            if (removals > 0) " · $removals to remove" else " · none removed",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = if (removals > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+        text = if (removals > 0) {
+            "$removals declaration${if (removals == 1) "" else "s"} will be deleted from the " +
+                "manifest of the APK this run produces. That is permanent: Android gives an app " +
+                "only the permissions its manifest declares, and an installed app has no way to " +
+                "declare more later, so whatever depends on ${if (removals == 1) "it" else "them"} " +
+                "stops working for good."
+        } else {
+            "Nothing is switched off, so every declaration this build ships stays in the manifest."
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    if (locked > 0) {
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "$locked of them cannot be removed and each says why on its own row.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

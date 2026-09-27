@@ -8,15 +8,19 @@ import dev.sleepy.app.model.AppSource
 import dev.sleepy.app.model.PatchItem
 import dev.sleepy.app.model.PatchProgress
 import dev.sleepy.app.model.PatchSelection
+import dev.sleepy.app.model.PermissionScan
 import dev.sleepy.app.model.StepResult
 import dev.sleepy.app.patches.PatchItemCatalog
+import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.util.SourcesConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Holds what the selection screen is doing: which source is being patched, which of its patch
@@ -50,6 +54,18 @@ class PatchViewModel(application: Application) : AndroidViewModel(application) {
     private val _customPackageName = MutableStateFlow<String>("")
     val customPackageName: StateFlow<String> = _customPackageName.asStateFlow()
 
+    private val _permissions = MutableStateFlow<PermissionScan>(PermissionScan.NotRead)
+    val permissions: StateFlow<PermissionScan> = _permissions.asStateFlow()
+
+    /**
+     * What each source's build declared, by source id, for as long as this ViewModel lives.
+     *
+     * Reading it costs a download of the build, so a source that has been read once is not read
+     * again while the app is running. It is a cache of a fact about a published build rather than
+     * of a choice, which is why [selectSource] clears the shown list but not this.
+     */
+    private val declaredBySource = mutableMapOf<String, List<String>>()
+
     val isPatching: StateFlow<Boolean> = progress.map {
         it !is PatchProgress.Idle && it !is PatchProgress.Done && it !is PatchProgress.Failed
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -66,6 +82,46 @@ class PatchViewModel(application: Application) : AndroidViewModel(application) {
             ?: PatchSelection()
         _isCloneMode.value = false
         _customPackageName.value = found?.let { "${it.packageName}.sleepy" } ?: ""
+        // A different source declares different permissions, so the list from the last one is
+        // dropped rather than carried over; what it declared is remembered, not re-downloaded.
+        _permissions.value = found?.id?.let { declaredBySource[it] }?.let { PermissionScan.Read(it) }
+            ?: PermissionScan.NotRead
+    }
+
+    /**
+     * Reads the selected build's own manifest and lists the permissions it declares.
+     *
+     * Nothing is known until this has run, and nothing can be removed until it has: the section
+     * shows what the APK says rather than what a table here claims, and [startPatch] hands the
+     * engine the same selection this seeds. Every declared permission is seeded as *kept*, so the
+     * list starts with nothing switched off — the run only removes what the user switched off,
+     * which is what makes reading the list a safe thing to do at all.
+     */
+    fun readPermissions() {
+        val source = _selectedSource.value ?: return
+        if (_permissions.value is PermissionScan.Reading) return
+
+        declaredBySource[source.id]?.let {
+            _permissions.value = PermissionScan.Read(it)
+            return
+        }
+
+        viewModelScope.launch {
+            _permissions.value = PermissionScan.Reading
+            try {
+                val declared = pipeline.readDeclaredPermissions(source.url)
+                declaredBySource[source.id] = declared
+                _permissions.value = PermissionScan.Read(declared)
+                _selection.value = _selection.value.with(PermissionCatalog.itemsOf(declared))
+            } catch (e: CancellationException) {
+                _permissions.value = PermissionScan.NotRead
+                throw e
+            } catch (e: Exception) {
+                _permissions.value = PermissionScan.Failed(
+                    e.message ?: "The build could not be read, so its permissions are unknown."
+                )
+            }
+        }
     }
 
     fun setCloneMode(enabled: Boolean) {

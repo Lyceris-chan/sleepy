@@ -19,7 +19,17 @@ object ApkSignerHelper {
     private const val KEY_ALIAS = "sleepy"
     private val KEY_PASSWORD = "sleepy_password_2026".toCharArray()
 
-    suspend fun sign(context: Context, unsignedApkBytes: ByteArray): ByteArray =
+    /**
+     * Signs [inputApk] into [outputApk] and leaves it there.
+     *
+     * Both ends are files because apksig streams the archive from one to the other: the signed
+     * result is never a `ByteArray`. Handing the signer bytes instead would put a full copy of
+     * the APK on the heap at the exact moment the heap is already holding everything that went
+     * into it, and then write it out again — a 131 MB archive copied twice for nothing.
+     *
+     * @return the signed file, which is [outputApk], so the caller can chain off the result.
+     */
+    suspend fun sign(context: Context, inputApk: File, outputApk: File): File =
         withContext(Dispatchers.IO) {
             val keyStoreFile = File(context.filesDir, KEYSTORE_NAME)
             val keyStore = KeyStore.getInstance("PKCS12")
@@ -41,32 +51,28 @@ object ApkSignerHelper {
             val privateKey = keyStore.getKey(KEY_ALIAS, KEY_PASSWORD) as PrivateKey
             val certificate = keyStore.getCertificate(KEY_ALIAS) as X509Certificate
 
-            val inputTemp = File(context.cacheDir, "unsigned_${System.currentTimeMillis()}.apk").apply {
-                writeBytes(unsignedApkBytes)
+            val signerConfig = ApkSigner.SignerConfig.Builder(
+                "sleepy",
+                KeyConfig.Jca(privateKey),
+                listOf(certificate)
+            ).build()
+
+            // A stale file would be signed around rather than replaced, so the destination
+            // starts from nothing either way.
+            if (outputApk.exists() && !outputApk.delete()) {
+                throw IllegalStateException("Could not replace ${outputApk.absolutePath}")
             }
-            val outputTemp = File(context.cacheDir, "signed_${System.currentTimeMillis()}.apk")
 
-            try {
-                val signerConfig = ApkSigner.SignerConfig.Builder(
-                    "sleepy",
-                    KeyConfig.Jca(privateKey),
-                    listOf(certificate)
-                ).build()
+            val apkSigner = ApkSigner.Builder(listOf(signerConfig))
+                .setInputApk(inputApk)
+                .setOutputApk(outputApk)
+                .setV1SigningEnabled(true)
+                .setV2SigningEnabled(true)
+                .setV3SigningEnabled(true)
+                .build()
 
-                val apkSigner = ApkSigner.Builder(listOf(signerConfig))
-                    .setInputApk(inputTemp)
-                    .setOutputApk(outputTemp)
-                    .setV1SigningEnabled(true)
-                    .setV2SigningEnabled(true)
-                    .setV3SigningEnabled(true)
-                    .build()
-
-                apkSigner.sign()
-                outputTemp.readBytes()
-            } finally {
-                inputTemp.delete()
-                outputTemp.delete()
-            }
+            apkSigner.sign()
+            outputApk
         }
 
     private fun generateKeyPair(): KeyPair {

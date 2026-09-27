@@ -13,7 +13,7 @@
       "Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates."
     ],
     "octogram_361": [
-      "Two patch entries target OctoGram 3.6.0, for which no source is registered, so they never run on this build.",
+      "Only OctoGram 3.6.1 builds are patchable. The reference scripts also carry entries for 3.6.0, and those are not ported: no source here offers that build, so an entry targeting it could never run and would read as a live patch that never does anything. Pointing this source at another release will drop the patches whose classes it cannot find, and say so in the step log.",
       "The OTA update check is disabled and the logger is silenced, but stub bodies here use .locals 0 where the reference reuses each method's original register count. The assembled code is equivalent; the text differs.",
       "Premium paywall removal is partial. The reference documents 53 of 61 presentation paths blocked, with profile premium rows, PremiumFeatureCell and LimitPreviewView still rendering.",
       "Signed with sleepy's own key, so it installs as a different app identity and will not receive official updates."

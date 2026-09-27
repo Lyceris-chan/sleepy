@@ -21,7 +21,7 @@ import dev.sleepy.app.model.PatchSelection
  * exists to close.
  *
  * Function ids identify an entry, and names do not: this bundle has three functions called
- * `track`, two called `sampleStats` and ten with no name at all. The names also move on every
+ * `track`. The names also move on every
  * release, so they are labels on an item and never its key — see [PatchItem.identity].
  *
  * Five entries the reference lists anonymously (13894 and the three NetStats closures at
@@ -302,9 +302,9 @@ object DiscordHermesFunctionCatalog {
             PatchItem(
                 setId = setId,
                 identity = "fn${entry.functionId}",
-                // Three of these are called `track`, three `sampleStats`, two `usePredicate`, and
-                // ten have no name at all - so the id is added wherever it is needed to tell two
-                // rows apart, and a nameless one says what it is rather than showing a blank.
+                // Three of these are called `track`, three `sampleStats`, two `usePredicate` - so
+                // the id is added wherever it is needed to tell two rows apart, and a nameless
+                // one says what it is rather than showing a blank.
                 label = when {
                     patch.name.isBlank() -> "Unnamed function ${entry.functionId}"
                     patch.name in AMBIGUOUS_NAMES -> "${patch.name} (function ${entry.functionId})"

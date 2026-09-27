@@ -1,12 +1,9 @@
 package dev.sleepy.app.engine
 
-import android.content.Context
 import dev.sleepy.app.model.HermesPatch
 import dev.sleepy.app.model.HermesStubShape
 import dev.sleepy.app.model.StepResult
 import dev.sleepy.app.model.StepStatus
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
 object HermesPatcher {
@@ -224,14 +221,5 @@ object HermesPatcher {
         }
 
         return currentBundle to results
-    }
-
-    suspend fun applyPatches(
-        context: Context,
-        bundleBytes: ByteArray,
-        patches: List<HermesPatch>,
-        onPatchStart: ((HermesPatch) -> Unit)? = null
-    ): Pair<ByteArray, List<StepResult>> = withContext(Dispatchers.IO) {
-        applyPatches(bundleBytes, patches, onPatchStart)
     }
 }
