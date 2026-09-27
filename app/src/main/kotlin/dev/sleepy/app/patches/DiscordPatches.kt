@@ -4,24 +4,35 @@ import dev.sleepy.app.model.HermesPatch
 import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
 
+/**
+ * Bytecode and Hermes JavaScript modifications for Discord (Alpha/Release).
+ *
+ * Implements 1-to-1 parity with local patch definitions in:
+ * - quirky-noether/discord/patches/core.py
+ *
+ * Stubs telemetry, Sentry crash reporters, and locks the on-device Hermes JS bundle.
+ */
 object DiscordPatches {
 
     val BUNDLE_LOCK = PatchSet(
         id = "discord_ota_bundle",
         label = "Lock APK Hermes JS Bundle",
-        description = "Neutralizes Discord's BundleUpdater pref keys (`key_android_js_bundle`) so Discord is forced to execute our patched APK asset bundle instead of silently downloading an unpatched bundle that restores all telemetry.",
+        description = "Neutralizes Discord's BundleUpdater pref keys (`key_android_js_bundle`) and reroutes the OTA host to invalid.com so Discord executes our patched APK asset bundle instead of downloading an unpatched bundle.",
         smaliPatches = listOf(
             SmaliPatch(
-                dexName = "classes.dex",
                 smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
-                methodSignature = ".method public final isLoaded()Z",
-                replacementBody = """.method public final isLoaded()Z
-    .locals 1
-
-    const/4 v0, 0x1
-
-    return v0
-.end method"""
+                anchor = "key_android_js_bundle",
+                replacement = "key_android_js_bundlX"
+            ),
+            SmaliPatch(
+                smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
+                anchor = "key_android_js_bundle_release_name",
+                replacement = "key_android_js_bundle_release_namX"
+            ),
+            SmaliPatch(
+                smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
+                anchor = "const-string v2, \"discord.com\"",
+                replacement = "const-string v2, \"invalid.com\""
             )
         )
     )
@@ -32,7 +43,6 @@ object DiscordPatches {
         description = "Stubs out Sentry NDK native shared library loading (`SentryNdk.loadNativeLibraries()`) and gates Java crash reporter initialization so crash dumps, thread states, and device info are never sent to Sentry.",
         smaliPatches = listOf(
             SmaliPatch(
-                dexName = "classes.dex",
                 smaliPath = "io/sentry/android/ndk/SentryNdk.smali",
                 methodSignature = ".method public static loadNativeLibraries()V",
                 replacementBody = """.method public static loadNativeLibraries()V
@@ -42,7 +52,6 @@ object DiscordPatches {
 .end method"""
             ),
             SmaliPatch(
-                dexName = "classes.dex",
                 smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
                 methodSignature = ".method public final init(Landroid/content/Context;)V",
                 replacementBody = """.method public final init(Landroid/content/Context;)V
@@ -60,7 +69,6 @@ object DiscordPatches {
         description = "Stubs native AppsFlyer event dispatching, NetStats network traffic profiling, and native logging call sites in Java/Kotlin DEX bytecode.",
         smaliPatches = listOf(
             SmaliPatch(
-                dexName = "classes.dex",
                 smaliPath = "com/discord/analytics/AnalyticsUtils.smali",
                 methodSignature = ".method public static final init()V",
                 replacementBody = """.method public static final init()V
@@ -75,7 +83,7 @@ object DiscordPatches {
     val HERMES = PatchSet(
         id = "discord_hermes",
         label = "Hermes JS Bytecode Telemetry Stubs",
-        description = "Rewrites index.android.bundle bytecode directly on-device using libhermes_decomp.so to stub central analytics emitters, Sentry breadcrumbs, and upsell banners:",
+        description = "Rewrites index.android.bundle bytecode directly on-device using in-place Sentry DSN nulling and libhermes_decomp.so to stub central analytics emitters, Sentry breadcrumbs, and upsell banners:",
         hermesPatches = listOf(
             HermesPatch(
                 functionId = "73760",

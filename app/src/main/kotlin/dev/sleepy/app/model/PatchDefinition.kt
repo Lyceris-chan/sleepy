@@ -4,10 +4,15 @@ package dev.sleepy.app.model
  * SmaliPatch: Precise in-memory method replacement by anchor signature
  */
 data class SmaliPatch(
-    val dexName: String,
+    val dexName: String? = null,
     val smaliPath: String,
-    val methodSignature: String,
-    val replacementBody: String
+    val methodSignature: String? = null,
+    val replacementBody: String? = null,
+    val anchor: String? = null,
+    val replacement: String? = null,
+    val switchCaseLabel: String? = null,
+    val switchCaseBody: String? = null,
+    val versionTag: String? = null
 )
 
 /**

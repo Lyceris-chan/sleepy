@@ -3,40 +3,30 @@ package dev.sleepy.app.patches
 import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
 
+/**
+ * Bytecode patches for OctoGram (Telegram client fork).
+ *
+ * Implements 1-to-1 parity with local patch definitions in:
+ * - work361/patch_dex_361.py (OctoGram 3.6.1 Beta 2 / build 38275)
+ * - work361/patch_premium_361.py (Paywall upsell removal)
+ * - work361/patch_octolog_361.py (OctoGram logger emitters)
+ * - work361/patch_logging_361.py (Diagnostic crash/event uploaders)
+ * - dexwork/patch_dex.py (OctoGram 3.6.0)
+ *
+ * All DEX container assignments are resolved dynamically at runtime by inspecting
+ * the target APK's DEX headers. Version tags ensure version-specific obfuscated
+ * class names are targeted accurately without conflicting with unrelated classes.
+ */
 object OctoGramPatches {
 
     val SPONSORED_MSGS = PatchSet(
         id = "octogram_sponsored_msgs",
         label = "Block Channel Sponsored Messages",
-        description = "Removes sponsored ad rows from Telegram channel message feeds and disables server-side sponsored message requests.",
+        description = "Removes sponsored advertisement cards from Telegram public channels and neutralizes server-side ad requests in ChatActivity and MessagesController.",
         smaliPatches = listOf(
-            // OctoGram 3.6.0 (classes4.dex: ChatActivity.ss -> return-void)
+            // 3.6.1 (build 38275): ChatActivity.If -> return-void
             SmaliPatch(
-                dexName = "classes4.dex",
-                smaliPath = "org/telegram/ui/o.smali",
-                methodSignature = ".method public final ss(Z)V",
-                replacementBody = """.method public final ss(Z)V
-    .locals 0
-
-    return-void
-.end method"""
-            ),
-            // OctoGram 3.6.0 (classes3.dex: MessagesController.sc -> return null)
-            SmaliPatch(
-                dexName = "classes3.dex",
-                smaliPath = "org/telegram/messenger/m0.smali",
-                methodSignature = ".method public sc(J)Lorg/telegram/messenger/m0\$y;",
-                replacementBody = """.method public sc(J)Lorg/telegram/messenger/m0${'$'}y;
-    .locals 6
-
-    const/4 v0, 0x0
-
-    return-object v0
-.end method"""
-            ),
-            // OctoGram 3.6.1 (classes3.dex: ChatActivity.If -> return-void)
-            SmaliPatch(
-                dexName = "classes3.dex",
+                versionTag = "3.6.1",
                 smaliPath = "org/telegram/ui/e6.smali",
                 methodSignature = ".method public final If()V",
                 replacementBody = """.method public final If()V
@@ -45,12 +35,36 @@ object OctoGramPatches {
     return-void
 .end method"""
             ),
-            // OctoGram 3.6.1 (classes3.dex: MessagesController.J1 -> return null)
+            // 3.6.1 (build 38275): MessagesController.J1 -> return null
             SmaliPatch(
-                dexName = "classes3.dex",
+                versionTag = "3.6.1",
                 smaliPath = "a28.smali",
-                methodSignature = ".method public J1(J)Lw18;",
-                replacementBody = """.method public J1(J)Lw18;
+                methodSignature = ".method public final J1(J)Lw18;",
+                replacementBody = """.method public final J1(J)Lw18;
+    .locals 1
+
+    const/4 v0, 0x0
+
+    return-object v0
+.end method"""
+            ),
+            // 3.6.0: ChatActivity.ss -> return-void
+            SmaliPatch(
+                versionTag = "3.6.0",
+                smaliPath = "org/telegram/ui/o.smali",
+                methodSignature = ".method public final ss(Z)V",
+                replacementBody = """.method public final ss(Z)V
+    .locals 0
+
+    return-void
+.end method"""
+            ),
+            // 3.6.0: MessagesController.sc -> return null
+            SmaliPatch(
+                versionTag = "3.6.0",
+                smaliPath = "org/telegram/messenger/m0.smali",
+                methodSignature = ".method public sc(J)Lorg/telegram/messenger/m0\$y;",
+                replacementBody = """.method public sc(J)Lorg/telegram/messenger/m0${'$'}y;
     .locals 6
 
     const/4 v0, 0x0
@@ -66,23 +80,23 @@ object OctoGramPatches {
         label = "Block PhotoViewer Interstitial Ads",
         description = "Stubs the ad presentation callback in PhotoViewer to eliminate full-screen ads and sponsored prompts when swiping through channel photos or media galleries.",
         smaliPatches = listOf(
-            // OctoGram 3.6.0
+            // 3.6.1: gpd.b(Lwz0;)V -> return-void
             SmaliPatch(
-                dexName = "classes3.dex",
-                smaliPath = "y5l.smali",
-                methodSignature = ".method public final Q()V",
-                replacementBody = """.method public final Q()V
+                versionTag = "3.6.1",
+                smaliPath = "gpd.smali",
+                methodSignature = ".method public final b(Lwz0;)V",
+                replacementBody = """.method public final b(Lwz0;)V
     .locals 0
 
     return-void
 .end method"""
             ),
-            // OctoGram 3.6.1
+            // 3.6.0: y5l.Q()V -> return-void
             SmaliPatch(
-                dexName = "classes3.dex",
-                smaliPath = "gpd.smali",
-                methodSignature = ".method public final b(Lwz0;)V",
-                replacementBody = """.method public final b(Lwz0;)V
+                versionTag = "3.6.0",
+                smaliPath = "y5l.smali",
+                methodSignature = ".method public final Q()V",
+                replacementBody = """.method public final Q()V
     .locals 0
 
     return-void
@@ -94,11 +108,26 @@ object OctoGramPatches {
     val SEARCH_ADS = PatchSet(
         id = "octogram_search_ads",
         label = "Block Global Search Sponsored Channels",
-        description = "Neutralizes the TL_contacts_sponsoredPeers handler in the search adapter, preventing commercial sponsored channels and promoted bots from appearing above real search results.",
+        description = "Neutralizes the TL_contacts_sponsoredPeers response handler in search, preventing promoted channels and bots from appearing above genuine search results.",
         smaliPatches = listOf(
-            // OctoGram 3.6.0
+            // 3.6.1: s04.k0 -> reset sponsoredReqId = 0 and return
             SmaliPatch(
-                dexName = "classes4.dex",
+                versionTag = "3.6.1",
+                smaliPath = "s04.smali",
+                methodSignature = ".method public final synthetic k0(Lorg/telegram/tgnet/TLObject;)V",
+                replacementBody = """.method public final synthetic k0(Lorg/telegram/tgnet/TLObject;)V
+    .locals 1
+
+    const/4 v0, 0x0
+
+    iput v0, p0, Ls04;->sponsoredReqId:I
+
+    return-void
+.end method"""
+            ),
+            // 3.6.0: be6.m1 -> reset sponsoredReqId = 0 and return
+            SmaliPatch(
+                versionTag = "3.6.0",
                 smaliPath = "be6.smali",
                 methodSignature = ".method public final synthetic m1(Lorg/telegram/tgnet/TLObject;)V",
                 replacementBody = """.method public final synthetic m1(Lorg/telegram/tgnet/TLObject;)V
@@ -110,21 +139,6 @@ object OctoGramPatches {
 
     return-void
 .end method"""
-            ),
-            // OctoGram 3.6.1
-            SmaliPatch(
-                dexName = "classes3.dex",
-                smaliPath = "s04.smali",
-                methodSignature = ".method public final synthetic k0(Lorg/telegram/tgnet/TLObject;)V",
-                replacementBody = """.method public final synthetic k0(Lorg/telegram/tgnet/TLObject;)V
-    .locals 3
-
-    const/4 v0, 0x0
-
-    iput v0, p0, Ls04;->sponsoredReqId:I
-
-    return-void
-.end method"""
             )
         )
     )
@@ -132,11 +146,28 @@ object OctoGramPatches {
     val OTA_UPDATER = PatchSet(
         id = "octogram_ota_updater",
         label = "Disable Update Check Pings",
-        description = "Prevents OctoGram's UpdatesManager from sending periodic network pings to external servers and GitHub for app updates, avoiding nag prompts that would overwrite this modded install.",
+        description = "Prevents UpdatesManager from sending network requests to GitHub for update manifests, preserving callback dispatching to prevent UI hangs while blocking update prompts.",
         smaliPatches = listOf(
-            // OctoGram 3.6.0
+            // 3.6.1: j6d.smali case :pswitch_160 in packed-switch
             SmaliPatch(
-                dexName = "classes3.dex",
+                versionTag = "3.6.1",
+                smaliPath = "j6d.smali",
+                switchCaseLabel = ":pswitch_160",
+                switchCaseBody = """    :pswitch_160
+    check-cast v5, Luid;
+
+    check-cast v4, Lpid;
+
+    iput-object v1, v5, Luid;->b:Lorg/json/JSONObject;
+
+    invoke-virtual {v4}, Lpid;->a()V
+
+    return-void
+"""
+            ),
+            // 3.6.0: hxk.o0 -> nullify e and invoke failure callback
+            SmaliPatch(
+                versionTag = "3.6.0",
                 smaliPath = "hxk.smali",
                 methodSignature = ".method public final synthetic o0(Lhxk\$i;)V",
                 replacementBody = """.method public final synthetic o0(Lhxk${'$'}i;)V
@@ -150,24 +181,97 @@ object OctoGramPatches {
 
     return-void
 .end method"""
-            ),
-            // OctoGram 3.6.1
-            SmaliPatch(
-                dexName = "classes3.dex",
-                smaliPath = "uid.smali",
-                methodSignature = ".method public final synthetic M(Lpid;)V",
-                replacementBody = """.method public final synthetic M(Lpid;)V
-    .locals 6
-
-    const/4 v0, 0x0
-
-    iput-object v0, p0, Luid;->e:Lorg/json/JSONObject;
-
-    invoke-interface {p1}, Lpid;->a()V
-
-    return-void
-.end method"""
             )
+        )
+    )
+
+    val PREMIUM_UPSELL = PatchSet(
+        id = "octogram_premium_upsell",
+        label = "Disable Premium Upsell Paywall Screens",
+        description = "Injects guards into ActionBarLayout and LaunchActivity's navigation router to drop navigation attempts to PremiumPreviewFragment, eliminating paywall nag screens.",
+        smaliPatches = listOf(
+            // ActionBarLayout.b(Ln16;)Z paywall drop guard
+            SmaliPatch(
+                versionTag = "3.6.1",
+                smaliPath = "org/telegram/ui/ActionBar/ActionBarLayout.smali",
+                anchor = """    iget-object v4, v0, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
+
+    .line 6
+    .line 7
+    iget-boolean v2, v0, Ln16;->b:Z""",
+                replacement = """    iget-object v4, v0, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
+
+    # --- OctoGram premium-upsell removal -------------------------------
+    instance-of v2, v4, Lorg/telegram/ui/PremiumPreviewFragment;
+
+    if-eqz v2, :cond_premium_upsell_skip
+
+    const/4 v2, 0x0
+
+    return v2
+
+    :cond_premium_upsell_skip
+    # -------------------------------------------------------------------
+
+    .line 6
+    .line 7
+    iget-boolean v2, v0, Ln16;->b:Z"""
+            ),
+            // t6.b(Ln16;)Z paywall drop guard in main window stack override
+            SmaliPatch(
+                versionTag = "3.6.1",
+                smaliPath = "t6.smali",
+                anchor = """    iget-object v0, p1, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
+
+    .line 2
+    .line 3
+    instance-of v1, v0, Lw51;""",
+                replacement = """    iget-object v0, p1, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
+
+    # --- OctoGram premium-upsell removal (t6 override) -------------------
+    instance-of v1, v0, Lorg/telegram/ui/PremiumPreviewFragment;
+
+    if-eqz v1, :cond_premium_upsell_skip_t6
+
+    const/4 v1, 0x0
+
+    return v1
+
+    :cond_premium_upsell_skip_t6
+    # -------------------------------------------------------------------
+
+    .line 2
+    .line 3
+    instance-of v1, v0, Lw51;"""
+            )
+        )
+    )
+
+    val OCTO_LOGGER = PatchSet(
+        id = "octogram_logger",
+        label = "Silence OctoGram & Diagnostic Loggers",
+        description = "Stubs all 12 public log emitters in OctoGram's cn8 logger and neutralizes diagnostic telemetry uploaders in PremiumPreviewFragment, r44, and a28.",
+        smaliPatches = listOf(
+            // cn8 public log emitters
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static a(Ljava/lang/String;)V", replacementBody = ".method public static a(Ljava/lang/String;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static b(Ljava/lang/String;Ljava/lang/String;)V", replacementBody = ".method public static b(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static d(Ljava/lang/String;Ljava/lang/String;)V", replacementBody = ".method public static d(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Exception;)V", replacementBody = ".method public static e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Exception;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static f(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V", replacementBody = ".method public static f(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static g(Ljava/lang/String;Ljava/lang/Throwable;)V", replacementBody = ".method public static g(Ljava/lang/String;Ljava/lang/Throwable;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static h(Ljava/lang/Throwable;)V", replacementBody = ".method public static h(Ljava/lang/Throwable;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static k(Ljava/lang/String;Ljava/lang/String;)V", replacementBody = ".method public static k(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static m(ILjava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V", replacementBody = ".method public static m(ILjava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static n(Ljava/lang/String;)V", replacementBody = ".method public static n(Ljava/lang/String;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static o(Ljava/lang/String;Ljava/lang/String;)V", replacementBody = ".method public static o(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "cn8.smali", methodSignature = ".method public static p(Ljava/io/OutputStreamWriter;Ljava/lang/Throwable;)V", replacementBody = ".method public static p(Ljava/io/OutputStreamWriter;Ljava/lang/Throwable;)V\n    .locals 0\n    return-void\n.end method"),
+
+            // Diagnostic uploaders in Telegram code
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "org/telegram/ui/PremiumPreviewFragment.smali", methodSignature = ".method public static A3()V", replacementBody = ".method public static A3()V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "org/telegram/ui/PremiumPreviewFragment.smali", methodSignature = ".method public static B3(II)V", replacementBody = ".method public static B3(II)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "org/telegram/ui/PremiumPreviewFragment.smali", methodSignature = ".method public static C3(Ljava/lang/String;)V", replacementBody = ".method public static C3(Ljava/lang/String;)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "r44.smali", methodSignature = ".method public static R0(Z)V", replacementBody = ".method public static R0(Z)V\n    .locals 0\n    return-void\n.end method"),
+            SmaliPatch(versionTag = "3.6.1", smaliPath = "a28.smali", methodSignature = ".method public final b3()V", replacementBody = ".method public final b3()V\n    .locals 0\n    return-void\n.end method")
         )
     )
 
@@ -176,24 +280,8 @@ object OctoGramPatches {
         label = label,
         description = description,
         smaliPatches = listOf(
-            // 3.6.0: classes3.dex
             SmaliPatch(
-                dexName = "classes3.dex",
-                smaliPath = smaliPath,
-                methodSignature = ".method public getComponents()Ljava/util/List;",
-                replacementBody = """.method public getComponents()Ljava/util/List;
-    .locals 1
-
-    invoke-static {}, Ljava/util/Collections;->emptyList()Ljava/util/List;
-
-    move-result-object v0
-
-    return-object v0
-.end method"""
-            ),
-            // 3.6.1: classes.dex
-            SmaliPatch(
-                dexName = "classes.dex",
+                versionTag = null, // Universal across 3.6.0 and 3.6.1
                 smaliPath = smaliPath,
                 methodSignature = ".method public getComponents()Ljava/util/List;",
                 replacementBody = """.method public getComponents()Ljava/util/List;
@@ -242,6 +330,8 @@ object OctoGramPatches {
         PHOTO_VIEWER_ADS,
         SEARCH_ADS,
         OTA_UPDATER,
+        PREMIUM_UPSELL,
+        OCTO_LOGGER,
         FIREBASE_ABT,
         FIREBASE_REMOTE_CONFIG,
         FIREBASE_REMOTE_CONFIG_KTX,

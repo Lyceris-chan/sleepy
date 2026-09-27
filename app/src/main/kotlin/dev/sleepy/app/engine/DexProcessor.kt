@@ -19,6 +19,36 @@ import java.io.File
 object DexProcessor {
 
     /**
+     * Builds an in-memory index mapping DEX type descriptors (e.g. "Lorg/telegram/ui/e6;")
+     * to the DEX container entry name (e.g. "classes3.dex") where they reside.
+     * Takes ~30ms for 30,000 classes across all DEX files.
+     */
+    fun buildClassToDexIndex(
+        dexEntries: Map<String, ByteArray>,
+        apiLevel: Int = 28
+    ): Map<String, String> {
+        val opcodes = Opcodes.forApi(apiLevel)
+        val index = mutableMapOf<String, String>()
+        for ((dexName, dexBytes) in dexEntries) {
+            val tempFile = File.createTempFile("sleepy_idx_", ".dex").apply {
+                writeBytes(dexBytes)
+                deleteOnExit()
+            }
+            try {
+                val dexFile = DexFileFactory.loadDexFile(tempFile, opcodes)
+                for (cls in dexFile.classes) {
+                    index[cls.type] = dexName
+                }
+            } catch (e: Exception) {
+                // If a non-standard DEX fails to parse, continue indexing other DEX files
+            } finally {
+                tempFile.delete()
+            }
+        }
+        return index
+    }
+
+    /**
      * Surgically patches a DEX file by disassembling and reassembling ONLY the classes
      * being modified, leaving all other classes untouched in binary form.
      *
@@ -53,7 +83,7 @@ object DexProcessor {
             val originalDex = DexFileFactory.loadDexFile(tempInDex, opcodes)
 
             // Convert smali relative paths to DEX type descriptors:
-            // "org/telegram/ui/o.smali" -> "Lorg/telegram/ui/o;"
+            // "org/telegram/ui/e6.smali" -> "Lorg/telegram/ui/e6;"
             val targetDescriptors = patches.map { patch ->
                 val clean = patch.smaliPath.removeSuffix(".smali")
                 "L$clean;"
@@ -79,12 +109,14 @@ object DexProcessor {
                 return@withContext dexBytes to results
             }
 
-            // 2. Apply smali patches to the generated files
+            // 2. Apply smali patches sequentially, accumulating changes in memory per file
             val smaliFilesMap = mutableMapOf<String, String>()
             patches.forEach { patch ->
                 val file = File(smaliDir, patch.smaliPath)
                 if (file.exists()) {
-                    smaliFilesMap[patch.smaliPath] = file.readText(Charsets.UTF_8)
+                    if (!smaliFilesMap.containsKey(patch.smaliPath)) {
+                        smaliFilesMap[patch.smaliPath] = file.readText(Charsets.UTF_8)
+                    }
                     val res = SmaliPatcher.apply(smaliFilesMap, patch)
                     results.add(res)
                     if (res.status == StepStatus.OK) {

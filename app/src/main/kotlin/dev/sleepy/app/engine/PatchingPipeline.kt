@@ -77,20 +77,39 @@ class PatchingPipeline(private val context: Context) {
 
         log(StepResult("Found ${dexEntries.size} DEX containers in APK", StepStatus.OK))
 
+        // Index class descriptors to DEX container names across the APK
+        val classToDexIndex = DexProcessor.buildClassToDexIndex(dexEntries)
+
         // Collect requested patches
         val activePatchSets = selectedPatchIds.mapNotNull { PatchRegistry.get(it) }
-        val smaliPatches = activePatchSets.flatMap { it.smaliPatches }
         val hermesPatches = activePatchSets.flatMap { it.hermesPatches }
 
-        val targetDexNames = smaliPatches.map { it.dexName }.toSet()
-        val dexToDisassemble = dexEntries.filterKeys { it in targetDexNames }
+        // Filter and assign each SmaliPatch to its verified DEX container
+        val smaliPatchesToApply = mutableListOf<SmaliPatch>()
+        for (patchSet in activePatchSets) {
+            val matchingPatches = patchSet.smaliPatches.filter { patch ->
+                val descriptor = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
+                val targetDex = patch.dexName ?: classToDexIndex[descriptor]
+                targetDex != null && dexEntries.containsKey(targetDex)
+            }
+
+            if (matchingPatches.isNotEmpty()) {
+                matchingPatches.forEach { patch ->
+                    val descriptor = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
+                    val actualDex = patch.dexName ?: classToDexIndex[descriptor]!!
+                    smaliPatchesToApply.add(patch.copy(dexName = actualDex))
+                }
+            } else if (patchSet.smaliPatches.isNotEmpty()) {
+                log(StepResult(patchSet.label, StepStatus.SKIP, "Target classes not found in APK DEX containers"))
+            }
+        }
 
         currentCoroutineContext().ensureActive()
 
-        // 3. Apply surgical DEX patches in parallel
-        _progress.value = PatchProgress.Patching("Applying surgical DEX bytecode modifications", 0, smaliPatches.size)
+        // 3. Apply surgical DEX patches grouped by verified DEX container
+        _progress.value = PatchProgress.Patching("Applying surgical DEX bytecode modifications", 0, smaliPatchesToApply.size)
         val repackedDexMap = mutableMapOf<String, ByteArray>()
-        val groupedPatches = smaliPatches.groupBy { it.dexName }
+        val groupedPatches = smaliPatchesToApply.groupBy { it.dexName!! }
 
         for ((dexName, patchesForDex) in groupedPatches) {
             currentCoroutineContext().ensureActive()
