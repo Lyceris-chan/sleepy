@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.Uri
 import dev.sleepy.app.model.*
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
+import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
+import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.patches.PatchRegistry
 import dev.sleepy.app.util.Downloader
 import dev.sleepy.app.util.HashUtils
@@ -41,11 +43,19 @@ class PatchingPipeline(private val context: Context) {
 
     private var currentJob: Job? = null
 
+    /**
+     * Runs a job for the sets in [selectedPatchIds], narrowed by [selection] when one is given.
+     *
+     * [selection] is the per-item selection and is optional: a caller that has one hands it over
+     * and gets only the items the user switched on, and a caller that does not (the set-level
+     * switch this grew out of) gets each selected set in full. See [execute].
+     */
     fun start(
         sourceUrl: String,
         originalPackageName: String,
         customPackageName: String? = null,
         selectedPatchIds: List<String>,
+        selection: PatchSelection? = null,
         splitUrls: List<String> = emptyList(),
         expectedSha256: String? = null,
         scope: CoroutineScope
@@ -55,7 +65,7 @@ class PatchingPipeline(private val context: Context) {
 
         currentJob = scope.launch(Dispatchers.IO) {
             try {
-                execute(sourceUrl, originalPackageName, customPackageName, selectedPatchIds, splitUrls, expectedSha256)
+                execute(sourceUrl, originalPackageName, customPackageName, selectedPatchIds, selection, splitUrls, expectedSha256)
             } catch (e: CancellationException) {
                 _progress.value = PatchProgress.Idle
             } catch (e: Exception) {
@@ -72,11 +82,20 @@ class PatchingPipeline(private val context: Context) {
         _progress.value = PatchProgress.Idle
     }
 
+    /**
+     * The job itself.
+     *
+     * [selection] narrows what a selected set contributes, and is null when the caller works at
+     * set level. It never widens anything: a set that is not in [selectedPatchIds] is not applied
+     * however many of its items a selection names, and a set that is selected but has no item
+     * switched on contributes nothing — the same thing an unselected set has always contributed.
+     */
     private suspend fun execute(
         sourceUrl: String,
         originalPackageName: String,
         customPackageName: String?,
         selectedPatchIds: List<String>,
+        selection: PatchSelection?,
         splitUrls: List<String>,
         expectedSha256: String?
     ) {
@@ -204,12 +223,21 @@ class PatchingPipeline(private val context: Context) {
             else -> null
         }
 
-        val activePatchSets = selectedPatchIds.mapNotNull { PatchRegistry.get(it) }
+        val activePatchSets = selectedPatchIds
+            .mapNotNull { PatchRegistry.get(it) }
+            .filter { set -> selection == null || PatchItemCatalog.itemsOf(set.id).any { selection.contains(it.key) } }
         // [DiscordPatches.HERMES] catalogues the stub shapes for audit; the bundle itself is
-        // patched from the pinned table, so the progress total follows whichever will run.
+        // patched from the pinned table, so the progress total follows whichever will run. With a
+        // selection that table is a subset, which is what the filtering below produces.
+        val hermesSelected = activePatchSets.any { it.id == DiscordPatches.HERMES.id }
         val hermesPatches = activePatchSets.flatMap { it.hermesPatches }
+        val hermesTableToApply = if (hermesSelected && selection != null) {
+            DiscordHermesFunctionCatalog.selectPatches(selection)
+        } else {
+            DiscordHermesBundlePatch.PATCHES
+        }
         val hermesWorkCount = if (bundleBytes != null && bundleBytes.size == DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE) {
-            DiscordHermesBundlePatch.PATCHES.size
+            hermesTableToApply.size
         } else {
             hermesPatches.size
         }
@@ -218,8 +246,15 @@ class PatchingPipeline(private val context: Context) {
         val targetApk = TargetApk(classToDexIndex = classToDexIndex, dexEntries = dexEntries)
         for (patchSet in activePatchSets) {
             // A generated set has nothing to filter until it has read the target APK, so it is
-            // asked first and its patches join the set's static ones.
-            val generated = patchSet.generator?.generate(targetApk)
+            // asked first and its patches join the set's static ones. A set that can generate for
+            // a selection gets one; a set that cannot is generated whole, since its selection is
+            // already expressed by whether it is in activePatchSets at all.
+            val generator = patchSet.generator
+            val generated = if (selection != null && generator is SelectivePatchGenerator) {
+                generator.generate(targetApk, selection)
+            } else {
+                generator?.generate(targetApk)
+            }
             val candidates = patchSet.smaliPatches + (generated?.patches ?: emptyList())
 
             val matchingPatches = candidates.filter { patch ->
@@ -310,7 +345,6 @@ class PatchingPipeline(private val context: Context) {
 
         // 6. Apply the Hermes JS bytecode patches.
         var finalBundle = bundleBytes
-        val hermesSelected = activePatchSets.any { it.id == DiscordPatches.HERMES.id }
         if (hermesSelected && bundleBytes != null) {
             _progress.value = PatchProgress.Patching(
                 step = "Neutralizing the JavaScript Sentry endpoint",
@@ -327,7 +361,7 @@ class PatchingPipeline(private val context: Context) {
                     current = completedPatchCount,
                     total = totalPatchCount
                 )
-                val outcome = HermesBundlePatcher.apply(afterDsn, DiscordHermesBundlePatch.PATCHES)
+                val outcome = HermesBundlePatcher.apply(afterDsn, hermesTableToApply)
                 finalBundle = outcome.bundleBytes
                 completedPatchCount += outcome.appliedCount
 

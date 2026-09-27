@@ -7,6 +7,9 @@ object PatchRegistry {
         (OctoGramPatches.ALL + DiscordPatches.ALL + DiscordNativePatches.ALL + DiscordBlocklistPatch.ALL)
             .associateBy { it.id }
 
+    /** Every registered set, in registration order. */
+    val all: List<PatchSet> get() = allPatches.values.toList()
+
     fun get(id: String): PatchSet? = allPatches[id]
 
     fun getAllForSource(patchIds: List<String>): List<PatchSet> {

@@ -2,10 +2,17 @@ package dev.sleepy.app.patches
 
 import dev.sleepy.app.engine.OkHttpNameResolver
 import dev.sleepy.app.engine.OkHttpResolution
+import dev.sleepy.app.model.BlocklistCoverage
+import dev.sleepy.app.model.BlocklistRow
+import dev.sleepy.app.model.BlocklistRule
 import dev.sleepy.app.model.GeneratedPatches
 import dev.sleepy.app.model.PatchGenerator
+import dev.sleepy.app.model.PatchItem
+import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.PatchSet
+import dev.sleepy.app.model.SelectivePatchGenerator
 import dev.sleepy.app.model.SmaliPatch
+import dev.sleepy.app.model.TargetApk
 
 /**
  * The network blocklist interceptor for Discord, transcribed from
@@ -14,8 +21,9 @@ import dev.sleepy.app.model.SmaliPatch
  * One method — `DeviceResourceUsageRecorder$Companion.requestStatsInterceptor` — is shared by
  * every OkHttp client that matters here: the React Native XHR client (which carries all of the
  * client's JavaScript traffic), the media download client, the bundle updater and Fresco. This
- * set replaces its body with one that matches the request URL against the rules below and
- * answers a match with a synthetic HTTP 204, so the request is never sent.
+ * set replaces its body with one that matches the request URL against the rules in
+ * [DiscordBlocklistRules] and answers a match with a synthetic HTTP 204, so the request is never
+ * sent.
  *
  * The 204 rather than a dropped response is deliberate: the JavaScript side reads it as a
  * successful empty response and clears its retry buffer, whereas dropping the response makes the
@@ -26,6 +34,10 @@ import dev.sleepy.app.model.SmaliPatch
  * is therefore generated against the APK the user selected — see [OkHttpNameResolver]. Because it
  * answers a request without calling `chain.proceed()`, it only works where the interceptors are
  * on OkHttp's application list, which is what [DiscordNativePatches.INTERCEPTORS] arranges.
+ *
+ * The rules are data ([DiscordBlocklistRules]) rather than lists compiled in here, so a build can
+ * carry some of them: a selected subset compiles an interceptor that scans for those rules and
+ * answers the rest of the traffic normally. See [generatedPatches].
  */
 object DiscordBlocklistPatch {
 
@@ -39,194 +51,120 @@ object DiscordBlocklistPatch {
             "Lcom/discord/resource_usage/DeviceResourceUsageRecorder${'$'}RequestStats;)" +
             "Lokhttp3/Response;"
 
-    /**
-     * Host rules, matched anywhere in the request URL.
-     *
-     * api.spotify.com and dealer.spotify.com are blocked on purpose: breaking the Spotify
-     * integration (REST and the listen-along WebSocket) is intended, not an oversight. The
-     * desktop reference notes that an audit flagged it as a feature regression and the user
-     * confirmed the block is deliberate.
-     */
-    private val HOST_BLOCKLIST = listOf(
-        "api.spotify.com",
-        "dealer.spotify.com",
-        // video QoE analytics beacon (Mux/Litix) hit by the media player
-        "img.litix.io",
-        // Firebase Analytics. The SDK logs to firebaselogging-pa.googleapis.com,
-        // which a literal "firebaselogging.googleapis.com" entry never matched —
-        // match the prefix instead. Firebase Installations and the FCM/mtalk hosts
-        // are deliberately absent: blocking them breaks push.
-        "firebaselogging",
-        "app-measurement.com",
-        // Google Analytics (covers ssl./www./region1. subdomains)
-        "google-analytics.com",
-        // Bare `sentry.io`, not `ingest.sentry.io`. Sentry moved to regional DSN
-        // hosts (`o<org>.ingest.us.sentry.io`, `.de.`, `.eu.`), and the old rule
-        // did not match any of them - it only matched the legacy single-region
-        // form. The DSNs in this build are scrubbed so nothing can send today, but
-        // a future version shipping a regional DSN would have sailed straight past
-        // the old pattern. Bare `sentry.io` covers every DSN form and the docs.
-        "sentry.io",
-        // Sentry's replay bundle CDN
-        "sentry-cdn.com",
-        // AppsFlyer attribution. The SDK init is already no-op'd; this covers the
-        // network side as well, including the OneLink short domain.
-        "appsflyer.com",
-        "appsflyersdk.com",
-        "onelink.me",
-        // Qualtrics surveys
-        "qualtrics.com",
-        // Datadog APM
-        "datadog.discord.tools",
-        // PayPal conversion beacon and the FraudNet script the checkout webview loads
-        "b.stats.paypal.com",
-        "c.paypal.com",
-        // Google Mobile Ads attribution beacon. Reachable only if the ads path
-        // were live (it is stubbed), but the host string is still in the dex.
-        "pagead2.googlesyndication.com",
-        "api.amplitude.com",
-        "api.segment.io",
-        "client-analytics.braintreegateway.com",
-        "app.adjust.com"
-    )
-
-    /**
-     * API path rules, matched only on Discord API URLs — those containing `/api/`.
-     *
-     * Without that gate a bare substring such as `/track` would also block a CDN attachment named
-     * `track1.mp3` or `shop.png`. A URL that looks proxied (one containing `/external/`) is never
-     * treated as an API call, for the same reason: the media proxy embeds the origin URL after the
-     * signature, so a proxied image could otherwise match a rule and be answered with a 204.
-     */
-    private val API_BLOCKLIST = listOf(
-        // analytics / telemetry
-        "/science",
-        "/track",
-        "scienc0",
-        "/affinit",
-        "/analytics_sessions",
-        // client metrics upload — MonitoringAgent POSTs /metrics/v2 every 2 minutes
-        "/metrics",
-        // client_telemetry heartbeat (AnalyticsTrackingStore -> TelemetryEndpoints
-        // .CLIENT_TELEMETRY). This one was live: it is a plain HTTP.post outside
-        // the /science queue and was not blocked at all.
-        "/beaker",
-        // Discord-side Spotify content inventory (MY_SPOTIFY_CONTENT_INVENTORY) —
-        // the one Spotify endpoint that is not on a Spotify host.
-        "/content-inventory/users/@me/spotify",
-        // The Spotify connection access token. `SpotifyActionCreators.getAccessToken`
-        // GETs Discord's own /connections/spotify/<id>/access-token and uses it to
-        // talk to the Spotify Web API. No host rule covers this - it is discord.com.
-        // Without it the client has no credential even if it reaches api.spotify.com.
-        "/connections/spotify",
-        // usage statistics
-        "/users/@me/activities/statistics",
-        // app-rating and embedded surveys
-        "/users/@me/survey",
-        "/users/@me/embedded-survey",
-        // ad attribution
-        "/ads/",
-        // debug endpoints
-        "/debug/temporal",
-        // storefront / promotions / quests
-        "/storefront",
-        "/quest",
-        "/quest-home",
-        "/promotion",
-        "/bogo-promotions",
-        "/shop",
-        "/game-shop",
-        "/collectibles",
-        // `/collectibles` only matches a slash-prefixed segment. Two real endpoints
-        // spell it as a hyphen compound, so the rule above misses both:
-        // /users/@me/claim-premium-collectibles-product
-        // /users/@me/valid-collectibles-gift-recipients-batch
-        // Found by diffing every API-shaped path in the bundle against the rules.
-        "-collectibles",
-        "/wishlist",
-        "/virtual_currency",
-        "/perks",
-        "/reward",
-        // billing / monetisation
-        "/users/@me/billing",
-        "/billing",
-        // Play Store in-app purchases
-        "/google-play/",
-        // store listings and price tiers
-        "/store/",
-        "/entitlement",
-        "/gift",
-        "/subscription",
-        "/guild-role-subscription",
-        "/guild_role_subscriptions",
-        "/guild_boosting",
-        "/skus",
-        "/purchases",
-        "/checkout",
-        "/payment",
-        "/user-offer",
-        "/referral",
-        "/nitro",
-        "/guilds/premium",
-        "/boost",
-        "/premium",
-        // typing indicator — NoType
-        "/typing",
-        // Hyphenated compounds the entries above miss. Matching is a plain
-        // `contains`, so "/reward" does not match "-reward-" and
-        // "/guild-role-subscription" does not match "/role-subscriptions". These
-        // are the live 346.2 spellings (Endpoints table in Constants.tsx).
-        "/creator-monetization",
-        "/role-subscriptions",
-        "/virtual-currency",
-        "/outbound-promotions",
-        "/partner-perks",
-        "/program-rewards",
-        "/tenure-reward",
-        "/claim-reward",
-        "/store-listing",
-        "/application-storefront",
-        "/applied-boosts",
-        "/powerups",
-        "/activities/statistics"
-    )
-
     val NETWORK_BLOCKLIST = PatchSet(
         id = "discord_native_blocklist",
         label = "Block Tracking, Advertising and Monetisation Endpoints",
         description = "Rebuilds Discord's shared OkHttp interceptor so requests to tracking, advertising, survey and monetisation endpoints are answered " +
-            "with an empty HTTP 204 instead of being sent, covering ${HOST_BLOCKLIST.size} host rules and ${API_BLOCKLIST.size} API path rules. The three " +
-            "obfuscated OkHttp names the method has to spell out are read from the target build, so a release where they cannot be resolved is skipped " +
-            "with a reason rather than patched with another release's names.",
-        generator = PatchGenerator { target ->
-            when (val resolution = OkHttpNameResolver.resolve(target)) {
-                is OkHttpResolution.Resolved -> GeneratedPatches(
-                    patches = listOf(
-                        SmaliPatch(
-                            title = "Rebuilding the request interceptor as a network blocklist",
-                            explanation = "Replaces the stock resource-usage interceptor with one that matches the request URL against " +
-                                "${HOST_BLOCKLIST.size} host and ${API_BLOCKLIST.size} API-path rules and answers a match with a synthetic empty " +
-                                "HTTP 204. The OkHttp constructor, Protocol enum and HTTP/1.1 field it has to name were read from this build.",
-                            smaliPath = RECORDER_CLASS,
-                            methodSignature = INTERCEPTOR_SIGNATURE,
-                            replacementBody = interceptorBody(
-                                ctorDescriptor = resolution.names.responseConstructorDescriptor,
-                                protocolClass = resolution.names.protocolClass,
-                                protocolField = resolution.names.protocolHttp11Field
-                            )
-                        )
-                    )
-                )
-
-                is OkHttpResolution.Unresolved -> GeneratedPatches(
-                    patches = emptyList(),
-                    skipReason = resolution.reason
-                )
-            }
-        }
+            "with an empty HTTP 204 instead of being sent, covering ${DiscordBlocklistRules.HOST_RULES.size} host rules and " +
+            "${DiscordBlocklistRules.API_RULES.size} API path rules. The three obfuscated OkHttp names the method has to spell out are read from the " +
+            "target build, so a release where they cannot be resolved is skipped with a reason rather than patched with another release's names.",
+        generator = BlocklistGenerator
     )
 
     val ALL = listOf(NETWORK_BLOCKLIST)
+
+    /**
+     * This set's item key for [rule], e.g. `discord_native_blocklist:api:/typing`.
+     *
+     * The rule's identity is its kind and its pattern, so a saved selection keeps meaning the same
+     * rule across releases — the pattern is what the interceptor scans for, and a rule that
+     * changes pattern is a different rule.
+     */
+    fun itemKeyOf(rule: BlocklistRule): String =
+        PatchItem.keyOf(NETWORK_BLOCKLIST.id, rule.identity)
+
+    /** Every rule of this set, as selectable items, in the order the interceptor applies them. */
+    fun items(): List<PatchItem> = DiscordBlocklistRules.items(NETWORK_BLOCKLIST.id)
+
+    /** The rules [selection] switches on, in table order. */
+    fun selectedRules(selection: PatchSelection): List<BlocklistRule> =
+        DiscordBlocklistRules.ALL.filter { selection.contains(itemKeyOf(it)) }
+
+    /**
+     * This set's rows as the UI shows them: the two gates as locked rows, then every rule with its
+     * switch and the reason that switch may be inert.
+     *
+     * Recomputed from [selection] on every call rather than cached, so turning a covering rule off
+     * makes everything it covered live again with nothing to keep in step.
+     */
+    fun rows(selection: PatchSelection): List<BlocklistRow> = BlocklistCoverage.rows(
+        rules = DiscordBlocklistRules.ALL,
+        gates = DiscordBlocklistRules.GATES,
+        isEnabled = { selection.contains(itemKeyOf(it)) }
+    )
+
+    /**
+     * Generates the interceptor for the rules [selection] switches on.
+     *
+     * A selection that names no rule of this set generates nothing, with a reason: the pipeline
+     * drops a set with no selected item before it gets here, and a set that is selected but has
+     * nothing to scan for would otherwise emit a method that only rebuilds the stock path.
+     */
+    fun generatedPatches(target: TargetApk, selection: PatchSelection): GeneratedPatches {
+        val hostRules = DiscordBlocklistRules.HOST_RULES.filter { selection.contains(itemKeyOf(it)) }
+        val apiRules = DiscordBlocklistRules.API_RULES.filter { selection.contains(itemKeyOf(it)) }
+        if (hostRules.isEmpty() && apiRules.isEmpty()) {
+            return GeneratedPatches(
+                patches = emptyList(),
+                skipReason = "No rule of this set is selected, so there is no blocklist to compile."
+            )
+        }
+        return generate(
+            target = target,
+            hostRules = hostRules.map { it.pattern },
+            apiRules = apiRules.map { it.pattern }
+        )
+    }
+
+    /** The generator, usable with a selection and without one. */
+    private object BlocklistGenerator : PatchGenerator, SelectivePatchGenerator {
+
+        override fun generate(target: TargetApk): GeneratedPatches = generate(
+            target = target,
+            hostRules = DiscordBlocklistRules.HOST_RULES.map { it.pattern },
+            apiRules = DiscordBlocklistRules.API_RULES.map { it.pattern }
+        )
+
+        override fun generate(target: TargetApk, selection: PatchSelection): GeneratedPatches =
+            generatedPatches(target, selection)
+    }
+
+    /**
+     * Compiles the interceptor for [hostRules] and [apiRules].
+     *
+     * The resolution is unchanged from the whole-set path: names this build cannot supply cost the
+     * set, not the job.
+     */
+    private fun generate(
+        target: TargetApk,
+        hostRules: List<String>,
+        apiRules: List<String>
+    ): GeneratedPatches = when (val resolution = OkHttpNameResolver.resolve(target)) {
+        is OkHttpResolution.Resolved -> GeneratedPatches(
+            patches = listOf(
+                SmaliPatch(
+                    title = "Rebuilding the request interceptor as a network blocklist",
+                    explanation = "Replaces the stock resource-usage interceptor with one that matches the request URL against " +
+                        "${hostRules.size} host and ${apiRules.size} API-path rules and answers a match with a synthetic empty " +
+                        "HTTP 204. The OkHttp constructor, Protocol enum and HTTP/1.1 field it has to name were read from this build.",
+                    smaliPath = RECORDER_CLASS,
+                    methodSignature = INTERCEPTOR_SIGNATURE,
+                    replacementBody = interceptorBody(
+                        ctorDescriptor = resolution.names.responseConstructorDescriptor,
+                        protocolClass = resolution.names.protocolClass,
+                        protocolField = resolution.names.protocolHttp11Field,
+                        hostRules = hostRules,
+                        apiRules = apiRules
+                    )
+                )
+            )
+        )
+
+        is OkHttpResolution.Unresolved -> GeneratedPatches(
+            patches = emptyList(),
+            skipReason = resolution.reason
+        )
+    }
 
     /**
      * Builds the replacement body for `requestStatsInterceptor`.
@@ -235,7 +173,8 @@ object DiscordBlocklistPatch {
      * how it was tuned against the live app. An on-device patcher has no such switch and the
      * shipped desktop build is generated without it, so the body here is what that build's method
      * contains: the block in full, the debug logging absent. Everything else is reproduced as
-     * written, down to the blank lines and the label names.
+     * written, down to the blank lines and the label names — a subset changes which rules are
+     * emitted and nothing else, so the reference comparison still holds rule for rule.
      *
      * The labels are the interesting part. `:not_proxied` and `:skip_<n>` bracket each API rule so
      * a rule only blocks when the URL is an API call, and every host rule branches to the shared
@@ -245,11 +184,16 @@ object DiscordBlocklistPatch {
      * @param ctorDescriptor `Lokhttp3/Response;`'s hand-built constructor, return type included.
      * @param protocolClass the Protocol enum, without `L`/`;`.
      * @param protocolField the Protocol field holding the `HTTP_1_1` constant.
+     * @param hostRules the host patterns to emit, in order. Defaults to the whole table.
+     * @param apiRules the API path patterns to emit, in order. The `:skip_<n>` labels are numbered
+     *   within this list, so it has to match the rules the caller selected.
      */
     fun interceptorBody(
         ctorDescriptor: String,
         protocolClass: String,
-        protocolField: String
+        protocolField: String,
+        hostRules: List<String> = DiscordBlocklistRules.HOST_RULES.map { it.pattern },
+        apiRules: List<String> = DiscordBlocklistRules.API_RULES.map { it.pattern }
     ): String {
         val protocol = "L$protocolClass;"
         val lines = mutableListOf(
@@ -303,7 +247,7 @@ object DiscordBlocklistPatch {
             ""
         )
 
-        for (host in HOST_BLOCKLIST) {
+        for (host in hostRules) {
             lines += listOf(
                 "    const-string v2, \"$host\"",
                 "",
@@ -316,7 +260,7 @@ object DiscordBlocklistPatch {
             )
         }
 
-        API_BLOCKLIST.forEachIndexed { index, entry ->
+        apiRules.forEachIndexed { index, entry ->
             lines += listOf(
                 "    const-string v2, \"$entry\"",
                 "",

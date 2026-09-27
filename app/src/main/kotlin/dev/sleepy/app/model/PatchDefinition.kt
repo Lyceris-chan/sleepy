@@ -103,6 +103,20 @@ fun interface PatchGenerator {
 }
 
 /**
+ * A [PatchGenerator] that can also generate for a subset of its set's items.
+ *
+ * Generators were written to produce the whole set, because the set was the only switch there was.
+ * Per-item selection needs to reach inside that: the blocklist's interceptor is compiled by
+ * walking its rule table, so honouring a subset means compiling a method that scans for fewer
+ * rules. A generator that implements both this and [PatchGenerator] stays usable with or without
+ * a selection, which is how the pipeline calls it.
+ */
+fun interface SelectivePatchGenerator {
+    /** Produces this set's patches for [target], restricted to what [selection] switches on. */
+    fun generate(target: TargetApk, selection: PatchSelection): GeneratedPatches
+}
+
+/**
  * PatchSet: User-toggleable group of related patches
  *
  * [generator] is for the patches that cannot be written down ahead of time; a set may have
