@@ -310,6 +310,65 @@ class PatcherPipelineTest {
         println("All Discord Smali patches applied cleanly with status OK!")
     }
 
+    /**
+     * Applies the whole ported native patch set to the real Discord base split.
+     *
+     * This is the end-to-end check that matters for the smali half: every anchor and every
+     * method marker must be found on a real disassembly, and the edited classes must
+     * reassemble — a label a patch introduces that does not match its branch target fails
+     * here rather than on a phone.
+     */
+    @Test
+    fun testDiscordNativePatchesApplyCleanly() = runBlocking {
+        val apkFile = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
+        if (!apkFile.exists()) {
+            println("Discord base.apk not found, skipping native patch test")
+            return@runBlocking
+        }
+
+        val apkBytes = apkFile.readBytes()
+        val dexEntries = mutableMapOf<String, ByteArray>()
+        ZipInputStream(ByteArrayInputStream(apkBytes)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (entry.name.matches(Regex("classes\\d*\\.dex"))) {
+                    dexEntries[entry.name] = zis.readBytes()
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+        val classToDex = DexProcessor.buildClassToDexIndex(dexEntries)
+
+        val patchesToApply = mutableListOf<SmaliPatch>()
+        val notApplicable = mutableListOf<String>()
+        for (patchSet in dev.sleepy.app.patches.DiscordNativePatches.ALL) {
+            for (patch in patchSet.smaliPatches) {
+                val descriptor = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
+                val dex = classToDex[descriptor]
+                if (dex == null) notApplicable.add(patch.smaliPath) else patchesToApply.add(patch.copy(dexName = dex))
+            }
+        }
+
+        assertTrue(
+            "every native patch must target a class present in this build, missing: $notApplicable",
+            notApplicable.isEmpty()
+        )
+        assertEquals("the ported native set is 90 edits", 90, patchesToApply.size)
+        println("Resolved ${patchesToApply.size} Discord native patches across ${patchesToApply.groupBy { it.dexName }.size} DEX files")
+
+        val failures = mutableListOf<String>()
+        for ((dexName, group) in patchesToApply.groupBy { it.dexName!! }) {
+            val (patched, results) = DexProcessor.patchDexSurgically(dexEntries[dexName]!!, group)
+            assertTrue("$dexName produced no output", patched.isNotEmpty())
+            results.filter { it.status != StepStatus.OK }
+                .forEach { failures.add("$dexName :: ${it.label} -> ${it.detail ?: it.status}") }
+        }
+
+        assertTrue("every native patch must apply cleanly, failures:\n${failures.joinToString("\n")}", failures.isEmpty())
+        println("All ${patchesToApply.size} Discord native smali patches applied and reassembled cleanly")
+    }
+
     @Test
     fun testDiscordPureKotlinHermesBytecodePatching() {
         val apkFile = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")

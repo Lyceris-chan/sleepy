@@ -22,7 +22,24 @@
         "discord_ota_bundle",
         "discord_sentry",
         "discord_telemetry",
-        "discord_hermes"
+        "discord_hermes",
+        "discord_native_sentry",
+        "discord_native_deep_links",
+        "discord_native_watchdog",
+        "discord_native_telemetry_modules",
+        "discord_native_log_noise",
+        "discord_native_audit",
+        "discord_native_okhttp_cache",
+        "discord_native_interceptors",
+        "discord_native_js_polls",
+        "discord_native_systrace",
+        "discord_native_crash_logcat",
+        "discord_native_privacy",
+        "discord_native_resource_monitors",
+        "discord_native_call_path",
+        "discord_native_media",
+        "discord_native_foreground_service",
+        "discord_native_experiments"
       ]
     },
     {
