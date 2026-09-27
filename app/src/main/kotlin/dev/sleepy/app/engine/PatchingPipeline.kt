@@ -80,6 +80,13 @@ class PatchingPipeline(private val context: Context) {
         // Index class descriptors to DEX container names across the APK
         val classToDexIndex = DexProcessor.buildClassToDexIndex(dexEntries)
 
+        // Detect app version if version-specific obfuscated classes are involved
+        val detectedOctoGramVersion = when {
+            classToDexIndex.containsKey("Lorg/telegram/ui/e6;") -> "3.6.1"
+            classToDexIndex.containsKey("Ly5l;") || classToDexIndex.containsKey("Lhxk;") || classToDexIndex.containsKey("Lorg/telegram/messenger/m0;") -> "3.6.0"
+            else -> null
+        }
+
         // Collect requested patches
         val activePatchSets = selectedPatchIds.mapNotNull { PatchRegistry.get(it) }
         val hermesPatches = activePatchSets.flatMap { it.hermesPatches }
@@ -88,6 +95,9 @@ class PatchingPipeline(private val context: Context) {
         val smaliPatchesToApply = mutableListOf<SmaliPatch>()
         for (patchSet in activePatchSets) {
             val matchingPatches = patchSet.smaliPatches.filter { patch ->
+                if (patch.versionTag != null && detectedOctoGramVersion != null && patch.versionTag != detectedOctoGramVersion) {
+                    return@filter false
+                }
                 val descriptor = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val targetDex = patch.dexName ?: classToDexIndex[descriptor]
                 targetDex != null && dexEntries.containsKey(targetDex)
@@ -100,7 +110,12 @@ class PatchingPipeline(private val context: Context) {
                     smaliPatchesToApply.add(patch.copy(dexName = actualDex))
                 }
             } else if (patchSet.smaliPatches.isNotEmpty()) {
-                log(StepResult(patchSet.label, StepStatus.SKIP, "Target classes not found in APK DEX containers"))
+                val reason = if (detectedOctoGramVersion != null && patchSet.smaliPatches.any { it.versionTag != null && it.versionTag != detectedOctoGramVersion }) {
+                    "Not applicable to detected app version ($detectedOctoGramVersion)"
+                } else {
+                    "Target classes not found in APK DEX containers"
+                }
+                log(StepResult(patchSet.label, StepStatus.SKIP, reason))
             }
         }
 

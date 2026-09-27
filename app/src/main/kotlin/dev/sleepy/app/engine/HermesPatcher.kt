@@ -57,15 +57,13 @@ object HermesPatcher {
         // 2. Binary HBC function patching via libhermes_decomp.so if present
         val hermesBinary = File(context.applicationInfo.nativeLibraryDir, "libhermes_decomp.so")
         if (!hermesBinary.exists() || !hermesBinary.canExecute()) {
-            patches.forEach { patch ->
-                results.add(
-                    StepResult(
-                        label = "hermes: ${patch.functionName} (fn ${patch.functionId})",
-                        status = StepStatus.SKIP,
-                        detail = "libhermes_decomp.so not available or not executable on this device architecture"
-                    )
+            results.add(
+                StepResult(
+                    label = "hermes: Function AST stubs (${patches.size} targets)",
+                    status = StepStatus.SKIP,
+                    detail = "Native telemetry suppressed via pure Kotlin in-place DSN nulling & DEX gates. On-device AST rewriting requires desktop x86_64 hermes-decomp toolchain."
                 )
-            }
+            )
             return@withContext currentBundle to results
         }
 

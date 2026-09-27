@@ -19,15 +19,17 @@ object DiscordPatches {
         label = "Lock APK Hermes JS Bundle",
         description = "Neutralizes Discord's BundleUpdater pref keys (`key_android_js_bundle`) and reroutes the OTA host to invalid.com so Discord executes our patched APK asset bundle instead of downloading an unpatched bundle.",
         smaliPatches = listOf(
-            SmaliPatch(
-                smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
-                anchor = "key_android_js_bundle",
-                replacement = "key_android_js_bundlX"
-            ),
+            // Order is critical: key_android_js_bundle_release_name MUST be replaced before key_android_js_bundle
+            // to avoid corrupting the longer key into key_android_js_bundlX_release_name.
             SmaliPatch(
                 smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
                 anchor = "key_android_js_bundle_release_name",
                 replacement = "key_android_js_bundle_release_namX"
+            ),
+            SmaliPatch(
+                smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
+                anchor = "key_android_js_bundle",
+                replacement = "key_android_js_bundlX"
             ),
             SmaliPatch(
                 smaliPath = "com/discord/bundle_updater/BundleUpdater.smali",
@@ -40,12 +42,12 @@ object DiscordPatches {
     val SENTRY = PatchSet(
         id = "discord_sentry",
         label = "Disable Sentry Crash Reporting (NDK & Java)",
-        description = "Stubs out Sentry NDK native shared library loading (`SentryNdk.loadNativeLibraries()`) and gates Java crash reporter initialization so crash dumps, thread states, and device info are never sent to Sentry.",
+        description = "Stubs out Sentry NDK native shared library loading (`SentryNdk.loadNativeLibraries()`), forces `CrashReporting.isDisabled() -> true`, and disables RNSentryModuleImpl SDK init and envelope dispatching so crash dumps, thread states, and device info are never sent to Sentry.",
         smaliPatches = listOf(
             SmaliPatch(
-                smaliPath = "io/sentry/android/ndk/SentryNdk.smali",
-                methodSignature = ".method public static loadNativeLibraries()V",
-                replacementBody = """.method public static loadNativeLibraries()V
+                smaliPath = "io/sentry/ndk/SentryNdk.smali",
+                methodSignature = ".method public static declared-synchronized loadNativeLibraries()V",
+                replacementBody = """.method public static declared-synchronized loadNativeLibraries()V
     .locals 0
 
     return-void
@@ -53,9 +55,37 @@ object DiscordPatches {
             ),
             SmaliPatch(
                 smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
-                methodSignature = ".method public final init(Landroid/content/Context;)V",
-                replacementBody = """.method public final init(Landroid/content/Context;)V
-    .locals 0
+                methodSignature = ".method private final isDisabled()Z",
+                replacementBody = """.method private final isDisabled()Z
+    .locals 1
+
+    const/4 v0, 0x1
+
+    return v0
+.end method"""
+            ),
+            SmaliPatch(
+                smaliPath = "io/sentry/react/RNSentryModuleImpl.smali",
+                methodSignature = ".method public initNativeSdk(Lcom/facebook/react/bridge/ReadableMap;Lcom/facebook/react/bridge/Promise;)V",
+                replacementBody = """.method public initNativeSdk(Lcom/facebook/react/bridge/ReadableMap;Lcom/facebook/react/bridge/Promise;)V
+    .locals 1
+
+    sget-object v0, Ljava/lang/Boolean;->FALSE:Ljava/lang/Boolean;
+
+    invoke-interface {p2, v0}, Lcom/facebook/react/bridge/Promise;->resolve(Ljava/lang/Object;)V
+
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                smaliPath = "io/sentry/react/RNSentryModuleImpl.smali",
+                methodSignature = ".method public captureEnvelope(Ljava/lang/String;Lcom/facebook/react/bridge/ReadableMap;Lcom/facebook/react/bridge/Promise;)V",
+                replacementBody = """.method public captureEnvelope(Ljava/lang/String;Lcom/facebook/react/bridge/ReadableMap;Lcom/facebook/react/bridge/Promise;)V
+    .locals 1
+
+    const/4 v0, 0x0
+
+    invoke-interface {p3, v0}, Lcom/facebook/react/bridge/Promise;->resolve(Ljava/lang/Object;)V
 
     return-void
 .end method"""
@@ -66,15 +96,50 @@ object DiscordPatches {
     val TELEMETRY = PatchSet(
         id = "discord_telemetry",
         label = "Disable Native Telemetry & NetStats",
-        description = "Stubs native AppsFlyer event dispatching, NetStats network traffic profiling, and native logging call sites in Java/Kotlin DEX bytecode.",
+        description = "Stubs native Google Advertising ID retrieval, InstallReferrerModule, TelemetryRing buffer appending, and WebRTC crash reporting so native event telemetry is dropped.",
         smaliPatches = listOf(
             SmaliPatch(
-                smaliPath = "com/discord/analytics/AnalyticsUtils.smali",
-                methodSignature = ".method public static final init()V",
-                replacementBody = """.method public static final init()V
+                smaliPath = "com/discord/ads/AdsModule.smali",
+                methodSignature = ".method public getGoogleAdvertisingId(Lcom/facebook/react/bridge/Promise;)V",
+                replacementBody = """.method public getGoogleAdvertisingId(Lcom/facebook/react/bridge/Promise;)V
+    .locals 1
+
+    invoke-direct {p0, p1}, Lcom/discord/ads/AdsModule;->resolveWithNullId(Lcom/facebook/react/bridge/Promise;)V
+
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                smaliPath = "com/discord/analytics/InstallReferrerModule.smali",
+                methodSignature = ".method public final get(Lcom/facebook/react/bridge/Promise;)V",
+                replacementBody = """.method public final get(Lcom/facebook/react/bridge/Promise;)V
+    .locals 1
+
+    const/4 v0, 0x0
+
+    invoke-interface {p1, v0}, Lcom/facebook/react/bridge/Promise;->resolve(Ljava/lang/Object;)V
+
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                smaliPath = "com/discord/crash_reporting/TelemetryRing.smali",
+                methodSignature = ".method public final append(Ljava/lang/String;JLjava/lang/String;Ljava/util/Map;Ljava/util/List;)V",
+                replacementBody = """.method public final append(Ljava/lang/String;JLjava/lang/String;Ljava/util/Map;Ljava/util/List;)V
     .locals 0
 
     return-void
+.end method"""
+            ),
+            SmaliPatch(
+                smaliPath = "com/discord/crash_reporting/WebrtcCrashReporting.smali",
+                methodSignature = ".method public static reportWebrtcException(Ljava/lang/Throwable;)Ljava/lang/String;",
+                replacementBody = """.method public static reportWebrtcException(Ljava/lang/Throwable;)Ljava/lang/String;
+    .locals 1
+
+    const-string v0, ""
+
+    return-object v0
 .end method"""
             )
         )

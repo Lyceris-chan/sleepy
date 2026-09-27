@@ -228,4 +228,63 @@ class PatcherPipelineTest {
         assertTrue("Footer must match SHA-1 of payload", expectedSha1.contentEquals(actualSha1))
         println("Pure Kotlin Hermes Sentry DSN nulling & SHA-1 footer verification passed!")
     }
+
+    @Test
+    fun testDiscordDynamicResolutionAndPatching() = runBlocking {
+        val apkFile = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
+        if (!apkFile.exists()) {
+            println("Discord base.apk not found, skipping test")
+            return@runBlocking
+        }
+
+        println("Reading Discord APK (size: ${apkFile.length()} bytes)...")
+        val apkBytes = apkFile.readBytes()
+
+        val dexEntries = mutableMapOf<String, ByteArray>()
+        ZipInputStream(ByteArrayInputStream(apkBytes)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (entry.name.matches(Regex("classes\\d*\\.dex"))) {
+                    dexEntries[entry.name] = zis.readBytes()
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+        println("Found ${dexEntries.size} DEX files in Discord APK")
+
+        val classToDex = DexProcessor.buildClassToDexIndex(dexEntries)
+        val patchesToApply = mutableListOf<SmaliPatch>()
+        for (patchSet in listOf(dev.sleepy.app.patches.DiscordPatches.BUNDLE_LOCK, dev.sleepy.app.patches.DiscordPatches.SENTRY, dev.sleepy.app.patches.DiscordPatches.TELEMETRY)) {
+            val matching = patchSet.smaliPatches.filter { patch ->
+                val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
+                val actualDex = patch.dexName ?: classToDex[desc]
+                actualDex != null && dexEntries.containsKey(actualDex)
+            }
+            assertTrue("PatchSet '${patchSet.label}' must have applicable patches in Discord APK", matching.isNotEmpty())
+            matching.forEach { patch ->
+                val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
+                val actualDex = patch.dexName ?: classToDex[desc]!!
+                patchesToApply.add(patch.copy(dexName = actualDex))
+            }
+        }
+
+        println("Discord patches queued: ${patchesToApply.size}")
+        assertEquals(11, patchesToApply.size) // 3 bundle + 4 sentry + 4 telemetry
+
+        val grouped = patchesToApply.groupBy { it.dexName!! }
+        for ((dexName, patchesForDex) in grouped) {
+            println("Patching Discord $dexName (${patchesForDex.size} edits)...")
+            val (patchedBytes, results) = DexProcessor.patchDexSurgically(
+                dexBytes = dexEntries[dexName]!!,
+                patches = patchesForDex
+            )
+            assertTrue("$dexName output must be valid", patchedBytes.isNotEmpty())
+            results.forEach {
+                println("  [${it.status}] ${it.label}: ${it.detail ?: "OK"}")
+                assertEquals("Patch must succeed: ${it.label}", StepStatus.OK, it.status)
+            }
+        }
+        println("All Discord Smali patches applied cleanly with status OK!")
+    }
 }

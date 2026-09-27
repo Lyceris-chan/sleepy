@@ -194,11 +194,7 @@ object OctoGramPatches {
             SmaliPatch(
                 versionTag = "3.6.1",
                 smaliPath = "org/telegram/ui/ActionBar/ActionBarLayout.smali",
-                anchor = """    iget-object v4, v0, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
-
-    .line 6
-    .line 7
-    iget-boolean v2, v0, Ln16;->b:Z""",
+                anchor = "    iget-object v4, v0, Ln16;->a:Lorg/telegram/ui/ActionBar/p;\n",
                 replacement = """    iget-object v4, v0, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
 
     # --- OctoGram premium-upsell removal -------------------------------
@@ -212,20 +208,13 @@ object OctoGramPatches {
 
     :cond_premium_upsell_skip
     # -------------------------------------------------------------------
-
-    .line 6
-    .line 7
-    iget-boolean v2, v0, Ln16;->b:Z"""
+"""
             ),
             // t6.b(Ln16;)Z paywall drop guard in main window stack override
             SmaliPatch(
                 versionTag = "3.6.1",
                 smaliPath = "t6.smali",
-                anchor = """    iget-object v0, p1, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
-
-    .line 2
-    .line 3
-    instance-of v1, v0, Lw51;""",
+                anchor = "    iget-object v0, p1, Ln16;->a:Lorg/telegram/ui/ActionBar/p;\n",
                 replacement = """    iget-object v0, p1, Ln16;->a:Lorg/telegram/ui/ActionBar/p;
 
     # --- OctoGram premium-upsell removal (t6 override) -------------------
@@ -239,10 +228,7 @@ object OctoGramPatches {
 
     :cond_premium_upsell_skip_t6
     # -------------------------------------------------------------------
-
-    .line 2
-    .line 3
-    instance-of v1, v0, Lw51;"""
+"""
             )
         )
     )
