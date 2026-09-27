@@ -1,6 +1,8 @@
 *.iml
 .gradle
 /local.properties
+# Release signing material read by app/build.gradle.kts when it is present.
+keystore.properties
 /.idea/
 .DS_Store
 /build
@@ -11,6 +13,9 @@
 *.aab
 *.jks
 *.keystore
+# Disassembly scratch: `baksmali`/`smali` round-trips of someone else's app, not artefacts of
+# this one. A stray one was committed once (Discord's SystraceModule) and read as source.
+*.dex
 app/build/
 build-out/
 RELEASE_CHANGELOG.md

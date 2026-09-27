@@ -9,6 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.FileOutputStream
@@ -28,40 +29,102 @@ import java.util.zip.ZipOutputStream
  * base split carries no native libraries at all and declares `requiredSplitTypes`, so an
  * APK built from the base alone dies on its first `System.loadLibrary` call — and would be
  * refused by the platform even before that.
+ *
+ * They also cover the second half of that gap, which the user noticed from the other end:
+ * the base split carries none of the density split's resource files either, so a base-only
+ * APK is short the ~8 MB of drawables the desktop build's merged APK carries. The merge puts
+ * those files back at the desktop's paths; what it cannot put back is the table that names
+ * them, which is why the assertions here are about file names and sizes rather than about
+ * whether the app can reach what it now contains.
  */
 class SplitMergeTest {
 
     // ---- SplitMerger -------------------------------------------------------------------
 
+    /**
+     * A configuration split contributes its shared objects and its resources, and nothing
+     * else: its manifest describes the split, its `resources.arsc` is a table this merge
+     * cannot graft onto the base's, and its `values/` holds stand-ins for values the base
+     * already has — copying those in would blank out what the base carries.
+     */
     @Test
-    fun mergeNativeLibrariesExtractsOnlyAbiLibraries() {
+    fun mergeSplitTakesLibrariesAndResourcesButNotTheSplitsOwnFiles() {
         val split = zipOf(
             "lib/arm64-v8a/libfoo.so" to ByteArray(64) { 1 },
             "lib/arm64-v8a/libbar.so" to ByteArray(32) { 2 },
             "lib/armeabi-v7a/libfoo.so" to ByteArray(16) { 3 },
             "AndroidManifest.xml" to byteArrayOf(1, 2, 3),
+            "resources.arsc" to byteArrayOf(6, 7, 8, 9),
+            "res/drawable-hdpi-v4/logo.png" to ByteArray(8) { 4 },
             "res/values/strings.xml" to byteArrayOf(4, 5)
         )
 
-        val report = SplitMerger.mergeNativeLibraries(split)
+        val report = SplitMerger.mergeSplit(split)
 
         assertEquals(3, report.libraryCount)
+        assertEquals(1, report.resourceCount)
         assertEquals(2, report.abis["arm64-v8a"])
         assertEquals(1, report.abis["armeabi-v7a"])
-        assertEquals(112L, report.totalBytes)
+        assertEquals(120L, report.totalBytes)
+        assertEquals("libraries and resources are weighed apart", 112L, report.libraryBytes)
+        assertEquals(8L, report.resourceBytes)
         // Sorted so the merged archive is deterministic.
         assertEquals(
-            listOf("lib/arm64-v8a/libbar.so", "lib/arm64-v8a/libfoo.so", "lib/armeabi-v7a/libfoo.so"),
+            listOf(
+                "lib/arm64-v8a/libbar.so",
+                "lib/arm64-v8a/libfoo.so",
+                "lib/armeabi-v7a/libfoo.so",
+                "res/drawable-hdpi-v4/logo.png"
+            ),
             report.entries.map { it.name }
         )
     }
 
     @Test
-    fun mergeNativeLibrariesOnSplitWithoutLibrariesYieldsEmptyReport() {
+    fun mergeSplitOnSplitWithNothingToMergeYieldsEmptyReport() {
         val split = zipOf("AndroidManifest.xml" to byteArrayOf(1))
-        val report = SplitMerger.mergeNativeLibraries(split)
+        val report = SplitMerger.mergeSplit(split)
         assertEquals(0, report.libraryCount)
+        assertEquals(0, report.resourceCount)
+        assertEquals(0L, report.totalBytes)
         assertTrue(report.abis.isEmpty())
+    }
+
+    /**
+     * The file-backed merge is the one the pipeline runs, so what it writes has to be
+     * readable back at the size it claims and inside the directory it was given — the entry
+     * names come from the split, and a flattened name is what keeps them from pointing
+     * anywhere else.
+     */
+    @Test
+    fun mergeSplitToDirWritesEveryEntryUnderTheDirectoryItWasGiven() {
+        val split = zipOf(
+            "lib/arm64-v8a/libfoo.so" to ByteArray(64) { 1 },
+            "res/drawable-hdpi-v4/logo.png" to ByteArray(8) { 4 }
+        )
+        val splitApk = File.createTempFile("sleepy-merge-split-", ".apk")
+        val into = Files.createTempDirectory("sleepy-merge-dir").toFile()
+        try {
+            splitApk.writeBytes(split)
+            val report = SplitMerger.mergeSplitToDir(splitApk, into)
+
+            assertEquals(1, report.libraryCount)
+            assertEquals(1, report.resourceCount)
+            assertEquals(
+                listOf("lib/arm64-v8a/libfoo.so", "res/drawable-hdpi-v4/logo.png"),
+                report.entries.map { it.name }
+            )
+            val root = into.canonicalPath + File.separator
+            for (entry in report.entries) {
+                assertTrue("${entry.file.path} must be written into ${into.path}", entry.file.canonicalPath.startsWith(root))
+                assertTrue("${entry.file.name} must have been written", entry.file.isFile)
+                assertEquals("the report must state the size on disk", entry.file.length(), entry.size)
+                assertTrue("${entry.file.name} must not be empty", entry.file.length() > 0)
+            }
+        } finally {
+            splitApk.delete()
+            into.deleteRecursively()
+        }
     }
 
     // ---- ZipRepacker alignment ---------------------------------------------------------
@@ -119,6 +182,40 @@ class SplitMergeTest {
     }
 
     /**
+     * A **replaced** entry keeps the method its source had, which is the case that matters for
+     * the two entries the pipeline actually replaces: the resource table the merge rebuilds and
+     * the JavaScript bundle the patch rewrites. Both are STORED in a Discord base split, and the
+     * platform maps both rather than unpacking them.
+     *
+     * The method of a replaced entry is not carried by the replacement, so it has to be read off
+     * the source as the source is walked — and that read has to happen before the entry is dropped
+     * from the copied stream, which is the one thing about a replaced entry that is easy to get
+     * wrong and impossible to see from the outside afterwards.
+     */
+    @Test
+    fun repackKeepsTheStorageMethodOfAnEntryItReplaces() {
+        val original = zipOfStored(
+            "resources.arsc" to ByteArray(4096) { 7 },
+            "AndroidManifest.xml" to ByteArray(512) { 8 }
+        )
+
+        val result = ZipRepacker.repack(
+            inputApkBytes = original,
+            replacements = mapOf("resources.arsc" to ByteArray(128) { 1 })
+        )
+
+        val methods = entryMethods(result.bytes)
+        assertEquals("the rebuilt table must stay uncompressed, as its source was", ZipEntry.STORED, methods["resources.arsc"])
+        assertEquals("the entry it replaced must not be left beside it", 2, methods.size)
+
+        // Uncompressed means aligned: the smaller replacement moved the entry, so the padding
+        // has to have moved with it, and the verifier's own reading is what says so.
+        val offsets = mutableMapOf<String, Long>()
+        ApkVerifier.readCentralDirectory(result.bytes) { name, dataOffset, _ -> offsets[name] = dataOffset }
+        assertEquals("a stored entry's data must land on a 4-byte boundary", 0L, offsets.getValue("resources.arsc") % 4)
+    }
+
+    /**
      * Compressed entries carry no alignment requirement, and treating them as if they did
      * is what made the patcher report "zipalign failed" on a perfectly valid APK. The real
      * `zipalign -c -v 4` labels them "(OK - compressed)"; this asserts the verifier agrees.
@@ -134,8 +231,10 @@ class SplitMergeTest {
 
         val repacked = ZipRepacker.repack(original, replacements = emptyMap())
         val result = ApkVerifier.verify(repacked.bytes)
-        assertTrue(
+        assertNull("the archive must be readable: ${result.directoryError}", result.directoryError)
+        assertEquals(
             "compressed entries must not be treated as misaligned: ${result.misalignedEntries}",
+            true,
             result.zipalignPassed
         )
 
@@ -146,8 +245,8 @@ class SplitMergeTest {
     }
 
     /**
-     * The full path that produced the alignment report: merge the real Discord ABI split
-     * into the real base split and repack, all of it the way the pipeline does it — the
+     * The full path that produced the alignment report: merge the real Discord ABI and density
+     * splits into the real base split and repack, all of it the way the pipeline does it — the
      * libraries merged out to files, the archive rebuilt file to file, and the result checked
      * where it lies.
      *
@@ -157,55 +256,196 @@ class SplitMergeTest {
      * deliberately the path that has to keep fitting.
      *
      * The output is left in `/tmp` so it can be handed to the real `zipalign` binary, which is
-     * the authority on whether the alignment is actually right.
+     * the authority on whether the alignment is actually right — see
+     * [theRealZipalignAcceptsTheMergedArchive], which makes that second claim on its own.
      */
     @Test
     fun mergedDiscordApkPassesAlignment() {
-        val extracted = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted")
+        val extracted = DISCORD_EXTRACTED
         val base = File(extracted, "base.apk")
-        val split = File(extracted, "config.arm64_v8a.apk")
-        if (!base.exists() || !split.exists()) {
-            println("Discord splits not found, skipping merged-alignment test")
-            return
-        }
+        val splits = discordSplits(extracted)
+        // An absent fixture skips the test, which JUnit reports as skipped. A `return` here
+        // would be a pass, and the merge path would stop being covered without anyone noticing.
+        assumeTrue(
+            "the Discord splits are not on this machine (${extracted.path})",
+            base.exists() && splits.all { it.exists() }
+        )
 
         val workDir = Files.createTempDirectory("sleepy-merge-test").toFile()
         try {
-            val merge = SplitMerger.mergeNativeLibrariesToDir(split, workDir)
-            assertTrue("the ABI split must carry libraries", merge.libraryCount > 0)
-
-            val additional = merge.entries.associate { entry ->
-                entry.name to ZipRepacker.AdditionalEntry(entry.file, ZipEntry.DEFLATED)
-            }
             val out = File("/tmp/sleepy-merged-test.apk")
-            FileOutputStream(out).use { stream ->
-                ZipRepacker.repackTo(base, stream, emptyMap(), additional)
-            }
+            val merged = repackMergedDiscordApk(base, splits, workDir, out)
 
             val result = ApkVerifier.verify(out)
-            assertTrue(
+            assertNull("the merged archive must be readable: ${result.directoryError}", result.directoryError)
+            assertEquals(
                 "merged APK must pass the alignment check, misaligned: ${result.misalignedEntries}",
+                true,
                 result.zipalignPassed
             )
 
-            // Our own checker was once wrong about which entries need aligning, so the real
-            // one gets the last word when it is on this machine.
-            val zipalign = File("/home/sleepy/portable-tools/android-sdk/build-tools/36.0.0/zipalign")
-            if (zipalign.canExecute()) {
-                val check = ProcessBuilder(zipalign.absolutePath, "-c", "-v", "4", out.absolutePath)
-                    .redirectErrorStream(true)
-                    .start()
-                val report = check.inputStream.bufferedReader().readText()
-                assertEquals("zipalign must accept the merged APK:\n$report", 0, check.waitFor())
-            } else {
-                println("zipalign not found, skipping the external alignment check")
-            }
-
-            println("Merged ${merge.libraryCount} libraries -> ${out.length()} bytes, alignment OK, wrote $out")
+            println(
+                "Merged ${merged.libraries} libraries and ${merged.resources} resources -> " +
+                    "${out.length()} bytes, alignment OK, wrote $out"
+            )
         } finally {
             workDir.deleteRecursively()
         }
     }
+
+    /**
+     * The user-visible claim: the merged APK is missing the resources the base split does not
+     * carry, and merging the density split puts them back — at the paths the desktop build uses.
+     *
+     * What does not come back with them is the table that names them. Every split ships a
+     * partial table naming only the files it carries: this base's names its own 3,606, the
+     * density split's names its 1,249, and the two sets share not one path. So the merged
+     * archive's entries and size come to match the desktop build's while those resources stay
+     * unreachable — the desktop relinks the tables with aapt2, and this repack copies files. The
+     * test below pins the file set and says nothing about resolution, because that is all the
+     * merge can honestly claim.
+     */
+    @Test
+    fun mergedDiscordApkGainsTheDensitySplitsResources() {
+        val extracted = DISCORD_EXTRACTED
+        val base = File(extracted, "base.apk")
+        val splits = discordSplits(extracted)
+        assumeTrue(
+            "the Discord splits are not on this machine (${extracted.path})",
+            base.exists() && splits.all { it.exists() }
+        )
+
+        val workDir = Files.createTempDirectory("sleepy-resource-test").toFile()
+        val out = File.createTempFile("sleepy-merged-resources-", ".apk")
+        try {
+            val merged = repackMergedDiscordApk(base, splits, workDir, out)
+            assertTrue("the density split must carry resources", merged.resources > 0)
+
+            val before = entryNames(base)
+            val after = entryNames(out)
+            val gained = after.toSet() - before.toSet()
+            val lost = before.toSet() - after.toSet()
+
+            // Nothing is replaced: the base has none of these, so every merged entry has to
+            // arrive as an addition, and every one of them has to be in the archive.
+            assertEquals(
+                "every merged entry must be an addition, never a replacement",
+                merged.libraries + merged.resources,
+                gained.size
+            )
+            // The repack always leaves out artefacts a later build supersedes, and the base
+            // carries one of them: Discord's own JS patch file, dropped by the "locked bundle"
+            // patch. Nothing else may go missing.
+            assertEquals(
+                "only the superseded artefact the repack drops may leave the archive",
+                setOf("assets/index.android.bundle.patch"),
+                lost
+            )
+            assertEquals(
+                "and nothing else about the entry count may change",
+                before.size - lost.size + gained.size,
+                after.size
+            )
+
+            assertTrue(
+                "a dense-screen drawable must be in the merged APK",
+                gained.any { it.startsWith("res/drawable-xhdpi-v4/") }
+            )
+            assertTrue(
+                "the anydpi ExoPlayer aliases the desktop build restores must be in the merged APK",
+                gained.any { it.startsWith("res/drawable-anydpi-v21/exo_") }
+            )
+
+            println(
+                "Base ${base.length()} bytes / ${before.size} entries -> merged ${out.length()} bytes / " +
+                    "${after.size} entries, +${gained.size} entries " +
+                    "(+${merged.libraries} libraries, +${merged.resources} resources)"
+            )
+        } finally {
+            workDir.deleteRecursively()
+            out.delete()
+        }
+    }
+
+    /**
+     * The merged archive read by the real `zipalign`, which is the last word on alignment.
+     *
+     * Its own test because the binary is not part of this repository: written as a branch inside
+     * the test above, a machine without the SDK would print a line nobody reads and report the
+     * external check as having passed. Here it is reported as skipped, and the alignment report
+     * above keeps its own verdict whether or not the tool is installed.
+     */
+    @Test
+    fun theRealZipalignAcceptsTheMergedArchive() {
+        val extracted = DISCORD_EXTRACTED
+        val base = File(extracted, "base.apk")
+        val splits = discordSplits(extracted)
+        assumeTrue(
+            "the Discord splits are not on this machine (${extracted.path})",
+            base.exists() && splits.all { it.exists() }
+        )
+        val zipalign = File("/home/sleepy/portable-tools/android-sdk/build-tools/36.0.0/zipalign")
+        assumeTrue("${zipalign.path} is not on this machine", zipalign.canExecute())
+
+        val workDir = Files.createTempDirectory("sleepy-zipalign-test").toFile()
+        val out = File.createTempFile("sleepy-merged-zipalign-", ".apk")
+        try {
+            repackMergedDiscordApk(base, splits, workDir, out)
+
+            val check = ProcessBuilder(zipalign.absolutePath, "-c", "-v", "4", out.absolutePath)
+                .redirectErrorStream(true)
+                .start()
+            val report = check.inputStream.bufferedReader().readText()
+            assertEquals("zipalign must accept the merged APK:\n$report", 0, check.waitFor())
+        } finally {
+            workDir.deleteRecursively()
+            out.delete()
+        }
+    }
+
+    /**
+     * Merges the real ABI split's libraries into the real base split and repacks the result to
+     * [out], returning how many libraries went in.
+     *
+     * Both tests above need the same artefact and make different claims about it, so they build
+     * it the same way rather than each assembling their own version of it.
+     */
+    private fun repackMergedDiscordApk(base: File, splits: List<File>, workDir: File, out: File): MergedCounts {
+        var libraries = 0
+        var resources = 0
+        val additional = linkedMapOf<String, ZipRepacker.AdditionalEntry>()
+        for (split in splits) {
+            val merge = SplitMerger.mergeSplitToDir(split, workDir)
+            libraries += merge.libraryCount
+            resources += merge.resourceCount
+            for (entry in merge.entries) {
+                additional[entry.name] = ZipRepacker.AdditionalEntry(entry.file, ZipEntry.DEFLATED)
+            }
+        }
+        assertTrue("the ABI split must carry libraries", libraries > 0)
+
+        FileOutputStream(out).use { stream ->
+            ZipRepacker.repackTo(base, stream, emptyMap(), additional)
+        }
+        return MergedCounts(libraries, resources)
+    }
+
+    /** What went into a merged APK, so each test can make its claim about the same artefact. */
+    private data class MergedCounts(val libraries: Int, val resources: Int)
+
+    /** Entry names in an archive, read from its directory rather than by loading it. */
+    private fun entryNames(apk: File): List<String> {
+        val names = mutableListOf<String>()
+        val error = ApkVerifier.readCentralDirectory(apk) { name, _, _ -> names.add(name) }
+        assertNull("the archive's directory must be readable: $error", error)
+        return names
+    }
+
+    /** The splits the merged fixture is built from: the ABI one, then the density one. */
+    private fun discordSplits(extracted: File): List<File> = listOf(
+        File(extracted, "config.arm64_v8a.apk"),
+        File(extracted, "config.hdpi.apk")
+    )
 
     @Test
     fun repackDropsSignatureFiles() {
@@ -294,13 +534,8 @@ class SplitMergeTest {
      */
     @Test
     fun standaloneManifestOnRealDiscordSplit() {
-        val apkFile = File(
-            "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk"
-        )
-        if (!apkFile.exists()) {
-            println("Discord base.apk not found, skipping real-manifest test")
-            return
-        }
+        val apkFile = File(DISCORD_EXTRACTED, "base.apk")
+        assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
         val zip = ZipFile(apkFile)
         val entry = zip.getEntry("AndroidManifest.xml")
@@ -501,6 +736,11 @@ class SplitMergeTest {
     }
 
     private companion object {
+        /** Where the Discord 348.5 base and ABI splits are unpacked, outside the repository. */
+        val DISCORD_EXTRACTED = File(
+            "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted"
+        )
+
         /** Index i holds the resource ID that string-pool index i resolves to. */
         val RESOURCE_IDS = intArrayOf(
             0x0101021b, // versionCode, used as an unrelated attribute that must survive

@@ -47,8 +47,9 @@ jobs:
         run: chmod +x gradlew
 
       # The patcher engine tests self-check the ZIP alignment maths and the binary-XML
-      # attribute editor. Tests that need a local reference APK skip themselves when the
-      # file is absent, so this is safe on a clean runner.
+      # attribute editor. Tests that need a local reference APK are reported as skipped when
+      # the file is absent, so this is safe on a clean runner — and the skipped count in the
+      # report says how much of the suite did not run here.
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 

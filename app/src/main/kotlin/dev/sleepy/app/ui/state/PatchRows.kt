@@ -218,7 +218,8 @@ object PatchRows {
      * These are the same rows an expanded set has, rendered by the same row and greyed by the same
      * mechanism, because a permission that cannot be switched off is the same kind of claim as a
      * blocklist gate: [InertKind.REQUIRED], the model's own reason, and no switch to move. What
-     * differs is only where the list comes from — the APK's manifest rather than a table.
+     * differs is only where the list comes from — the declarations shipped for the release being
+     * patched, or its own manifest when nothing is shipped for it.
      *
      * The switch reads "kept", so a permission is removed by switching it off, and the rows are
      * derived from the selection on every read like everything else here: the last permission
@@ -252,7 +253,7 @@ object PatchRows {
         } else {
             "Left declared, so the app keeps this permission."
         }
-        return "Declared by this build in its own AndroidManifest.xml. $effect Selection key ${item.key}."
+        return "Declared in the manifest of this release. $effect Selection key ${item.key}."
     }
 
     /**

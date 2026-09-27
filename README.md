@@ -46,6 +46,7 @@ The patch screen lists a set for each part of the app. Expand a set to see the i
   - **Already covered by …** names a rule you already have switched on that blocks every request this one would block. Switch that one off and this switch starts working again.
   - **Required …** marks one of the two checks the blocklist cannot work without. Those checks always run.
 - The counts above the list and on the button at the bottom tell you how many changes you have selected.
+- **Permissions** are listed above the patch sets, one switch per permission the app asks for. Switching one off deletes that permission from the patched app's manifest, and that is permanent: Android gives an app only the permissions its manifest declares, and an installed app cannot ask for another one later. The list comes with sleepy, for the exact builds listed below, and you can check it against the build — sleepy downloads it and shows any difference in full rather than passing over it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
 The 142 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
@@ -79,14 +80,22 @@ sleepy patches one exact build of each app. The list below is what this version 
 
 | App | Version | Version code | Downloaded from |
 | :--- | :--- | :--- | :--- |
-| Discord | 348.5 Alpha | 348205 | [Vendetta tracker](https://tracker.vendetta.rocks/tracker/download/348205/base), plus its ARM64 split |
+| Discord | 348.5 Alpha | 348205 | [Vendetta tracker](https://tracker.vendetta.rocks/tracker/download/348205/base), plus its ARM64, density and language splits |
 | OctoGram | 3.6.1 Beta 2 | 38275 | [OctoGram releases on GitHub](https://github.com/OctoGramApp/OctoGram/releases/download/v3.6.0_3827/OctoGram_arm64.apk) |
 
-The Discord source is a base APK plus a separate file holding the ARM64 native libraries. sleepy downloads both and merges them, so the patched APK runs on ARM64 phones.
+The Discord source is a base APK plus four separate files: the ARM64 native libraries, the images for one screen density, and the German and English strings. sleepy downloads all five and merges them into one APK, so the patched build runs on ARM64 phones and carries the resources the desktop build has. The resource table is rebuilt around them at patch time — every split ships a partial table naming only its own files, and the base's names none of the others — so the merged files resolve instead of sitting in the archive unreferenced.
 
 Every download URL, version number and hash is declared in [the `sources.json` manifest](https://github.com/Lyceris-chan/sleepy/blob/main/sources.json). sleepy downloads the original APK from the source named there and patches it on your device. sleepy does not host or redistribute Discord or OctoGram.
 
-Where the publisher provides a SHA-256 hash, as OctoGram does, sleepy checks the download against it and refuses a file that does not match. For Discord, the tracker publishes no hash, and the app says so rather than claiming a check it cannot make. The Settings screen lists the exact hosts that will be contacted before anything is downloaded.
+Where the publisher provides a SHA-256 hash, as OctoGram does, sleepy checks the download against it and refuses a file that does not match. For Discord, the tracker publishes no hash, and the app says so rather than claiming a check it cannot make. The Settings screen lists the hosts every supported target is downloaded from, and marks the one you opened last, so nothing is contacted that you have not seen named.
+
+## How this compares to the desktop patch suites
+
+sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, every one of the 142 JavaScript changes the suite makes is made to the same bytes, verified against the code the suite's build ships, so the patched app matches it change for change.
+
+In two places sleepy goes past the suite. The network blocklist is worked out from the APK you selected instead of being written down as fixed names that the next release would invalidate. And the permissions an app asks for are listed with a switch each, so what it can ask for is your decision rather than a fixed set.
+
+What is not covered yet is under [Known limitations](#known-limitations), per app.
 
 ## Known limitations
 
@@ -96,8 +105,8 @@ Stated plainly, because a limitation left unsaid reads as a guarantee.
 
 - JavaScript changes are written for one exact Discord release, 348.5. A different release's code is refused instead of being patched, because the identifiers these changes use are numbered per release and would point at unrelated code in another build.
 - The blocklist is built from the APK you selected rather than shipped as fixed text, because three of the names it needs are renamed by the app's own obfuscation on every release. A build where these cannot be found is skipped, with the reason shown, instead of being patched with names from another release.
-- Most edits to the app's manifest file are not implemented yet. The split declarations and the native library setting are handled; removing dead permissions, the crash reporter's providers, Play split metadata and the AppsFlyer link query is not.
-- New entries cannot be added to the app's resource table. The desktop build adds some video player image aliases that sleepy cannot add. Discord's own APK ships without them and runs, so this matches what Discord itself ships.
+- Every manifest edit the desktop suite makes is applied except one. The split declarations, the native library setting, any permission you switch off, the crash reporter's two providers, the three Play split metadata entries and the AppsFlyer link query are all edited into the compiled manifest, and the RPC service is closed to other apps on every build because it is exported with no permission on it and checks nothing about its caller. The edit not ported is the desktop suite's rewrite of the three Google Analytics components from enabled to disabled: the desktop suite's own comment on that edit says those components do nothing once the analytics initialiser is stubbed, which is what sleepy does instead, so the rewrite would change the manifest without changing what the app does.
+- New entries cannot be added to the app's resource table, only carried across from a split. The desktop build adds some video player image aliases that sleepy cannot add. Discord's own APK ships without them and runs, so this matches what Discord itself ships.
 - Four media changes from the reference build stay switched off, for the reasons that build documents: they crash the camera, shrink recorded video below what the encoder expects, remove a string that is still in use, or pass a value the media engine does not document.
 - Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates.
 
@@ -129,9 +138,9 @@ Build a release APK:
 ./gradlew :app:assembleRelease
 ```
 
-Some engine tests check the patcher against a reference APK. They skip themselves when that file is not on your machine, so the test task passes on a clean checkout. The tests for merging the Discord split need a 3 GB heap, which the build sets for them.
+Some engine tests check the patcher against a reference APK. They report themselves as skipped when that file is not on your machine, so the test task passes on a clean checkout and the skipped count says how much of the suite did not run. The heap for every test task is capped at 512 MB, which is what a phone grants an app with `largeHeap`: the tests that merge the real Discord splits run under that cap on purpose, so a repack that holds the whole archive in memory fails on a build machine rather than on a phone.
 
-The Gradle build signs the release APK with a debug key. The published releases are re-signed by the release workflow with the project's own key.
+The Gradle build leaves the release APK unsigned unless you give it a signing key of its own: put a `keystore.properties` at the repository root naming the keystore, and the release is signed with it. Nothing falls back to the debug key, which every Android SDK installs and publishes — a release signed with it would be one anybody could sign a newer version of. The published releases are re-signed by the release workflow with the project's own key.
 
 ## Source and licence
 

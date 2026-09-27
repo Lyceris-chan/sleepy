@@ -8,16 +8,66 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.math.BigInteger
-import java.security.*
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.KeyStore
+import java.security.PrivateKey
+import java.security.PublicKey
+import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import java.util.*
+import java.util.Base64
+import java.util.Date
 import javax.security.auth.x500.X500Principal
 
 object ApkSignerHelper {
 
     private const val KEYSTORE_NAME = "sleepy_internal.p12"
+
+    /** The keystore's password, in the same app-private directory as the keystore itself. */
+    private const val KEYSTORE_PASSWORD_NAME = "sleepy_internal.p12.password"
+
     private const val KEY_ALIAS = "sleepy"
-    private val KEY_PASSWORD = "sleepy_password_2026".toCharArray()
+
+    /** Bytes of randomness behind the password, which Base64 then turns into 44 characters. */
+    private const val PASSWORD_BYTES = 32
+
+    /**
+     * The keystore's password: random, generated when this installation first signs, and kept in
+     * [directory] beside the keystore.
+     *
+     * **Threat model.** This password is not what protects the private key, and nothing here
+     * should be read as claiming it does. It is stored in cleartext next to the keystore it
+     * unlocks, so anything that can read one can read the other: a rooted device, a local
+     * attacker, or a backup that includes app data defeats it exactly as it would defeat any
+     * password written beside its own lock. The boundary is the *storage* — app-private files,
+     * which the platform denies to other apps — not this string.
+     *
+     * What generating it removes is a **shared** secret. The password used to be a literal in
+     * this file, which made it one published value that opens every sleepy keystore ever
+     * created, in every installation, readable by anyone who has the source. Per-installation
+     * randomness means a password that does leak opens one installation's keystore and no
+     * other, and that nothing in the repository opens any of them.
+     *
+     * A keystore is never silently replaced. If the password file is lost while the keystore
+     * survives, opening it fails and signing fails with it, which is the safe direction: a new
+     * key would install as a different app and refuse to update the patched ones.
+     */
+    internal fun keyStorePassword(directory: File): CharArray {
+        val passwordFile = File(directory, KEYSTORE_PASSWORD_NAME)
+        if (passwordFile.isFile) {
+            val stored = passwordFile.readText(Charsets.UTF_8).trim()
+            if (stored.isNotEmpty()) return stored.toCharArray()
+        }
+
+        val random = ByteArray(PASSWORD_BYTES)
+        SecureRandom().nextBytes(random)
+        // Base64 so the file is text a human can hand to another tool unchanged. PKCS#12 takes
+        // any character, but a password holding whitespace or control bytes is one that cannot
+        // be typed or pasted anywhere else.
+        val password = Base64.getEncoder().encodeToString(random)
+        passwordFile.writeText(password, Charsets.UTF_8)
+        return password.toCharArray()
+    }
 
     /**
      * Signs [inputApk] into [outputApk] and leaves it there.
@@ -27,28 +77,33 @@ object ApkSignerHelper {
      * the APK on the heap at the exact moment the heap is already holding everything that went
      * into it, and then write it out again — a 131 MB archive copied twice for nothing.
      *
+     * The signing key is this installation's own: the keystore lives in [Context.getFilesDir]
+     * and the password that opens it is generated there on first use, not compiled in. See
+     * [keyStorePassword] for what that does and does not protect against.
+     *
      * @return the signed file, which is [outputApk], so the caller can chain off the result.
      */
     suspend fun sign(context: Context, inputApk: File, outputApk: File): File =
         withContext(Dispatchers.IO) {
             val keyStoreFile = File(context.filesDir, KEYSTORE_NAME)
+            val password = keyStorePassword(context.filesDir)
             val keyStore = KeyStore.getInstance("PKCS12")
 
             if (!keyStoreFile.exists()) {
-                keyStore.load(null, KEY_PASSWORD)
+                keyStore.load(null, password)
                 val keyPair = generateKeyPair()
                 val cert = generateCertificate(keyPair)
-                keyStore.setKeyEntry(KEY_ALIAS, keyPair.private, KEY_PASSWORD, arrayOf(cert))
+                keyStore.setKeyEntry(KEY_ALIAS, keyPair.private, password, arrayOf(cert))
                 FileOutputStream(keyStoreFile).use { fos ->
-                    keyStore.store(fos, KEY_PASSWORD)
+                    keyStore.store(fos, password)
                 }
             } else {
                 keyStoreFile.inputStream().use { fis ->
-                    keyStore.load(fis, KEY_PASSWORD)
+                    keyStore.load(fis, password)
                 }
             }
 
-            val privateKey = keyStore.getKey(KEY_ALIAS, KEY_PASSWORD) as PrivateKey
+            val privateKey = keyStore.getKey(KEY_ALIAS, password) as PrivateKey
             val certificate = keyStore.getCertificate(KEY_ALIAS) as X509Certificate
 
             val signerConfig = ApkSigner.SignerConfig.Builder(

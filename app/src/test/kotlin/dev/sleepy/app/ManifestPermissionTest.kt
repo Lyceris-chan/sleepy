@@ -5,6 +5,7 @@ import dev.sleepy.app.engine.BinaryXmlEditor.ElementSelector
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -35,14 +36,18 @@ class ManifestPermissionTest {
         File(System.getenv("ANDROID_HOME") ?: "/nonexistent", "build-tools/36.0.0/aapt2")
     )
 
-    /** A manifest from a fixture APK, or null when that fixture is not on this machine. */
-    private fun manifestOf(apk: File): ByteArray? {
-        if (!apk.exists()) {
-            println("${apk.name} not found, skipping test")
-            return null
-        }
+    /**
+     * A manifest from a fixture APK.
+     *
+     * The fixtures are build outputs that live outside the repository, so a machine without one
+     * reports the test as skipped — an early `return` would have reported it as a pass instead.
+     */
+    private fun manifestOf(apk: File): ByteArray {
+        assumeTrue("${apk.path} is not on this machine", apk.exists())
         return ZipFile(apk).use { zip ->
-            val entry = zip.getEntry("AndroidManifest.xml") ?: return null
+            val entry = requireNotNull(zip.getEntry("AndroidManifest.xml")) {
+                "${apk.name} has no AndroidManifest.xml"
+            }
             zip.getInputStream(entry).readBytes()
         }
     }
@@ -111,7 +116,7 @@ class ManifestPermissionTest {
 
     @Test
     fun removesExactlyTheRequestedPermissionsFromTheRealManifest() {
-        val original = manifestOf(discordApk) ?: return
+        val original = manifestOf(discordApk)
         val before = declared(original)
         assertTrue("the Discord base manifest should declare permissions", before.size > 5)
         assertTrue(before.contains("android.permission.READ_CONTACTS"))
@@ -152,7 +157,7 @@ class ManifestPermissionTest {
      */
     @Test
     fun removalDeletesChunksAndTouchesNothingElse() {
-        val original = manifestOf(discordApk) ?: return
+        val original = manifestOf(discordApk)
         val result = BinaryXmlEditor.edit(
             xml = original,
             removeElements = selectorsFor("android.permission.RECORD_AUDIO")
@@ -185,7 +190,7 @@ class ManifestPermissionTest {
      */
     @Test
     fun removesEveryAttributeOfTheElementItDeletes() {
-        val original = manifestOf(discordApk) ?: return
+        val original = manifestOf(discordApk)
         val result = BinaryXmlEditor.edit(
             xml = original,
             removeElements = selectorsFor("android.permission.READ_EXTERNAL_STORAGE")
@@ -199,7 +204,7 @@ class ManifestPermissionTest {
 
     @Test
     fun removingEveryDeclaredPermissionLeavesAManifestThatStillTiles() {
-        val original = manifestOf(octoGramApk) ?: return
+        val original = manifestOf(octoGramApk)
         val before = declared(original)
         assertTrue("the OctoGram manifest should declare permissions", before.size > 5)
 
@@ -214,7 +219,7 @@ class ManifestPermissionTest {
 
     @Test
     fun aPermissionTheBuildDoesNotDeclareIsReportedRatherThanSilentlyIgnored() {
-        val original = manifestOf(discordApk) ?: return
+        val original = manifestOf(discordApk)
         val result = BinaryXmlEditor.edit(
             xml = original,
             removeElements = selectorsFor("android.permission.NOT_DECLARED_BY_THIS_BUILD")
@@ -326,12 +331,12 @@ class ManifestPermissionTest {
      */
     @Test
     fun aapt2ReadsTheEditedManifestAndThePermissionsAreGone() {
-        val original = manifestOf(discordApk) ?: return
+        val original = manifestOf(discordApk)
+        // The external parser is a tool rather than a fixture of this repository: without it
+        // the test is reported as skipped. The check it makes is the only independent reading
+        // of the edited document, so "did not run" must not look like "passed".
         val aapt2 = aapt2Candidates.firstOrNull { it.canExecute() }
-        if (aapt2 == null) {
-            println("aapt2 not found, skipping the external-parser check")
-            return
-        }
+        assumeTrue("aapt2 is not installed on this machine", aapt2 != null)
 
         val removed = listOf("android.permission.CAMERA", "android.permission.READ_CONTACTS")
         val edited = BinaryXmlEditor.edit(xml = original, removeElements = selectorsFor(*removed.toTypedArray()))
@@ -345,7 +350,7 @@ class ManifestPermissionTest {
                 zip.closeEntry()
             }
 
-            val parsed = aapt2PermissionNames(aapt2, apk)
+            val parsed = aapt2PermissionNames(aapt2!!, apk)
             for (name in removed) {
                 assertFalse("aapt2 still lists $name", parsed.contains(name))
             }

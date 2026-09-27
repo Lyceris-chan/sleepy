@@ -12,11 +12,13 @@ import dev.sleepy.app.model.PermissionRow
  * what stops working without it, and whether removing it is offered at all.
  *
  * ## What this is, and what it deliberately is not
- * The set of permissions a build declares is read from that build's own manifest at patch time —
- * never from here. A frozen list of names would be wrong within one release of either app, and
- * wrong in a way that is invisible: it would offer a switch for a permission the build does not
- * declare, and quietly keep one it does. What is shipped here is the *knowledge* a declaration
- * cannot carry: what a permission means to a person, and what removing it costs.
+ * This answers one question — given the name of a permission, what does it mean and what does
+ * removing it cost — and nothing else. Which permissions are on offer is not decided here: that is
+ * the declarations of the release being patched, which [DeclaredPermissions] ships and a build
+ * nothing is shipped for supplies from its own manifest. The split is deliberate, because the two
+ * go stale differently: a name this table has never heard of is still a row (it is described as
+ * unknown rather than hidden), while a permission a build declares and its shipped list does not
+ * name has no row at all, which is why that case is reported instead of resolved silently.
  *
  * ## Removal is permanent, and every description says so
  * Android grants an app only the permissions its manifest declares. An installed app cannot add a
@@ -46,9 +48,9 @@ object PermissionCatalog {
      * The id of the permission section.
      *
      * It is not a patch set: it has no entry in `sources.json`, no [dev.sleepy.app.model.PatchSet]
-     * and nothing in [PatchItemCatalog], because its items are read from the APK being patched
-     * rather than from a table. What it does have is item keys, so the same [PatchSelection] the
-     * patch rows are toggled through also carries the permissions, and one switch model serves
+     * and nothing in [PatchItemCatalog], because its items are the declarations of the release
+     * being patched rather than a table. What it does have is item keys, so the same [PatchSelection]
+     * the patch rows are toggled through also carries the permissions, and one switch model serves
      * both.
      */
     const val SET_ID = "manifest_permissions"

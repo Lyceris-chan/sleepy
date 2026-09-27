@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sleepy.app.BuildConfig
 import dev.sleepy.app.model.AppSource
 import dev.sleepy.app.ui.SourcesManifest
 import dev.sleepy.app.ui.components.DownloadHostRow
@@ -55,16 +57,19 @@ import dev.sleepy.app.ui.components.downloadHosts
  * Settings and provenance.
  *
  * The screens above this one ask the reader to trust a build; this one is where that trust can
- * be checked — which hosts the app downloads from, which manifest drove the build, and where
- * the code that does the work lives.
+ * be checked — which hosts each target is downloaded from, which manifest drove the build, and
+ * where the code that does the work lives.
  *
- * @param selectedSource the source currently chosen on the home screen, if any, so its
- *   download hosts can be shown before a build starts.
+ * @param sources every target this build can patch, each with the hosts it downloads from, so a
+ *   target other than the selected one is shown rather than left out.
+ * @param selectedSourceId the target last opened on the home screen, which is marked in the list.
+ *   It is null before anything has been opened.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    selectedSource: AppSource?,
+    sources: List<AppSource>,
+    selectedSourceId: String?,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -104,12 +109,13 @@ fun SettingsScreen(
         ) {
             Spacer(modifier = Modifier.height(4.dp))
 
-            AppIdentityCard()
+            AppIdentityCard(versionName = BuildConfig.VERSION_NAME)
 
             SettingsSectionTitle("Where builds come from")
 
             ProvenanceCard(
-                selectedSource = selectedSource,
+                sources = sources,
+                selectedSourceId = selectedSourceId,
                 manifestUrl = manifest.manifestUrl,
                 onOpenUrl = { url -> openUrl(context, url) }
             )
@@ -130,9 +136,14 @@ fun SettingsScreen(
     }
 }
 
-/** Product identity: what this app is and what it does. */
+/**
+ * Product identity: what this app is and what it does.
+ *
+ * The version is the one the build was made as — read from the generated `BuildConfig`, which the
+ * build script derives from the changelog — so it cannot say something the release does not.
+ */
 @Composable
-private fun AppIdentityCard() {
+private fun AppIdentityCard(versionName: String) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
@@ -151,7 +162,7 @@ private fun AppIdentityCard() {
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "Version 1.0.0 • Target SDK 37 (Android 17 QPR2)",
+                text = "Version $versionName • Target SDK 37 (Android 17 QPR2)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -167,19 +178,20 @@ private fun AppIdentityCard() {
 }
 
 /**
- * Provenance for the source chosen on the home screen: the hosts it downloads from, and the
- * manifest that declared those hosts.
+ * Where every build comes from: one entry per target, with the hosts its files are fetched from,
+ * and the manifest that declared those hosts.
+ *
+ * Every target is listed rather than only the selected one, because provenance a reader has to
+ * select a target to see is provenance they cannot check before selecting it. The one they last
+ * opened is marked, so the list says both what this app can fetch and what it is about to.
  */
 @Composable
 private fun ProvenanceCard(
-    selectedSource: AppSource?,
+    sources: List<AppSource>,
+    selectedSourceId: String?,
     manifestUrl: String?,
     onOpenUrl: (String) -> Unit
 ) {
-    val hosts = remember(selectedSource) {
-        selectedSource?.let { source -> downloadHosts(source) }.orEmpty()
-    }
-
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
@@ -193,39 +205,41 @@ private fun ProvenanceCard(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (selectedSource != null) {
+            if (sources.isEmpty()) {
                 Text(
-                    text = selectedSource.displayName,
+                    text = "No target is listed in the manifest this build ships.",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                DownloadHostRow(hosts = hosts)
                 Text(
-                    text = "Every file this build needs is fetched from the hosts above. " +
-                        "Nothing else is contacted.",
+                    text = "Nothing can be downloaded until the manifest lists something to " +
+                        "download. The manifest is published at the address below.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 Text(
-                    text = "No application selected yet.",
+                    text = "Everything sleepy downloads, and where from.",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = "Pick a target on the home screen and its download hosts will be " +
-                        "listed here before anything is fetched.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                sources.forEachIndexed { index, source ->
+                    if (index > 0) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                    ProvenanceSourceEntry(
+                        source = source,
+                        isSelected = source.id == selectedSourceId
+                    )
+                }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             Text(
-                text = "Download URLs, versions and hashes are declared in `sources.json`. " +
+                text = "Download URLs, versions and hashes are declared in sources.json. " +
                     "The manifest used for this build is published at the address below, so the " +
                     "file this app ships with can be compared against it.",
                 style = MaterialTheme.typography.bodySmall,
@@ -255,6 +269,48 @@ private fun ProvenanceCard(
                 )
             }
         }
+    }
+}
+
+/** One target's provenance: what it is, which hosts it fetches from, and whether it is selected. */
+@Composable
+private fun ProvenanceSourceEntry(source: AppSource, isSelected: Boolean) {
+    val hosts = remember(source) { downloadHosts(source) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = source.displayName,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            if (isSelected) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        text = "Last opened",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+        Text(
+            text = "${source.versionName} • ${source.packageName}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        DownloadHostRow(hosts = hosts)
     }
 }
 

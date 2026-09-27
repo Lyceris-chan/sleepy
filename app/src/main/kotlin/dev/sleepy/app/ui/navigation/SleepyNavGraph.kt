@@ -79,9 +79,11 @@ fun SleepyNavGraph(
         }
 
         composable(Screen.Settings.route) {
+            val sources by homeViewModel.sources.collectAsState()
             val selectedSource by patchViewModel.selectedSource.collectAsState()
             SettingsScreen(
-                selectedSource = selectedSource,
+                sources = sources,
+                selectedSourceId = selectedSource?.id,
                 onBack = {
                     navController.popBackStack()
                 }

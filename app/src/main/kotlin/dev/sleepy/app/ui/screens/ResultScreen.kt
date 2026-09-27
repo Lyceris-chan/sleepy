@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Refresh
@@ -377,6 +378,20 @@ private fun OutputCard(report: VerificationReport) {
                         "put back before it could run."
                 )
             }
+
+            if (report.mergedResourceFiles > 0) {
+                AuditRow(
+                    icon = Icons.Default.Image,
+                    tint = MaterialTheme.colorScheme.primary,
+                    label = "Resources merged",
+                    status = "${report.mergedResourceFiles} added",
+                    detail = "Images and other resource files the app's density split holds " +
+                        "and the base split does not, put back at the paths the desktop build " +
+                        "uses. The resource table that points at them ships in pieces across " +
+                        "the splits and is not rebuilt here, so the files are in the archive " +
+                        "without anything in it referring to them."
+                )
+            }
         }
     }
 }
@@ -434,11 +449,23 @@ private fun DownloadIntegrityCard(report: VerificationReport) {
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+            // Three outcomes, not two: a scheme that cannot apply to this build was not
+            // checked, so it is named as not applicable rather than as a failure. JAR signing
+            // is only honoured below API 24, which is why this row reads that way on most
+            // builds — a v1 signature is written, and nothing that installs the APK reads it.
             AuditRow(
                 icon = signatureIcon(report.v1SignatureValid),
                 tint = signatureTint(report.v1SignatureValid),
                 label = "Signature v1 (JAR)",
-                status = if (report.v1SignatureValid) "Valid" else "Not valid"
+                status = signatureStatusText(report.v1SignatureValid),
+                detail = if (report.v1SignatureValid == null) {
+                    "Android stopped reading JAR signatures at API 24 and this build declares " +
+                        "a minSdkVersion at or above that, so no platform that can install it " +
+                        "consults this signature. It is present in the file, and that is all it " +
+                        "needs to be. This is not a failure."
+                } else {
+                    null
+                }
             )
 
             AuditRow(
@@ -455,12 +482,32 @@ private fun DownloadIntegrityCard(report: VerificationReport) {
                 status = if (report.v3SignatureValid) "Valid" else "Not valid"
             )
 
-            AuditRow(
-                icon = signatureIcon(report.zipalignPassed),
-                tint = signatureTint(report.zipalignPassed),
-                label = "ZIP alignment",
-                status = if (report.zipalignPassed) "4-byte aligned" else "Misaligned"
-            )
+            // Three outcomes, not two: an archive whose directory could not be read was not
+            // measured, so it is reported as unchecked rather than as an alignment pass.
+            when (report.zipalignPassed) {
+                true -> AuditRow(
+                    icon = Icons.Default.CheckCircle,
+                    tint = MaterialTheme.statusColors.success,
+                    label = "ZIP alignment",
+                    status = "4-byte aligned"
+                )
+
+                false -> AuditRow(
+                    icon = Icons.Default.Warning,
+                    tint = MaterialTheme.colorScheme.error,
+                    label = "ZIP alignment",
+                    status = "Misaligned"
+                )
+
+                null -> AuditRow(
+                    icon = Icons.Default.Info,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    label = "ZIP alignment",
+                    status = "Not checked",
+                    detail = "The finished archive's central directory could not be read, so no " +
+                        "entry was measured. Nothing here says the result is aligned."
+                )
+            }
         }
     }
 }
@@ -720,13 +767,32 @@ private fun SectionLabel(text: String) {
     }
 }
 
-/** Pass and fail share an icon shape and differ by glyph, so the pair is not colour-only. */
-private fun signatureIcon(passed: Boolean): ImageVector =
-    if (passed) Icons.Default.CheckCircle else Icons.Default.Warning
+/**
+ * How a signature scheme's verdict reads.
+ *
+ * Three states rather than two, because a scheme that cannot apply to a build has not failed:
+ * `null` is "there was nothing here to check", and showing that as "Not valid" is a claim the
+ * patcher has no evidence for.
+ */
+internal fun signatureStatusText(verified: Boolean?): String = when (verified) {
+    true -> "Valid"
+    false -> "Not valid"
+    null -> "Not applicable"
+}
+
+/** Pass, fail and not-applicable differ by glyph, so the three are never colour-only. */
+private fun signatureIcon(passed: Boolean?): ImageVector = when (passed) {
+    true -> Icons.Default.CheckCircle
+    false -> Icons.Default.Warning
+    null -> Icons.Default.Info
+}
 
 @Composable
-private fun signatureTint(passed: Boolean): Color =
-    if (passed) MaterialTheme.statusColors.success else MaterialTheme.colorScheme.error
+private fun signatureTint(passed: Boolean?): Color = when (passed) {
+    true -> MaterialTheme.statusColors.success
+    false -> MaterialTheme.colorScheme.error
+    null -> MaterialTheme.colorScheme.onSurfaceVariant
+}
 
 /** Human-readable size, in the unit a reader would use for an APK. */
 private fun formatByteSize(bytes: Long): String {

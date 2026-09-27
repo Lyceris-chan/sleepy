@@ -16,6 +16,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -24,6 +25,12 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 class PatcherPipelineTest {
+
+    private companion object {
+        /** The Discord 348.5 base split, which lives outside the repository. */
+        const val DISCORD_BASE_APK =
+            "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk"
+    }
 
     /**
      * Function id -> (body offset, bytecode size) for every Discord Hermes target in the
@@ -49,10 +56,9 @@ class PatcherPipelineTest {
     @Test
     fun testOctoGram361DynamicResolutionAndSurgicalPatching() = runBlocking {
         val apkFile = File("/home/sleepy/Documents/antigravity/telegram/OctoGram_361_arm64.apk")
-        if (!apkFile.exists()) {
-            println("OctoGram_361_arm64.apk not found, skipping test")
-            return@runBlocking
-        }
+        // An absent fixture is a skipped test, not a passing one: a return from the body would
+        // be reported as a pass, and this file's coverage would vanish from CI in silence.
+        assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
         println("Reading OctoGram 3.6.1 APK (size: ${apkFile.length()} bytes)...")
         val apkBytes = apkFile.readBytes()
@@ -156,10 +162,7 @@ class PatcherPipelineTest {
     @Test
     fun testOctoGram360DynamicResolutionAndSurgicalPatching() = runBlocking {
         val apkFile = File("/home/sleepy/Documents/antigravity/telegram/OctoGram_arm64.apk")
-        if (!apkFile.exists()) {
-            println("OctoGram_arm64.apk not found, skipping 3.6.0 test")
-            return@runBlocking
-        }
+        assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
         println("Reading OctoGram 3.6.0 APK (size: ${apkFile.length()} bytes)...")
         val apkBytes = apkFile.readBytes()
@@ -237,7 +240,7 @@ class PatcherPipelineTest {
     @Test
     fun testBinaryXmlPackageRename() {
         val apkFile = File("/home/sleepy/Documents/antigravity/telegram/OctoGram_361_arm64.apk")
-        if (!apkFile.exists()) return
+        assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
         val zip = ZipFile(apkFile)
         val entry = zip.getEntry("AndroidManifest.xml")
@@ -295,11 +298,8 @@ class PatcherPipelineTest {
 
     @Test
     fun testDiscordDynamicResolutionAndPatching() = runBlocking {
-        val apkFile = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
-        if (!apkFile.exists()) {
-            println("Discord base.apk not found, skipping test")
-            return@runBlocking
-        }
+        val apkFile = File(DISCORD_BASE_APK)
+        assumeTrue("$DISCORD_BASE_APK is not on this machine", apkFile.exists())
 
         println("Reading Discord APK (size: ${apkFile.length()} bytes)...")
         val apkBytes = apkFile.readBytes()
@@ -362,11 +362,8 @@ class PatcherPipelineTest {
      */
     @Test
     fun testDiscordNativePatchesApplyCleanly() = runBlocking {
-        val apkFile = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
-        if (!apkFile.exists()) {
-            println("Discord base.apk not found, skipping native patch test")
-            return@runBlocking
-        }
+        val apkFile = File(DISCORD_BASE_APK)
+        assumeTrue("$DISCORD_BASE_APK is not on this machine", apkFile.exists())
 
         val apkBytes = apkFile.readBytes()
         val dexEntries = mutableMapOf<String, ByteArray>()
@@ -413,11 +410,8 @@ class PatcherPipelineTest {
 
     @Test
     fun testDiscordPureKotlinHermesBytecodePatching() {
-        val apkFile = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
-        if (!apkFile.exists()) {
-            println("Discord base.apk not found, skipping Hermes test")
-            return
-        }
+        val apkFile = File(DISCORD_BASE_APK)
+        assumeTrue("$DISCORD_BASE_APK is not on this machine", apkFile.exists())
 
         println("Extracting index.android.bundle from Discord APK...")
         val zip = ZipFile(apkFile)

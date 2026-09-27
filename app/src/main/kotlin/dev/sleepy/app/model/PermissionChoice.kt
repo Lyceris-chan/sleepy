@@ -5,8 +5,8 @@ package dev.sleepy.app.model
  *
  * @property name the permission as the manifest writes it, e.g. `android.permission.READ_CONTACTS`.
  *   This is also the entry's identity, because it is the only thing stable across releases: a
- *   permission's name is fixed by the platform, so a saved choice keeps meaning the same
- *   permission even though it is matched against a build's own declarations rather than a list.
+ *   permission's name is fixed by the platform, so a saved choice keeps meaning the same permission
+ *   however the list it was made against was produced.
  * @property label the short name the UI shows.
  * @property description what the permission allows, and what stops working once the declaration is
  *   gone. It always states the consequence of removal in full, because that consequence is not
@@ -50,27 +50,121 @@ data class PermissionRow(
     val switchable: Boolean get() = lockedReason == null
 }
 
+/** Where the declarations a build is offered came from. */
+enum class DeclarationSource {
+
+    /**
+     * The list sleepy ships for this exact release of the app, which is there before anything runs.
+     */
+    SHIPPED,
+
+    /** The build's own manifest, read because sleepy ships no list for this build. */
+    READ_FROM_BUILD
+}
+
+/**
+ * One difference between the declarations sleepy ships and the ones a build makes.
+ *
+ * The two directions are not the same claim and are not treated as one. What a build declares and
+ * sleepy does not list is a permission with no row: the user cannot see it, cannot read what it
+ * does, and cannot switch it off, which is the case that has to be said out loud. What sleepy lists
+ * and the build does not declare is a row for a declaration that is not there — harmless to leave,
+ * wrong to act on.
+ */
+sealed interface DeclarationMismatch {
+
+    /** The permission this difference is about. */
+    val name: String
+
+    /** The build declares this and sleepy does not list it, so the list shows no row for it. */
+    data class Unlisted(override val name: String) : DeclarationMismatch
+
+    /** sleepy lists this and the build does not declare it, so there is nothing here to remove. */
+    data class Absent(override val name: String) : DeclarationMismatch
+}
+
+/**
+ * What comparing the shipped list against the build's own manifest found.
+ *
+ * The build is read for this and for nothing else: the list the rows and the removals come from is
+ * [DeclarationSource.SHIPPED], so a build that has changed under a source is described rather than
+ * quietly re-specified. A comparison that cannot be made is its own state rather than an agreement,
+ * because "the manifest could not be read" and "the manifest says the same thing" are answers a
+ * reader would act on differently.
+ */
+sealed interface PermissionCheck {
+
+    /** The list and the build have not been compared. */
+    data object NotChecked : PermissionCheck
+
+    /** The build is being downloaded and its manifest read, to compare the list against it. */
+    data object Checking : PermissionCheck
+
+    /** The build declares exactly the permissions the shipped list names. */
+    data object Agrees : PermissionCheck
+
+    /** The build and the shipped list differ, in [mismatches]. */
+    data class Disagrees(val mismatches: List<DeclarationMismatch>) : PermissionCheck
+
+    /** The manifest could not be read, so nothing was compared, for [reason]. */
+    data class Failed(val reason: String) : PermissionCheck
+
+    companion object {
+
+        /**
+         * [shipped] against [declared]: agreement, or every difference in both directions.
+         *
+         * A permission declared twice counts once, because it is one declaration as far as a reader
+         * is concerned; the order of the differences is the order each list writes them in, so the
+         * report reads the way the manifest and the list are written.
+         */
+        fun of(shipped: List<String>, declared: List<String>): PermissionCheck {
+            val listed = shipped.toSet()
+            val inBuild = declared.toSet()
+            val mismatches = buildList {
+                val seen = mutableSetOf<String>()
+                for (name in declared) {
+                    if (name !in listed && seen.add(name)) add(DeclarationMismatch.Unlisted(name))
+                }
+                for (name in shipped) {
+                    if (name !in inBuild && seen.add(name)) add(DeclarationMismatch.Absent(name))
+                }
+            }
+            return if (mismatches.isEmpty()) Agrees else Disagrees(mismatches)
+        }
+    }
+}
+
 /**
  * What is known about the selected build's permissions.
  *
- * The list is read from the APK being patched — from its own manifest — because that is the only
- * thing that cannot go stale: a table of names shipped here would be wrong within a release of
- * either app. Reading it costs a download of that build, so the state is explicit and the list
- * only appears once it has been read: until then there is nothing to show and nothing to remove.
+ * The list has exactly one source and it is not the network: what sleepy ships for this release,
+ * which is what makes the section reachable — a list behind a 96 MB download is a list most people
+ * never see. A package nothing is shipped for is the exception, and it is read from the build
+ * itself, because there is nothing else to offer and a build that declares permissions the app
+ * cannot name is a build the user cannot choose about at all.
+ *
+ * Because a shipped list describes a release and a source can be pointed elsewhere, the build is
+ * still read on request, as a cross-check: [PermissionCheck] carries what that read found, and the
+ * differences are reported rather than used to rewrite the list.
  */
 sealed interface PermissionScan {
 
-    /** The build has not been read. No permission is known, and none can be chosen about. */
+    /** No list is shipped for this build and nothing has been read; nothing can be chosen about. */
     data object NotRead : PermissionScan
 
-    /** The build is being downloaded and its manifest read. */
+    /** The build is being read, because no list is shipped for it. */
     data object Reading : PermissionScan
 
-    /** The build declares [declared], in the order its manifest declares them. */
-    data class Read(val declared: List<String>) : PermissionScan
-
-    /** The build could not be read, for [reason]. Nothing is known and nothing can be removed. */
+    /** The build could not be read, for [reason], and no list is shipped for it. */
     data class Failed(val reason: String) : PermissionScan
+
+    /** The declarations on offer: [declared], where they came from, and the [check] on them. */
+    data class Read(
+        val declared: List<String>,
+        val from: DeclarationSource,
+        val check: PermissionCheck = PermissionCheck.NotChecked
+    ) : PermissionScan
 }
 
 /**

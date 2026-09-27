@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The permissions each supported app asks for are listed in sleepy itself, so the permission switches are on screen as soon as you pick a target. They used to be read out of the APK you were patching, which meant the section stayed empty until the whole download had finished, and there was no way to see what an app asks for without downloading it.
+- You can check the permission list against the build it describes. Checking downloads the build and compares what it declares with the list, and any difference is shown in full — including an app asking for something the list does not cover, which is the one case where a permission has no switch and no description to read.
+- Settings now lists where every target is downloaded from, not only the one you last opened, and marks the one you opened last.
+- The patched build now carries the images a configuration split holds for one screen density and the strings the two language splits hold, which a base split on its own carries none of. They go back at the paths the desktop build has them at, so the finished APK's file set and its size come to match that build's — and the resource table is rebuilt around them while the APK is patched, so they are reachable rather than merely present. Every path the rebuilt table names is a file the APK holds, every resource file it holds is named, and each source's resource ids, configurations and compiled file paths are kept as they were; the table is read back and checked before the APK is rebuilt, and a set of tables that cannot be reconciled is refused with the reason, leaving the base's table in place.
+- The manifest edits the desktop build makes are applied here too, to the compiled manifest rather than to its text. The two Sentry provider declarations go with the crash-reporting switch, the three Play split markers go when the splits have been merged into one APK, and the AppsFlyer package-visibility query goes with the deep-link switch that stops the only thing that used it. The RPC service is not exported any more, on every build and behind no switch: it is exported with no permission declared on it and no check on its caller, so any app on the device can bind it and publish presence frames as you. Each of those is reported as its own step, so a build that no longer declares one says so.
+
+### Changed
+
+- The permission list is above the patch list instead of below all of it.
+- The version in settings is the version the build was made as. It is read from the changelog's newest release when the build is made, so the app, the changelog and the release tag cannot disagree; it used to be a number written into the screen, which is why the app still said 1.0.0 at 1.4.0.
+- Corner radii now come from the Material 3 shape scale rather than being chosen per screen, so cards, dialogs, chips and text fields are rounded the way Material 3 rounds those components. They were 34, 26, 18, 12 and 6 dp where the tokens are 28, 16, 12, 8 and 4.
+- Two libraries nothing called are no longer declared, and the debug build no longer carries the Compose preview tooling. The APKs are smaller for it.
+- A test that needs a file from outside the repository is reported as skipped rather than as a pass when that file is not there, so a green run means the checks ran and not that they were unable to.
+
+### Removed
+
+- A build output file that had been committed to the repository by mistake is no longer tracked in it.
+
+### Fixed
+
+- The rebuilt APK compressed the two entries it is supposed to carry through unchanged. A replaced entry is dropped from the copied stream and rewritten from what replaced it, and the storage method it had in the source was read after that drop rather than before — so every replaced entry fell back to DEFLATE. The resource table and the JavaScript bundle are both stored uncompressed in Discord's APK, and both came out compressed: the table no longer aligned to a 4-byte boundary, and the bundle had to be unpacked at startup instead of being mapped. Both now keep the method their source had.
+- The aligned-APK check treated "no entry was measured" the same as "every entry aligned", so a finished APK whose archive could not be read was reported as correctly aligned. A check that cannot be made is now reported as unchecked.
+- The permission section could not be used at all. Nothing was listed until a whole APK had been downloaded for it, and even then it sat below every patch set, so its switches were out of reach; the list ships with the app now and the section is the first thing on the screen.
+- In dark mode, the borders of components that carry no fill of their own — an unchecked switch, an outlined text field — were too faint to see: 2.0:1 against the surface where the accessibility guidelines ask 3:1. They are drawn in a lighter tone that clears 3:1 on every surface of the dark scheme.
+- The JAR signature on the finished APK was reported as failing on every build, because a check that does not apply was being read as a check that failed. JAR signing is only honoured below Android 7.0, so a build that requires a newer version than that never has it read, which is every build sleepy makes; the signature is written and is valid, and there was no verdict to report on it. It now says the scheme does not apply to this build and names the version that puts it out of scope, while the v2 and v3 signatures are still checked and still fail the step when they do not verify.
+
+### Security
+
+- sleepy releases are no longer signed with the debug key. Every Android SDK installs that key and publishes it, so a release signed with it is one that anyone can build a newer version of. Without a signing key of its own a release is now left unsigned and named so.
+- The password on the signing key sleepy creates on your device is generated for that installation rather than written into the source. It is kept in the app's private storage beside the key, which is what actually protects it; what changes is that a password read out of the source no longer opens anyone's key, and one that leaks opens a single installation instead of all of them.
+
+## [1.4.0] - 2026-09-27
+
+### Added
+
 - OctoGram's own crash reporter can be switched off. It installs a crash handler of its own while the app starts, which writes the stack trace of a crash into the app's storage and raises an "OctoGram just crashed!" notification the next time the app opens; with it switched off the handler is never installed, so a crash leaves nothing behind. It is a switch of its own because that handler is installed regardless of the logging flag the logging switch pins false.
 - The premium rows in the profile's settings list can be hidden: the Telegram Premium row, the Send a Gift row, and the combined premium-sections row that would otherwise appear in their place. It is one switch rather than three, because hiding the first row on its own puts a different premium row on screen instead.
 
@@ -92,7 +127,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript changes are checked against the app's code before they are written, so a change aimed at the wrong place cannot corrupt it.
 - OctoGram changes that matched more than one place in the code are resolved, and each change now applies only to the app version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.0.0...v1.1.0

@@ -31,12 +31,20 @@ object BinaryXmlEditor {
 
     /** `AndroidManifest.xml` attribute resource IDs (`android` namespace). */
     const val ATTR_NAME = 0x01010003
+    const val ATTR_EXPORTED = 0x01010010
     const val ATTR_REQUIRED_SPLIT_TYPES = 0x0101064e
     const val ATTR_SPLIT_TYPES = 0x0101064f
     const val ATTR_EXTRACT_NATIVE_LIBS = 0x010104ea
 
     /** The manifest element a declared permission lives in. */
     const val ELEMENT_USES_PERMISSION = "uses-permission"
+
+    /** The other manifest elements this editor is asked to match. */
+    const val ELEMENT_PROVIDER = "provider"
+    const val ELEMENT_META_DATA = "meta-data"
+    const val ELEMENT_SERVICE = "service"
+    const val ELEMENT_INTENT = "intent"
+    const val ELEMENT_ACTION = "action"
 
     private const val TYPE_NULL = 0x00
     private const val TYPE_STRING = 0x03
@@ -55,28 +63,66 @@ object BinaryXmlEditor {
     private const val NO_RESOURCE_ID = 0
 
     /**
-     * One element to delete from a document: the element's name (matched as a prefix) and one
-     * attribute of it that must carry a given string value.
+     * One element to delete from a document: the element's name (matched as a prefix), one
+     * attribute of it that must carry a given string value, and — when that is not enough to
+     * name it — an element it must contain.
      *
      * Matching on the name alone would be wrong for the case this exists for: the manifest
      * declares a permission with `<uses-permission android:name="..."/>`, so the element name is
      * shared by every permission and only the attribute says which one. The attribute is named by
      * resource ID rather than by string for the same reason attributes are removed by ID — the
      * `name` field on the wire is a string-pool index, not an identity.
+     *
+     * [attributeId] is null for an element the attribute test cannot single out — `<intent>` under
+     * `<queries>` carries no attributes at all, and what tells the AppsFlyer one from the others is
+     * the `<action>` inside it, which is what [contains] is for. A contained selector is matched
+     * anywhere in the element's subtree, so it can itself carry a [contains].
      */
     data class ElementSelector(
         val namePrefix: String,
+        val attributeId: Int? = null,
+        val attributeValue: String = "",
+        val contains: ElementSelector? = null
+    ) {
+        /**
+         * What a caller names this selector by when reporting it back.
+         *
+         * The attribute value is the identity in the permission case, and it is what the caller
+         * asked about. A selector that carries no attribute is identified by the element it was
+         * distinguished by, and one that matches on its name alone falls back to the name.
+         */
+        val label: String get() = attributeValue.ifEmpty { contains?.label ?: namePrefix }
+    }
+
+    /**
+     * One attribute to rewrite on the elements [element] matches, and nowhere else.
+     *
+     * [edit]'s `booleanOverrides` is keyed by attribute ID alone, which is right when every
+     * occurrence of an attribute should change — `extractNativeLibs` sits on a single
+     * `<application>`. It is wrong when one element out of many should change: `android:exported`
+     * appears on dozens of components, and only one of them is being closed off. So this carries
+     * the same selector an element removal does, matched the same way.
+     */
+    data class AttributeOverride(
+        val element: ElementSelector,
         val attributeId: Int,
-        val attributeValue: String
+        val value: Boolean
     )
 
     /**
      * Result of an edit pass, describing what actually changed so the caller can report it
      * truthfully instead of assuming the edit landed.
      *
-     * [elementsRemoved] and [elementsMissing] are keyed by the selector's attribute value — the
-     * permission name, in the case this exists for — because that is the thing the caller asked
-     * about and the thing it has to name back to the user.
+     * [elementsRemoved] and [elementsMissing] are keyed by [ElementSelector.label] — the permission
+     * name, in the case this exists for — because that is the thing the caller asked about and the
+     * thing it has to name back to the user. Which selector removed an element is the whole reason
+     * the label is reported rather than the element: one pass can carry removals for several
+     * unrelated reasons, and the caller reports each of them separately.
+     *
+     * [elementOverridesApplied] names, the same way, the selectors in `elementOverrides` that found
+     * the element they name. It says the element was there, not that its attribute changed:
+     * [attributesRewritten] says that, and the two together are what tells a caller "closed it"
+     * from "it was already closed" from "this build does not declare it".
      */
     data class EditResult(
         val bytes: ByteArray,
@@ -84,7 +130,8 @@ object BinaryXmlEditor {
         val attributesRewritten: List<Int>,
         val missing: List<Int>,
         val elementsRemoved: List<String> = emptyList(),
-        val elementsMissing: List<String> = emptyList()
+        val elementsMissing: List<String> = emptyList(),
+        val elementOverridesApplied: List<String> = emptyList()
     )
 
     /**
@@ -99,13 +146,14 @@ object BinaryXmlEditor {
         xml: ByteArray,
         stripAttributeIds: Set<Int> = emptySet(),
         booleanOverrides: Map<Int, Boolean> = emptyMap(),
-        removeElements: List<ElementSelector> = emptyList()
+        removeElements: List<ElementSelector> = emptyList(),
+        elementOverrides: List<AttributeOverride> = emptyList()
     ): EditResult {
         val requested = stripAttributeIds + booleanOverrides.keys
         if (xml.size < ROOT_HEADER_SIZE) {
             return EditResult(
                 xml, emptyList(), emptyList(), requested.toList(),
-                elementsMissing = removeElements.map { it.attributeValue }
+                elementsMissing = removeElements.map { it.label }
             )
         }
 
@@ -113,14 +161,19 @@ object BinaryXmlEditor {
         if ((buf.getShort(0).toInt() and 0xFFFF) != RES_XML_TYPE) {
             return EditResult(
                 xml, emptyList(), emptyList(), requested.toList(),
-                elementsMissing = removeElements.map { it.attributeValue }
+                elementsMissing = removeElements.map { it.label }
             )
         }
 
         val resourceIds = readResourceMap(buf, xml)
-        // Only read the pool when an element is being matched by value: it is the one thing here
-        // that has to resolve a string, and a document with no element selectors never needs it.
-        val strings = if (removeElements.isEmpty()) emptyList() else readStringPool(buf, xml)
+        // Only read the pool when an element is being matched by name or value: it is the one
+        // thing here that has to resolve a string, and a document nothing is matched against
+        // never needs it.
+        val strings = if (removeElements.isEmpty() && elementOverrides.isEmpty()) {
+            emptyList()
+        } else {
+            readStringPool(buf, xml)
+        }
         val out = ByteArrayOutputStream(xml.size)
         out.write(ByteArray(ROOT_HEADER_SIZE)) // root header rewritten once the size is known
 
@@ -129,6 +182,7 @@ object BinaryXmlEditor {
         val seen = mutableSetOf<Int>()
         val elementsRemoved = mutableListOf<String>()
         val removedSelectors = mutableSetOf<ElementSelector>()
+        val overridesApplied = mutableListOf<String>()
 
         var offset = buf.getShort(2).toInt() and 0xFFFF
         while (offset + CHUNK_HEADER_SIZE <= xml.size) {
@@ -144,16 +198,34 @@ object BinaryXmlEditor {
                     // truncated: a manifest that parses is worth more than one edit.
                     val afterElement = endOfElement(buf, xml, offset, chunkSize)
                     if (afterElement > offset) {
-                        elementsRemoved.add(selector.attributeValue)
+                        elementsRemoved.add(selector.label)
                         removedSelectors.add(selector)
                         offset = afterElement
                         continue
                     }
                 }
+                // A scoped override wins over a global one: it names the element it belongs to,
+                // and the global map names only an attribute.
+                val applicable = if (elementOverrides.isEmpty()) {
+                    booleanOverrides
+                } else {
+                    val scoped = elementOverrides.filter {
+                        matchElement(buf, xml, offset, resourceIds, strings, listOf(it.element)) != null
+                    }
+                    for (override in scoped) {
+                        val label = override.element.label
+                        if (label !in overridesApplied) overridesApplied.add(label)
+                    }
+                    if (scoped.isEmpty()) {
+                        booleanOverrides
+                    } else {
+                        booleanOverrides + scoped.associate { it.attributeId to it.value }
+                    }
+                }
                 out.write(
                     editStartElement(
                         xml, buf, offset, chunkSize, resourceIds,
-                        stripAttributeIds, booleanOverrides, removed, rewritten, seen
+                        stripAttributeIds, applicable, removed, rewritten, seen
                     )
                 )
             } else {
@@ -177,7 +249,8 @@ object BinaryXmlEditor {
             elementsRemoved = elementsRemoved,
             elementsMissing = removeElements
                 .filter { it !in removedSelectors }
-                .map { it.attributeValue }
+                .map { it.label },
+            elementOverridesApplied = overridesApplied
         )
     }
 
@@ -192,12 +265,14 @@ object BinaryXmlEditor {
      */
     fun makeStandaloneManifest(
         manifestBytes: ByteArray,
-        removeElements: List<ElementSelector> = emptyList()
+        removeElements: List<ElementSelector> = emptyList(),
+        elementOverrides: List<AttributeOverride> = emptyList()
     ): EditResult = edit(
         xml = manifestBytes,
         stripAttributeIds = setOf(ATTR_REQUIRED_SPLIT_TYPES, ATTR_SPLIT_TYPES),
         booleanOverrides = mapOf(ATTR_EXTRACT_NATIVE_LIBS to true),
-        removeElements = removeElements
+        removeElements = removeElements,
+        elementOverrides = elementOverrides
     )
 
     /**
@@ -390,7 +465,8 @@ object BinaryXmlEditor {
      * A selector matches on the element's name as a *prefix* — `uses-permission` covers
      * `uses-permission-sdk-23` and `uses-permission-sdk-m`, the variants the platform reads for
      * their own SDK ranges — and on the string value of one attribute, which is what tells one
-     * permission declaration from another.
+     * permission declaration from another. A selector with no attribute matches on the name
+     * alone; one that also carries a `contains` has to hold that element somewhere inside it.
      */
     private fun matchElement(
         buf: ByteBuffer,
@@ -407,12 +483,54 @@ object BinaryXmlEditor {
         val chunkSize = buf.getInt(chunkStart + 4)
         for (selector in selectors) {
             if (!name.startsWith(selector.namePrefix)) continue
-            val value = findStringAttribute(
-                buf, xml, chunkStart, chunkSize, resourceIds, strings, selector.attributeId
-            )
-            if (value == selector.attributeValue) return selector
+            val attributeId = selector.attributeId
+            if (attributeId != null) {
+                val value = findStringAttribute(buf, xml, chunkStart, chunkSize, resourceIds, strings, attributeId)
+                if (value != selector.attributeValue) continue
+            }
+            if (selector.contains != null && !containsElement(buf, xml, chunkStart, resourceIds, strings, selector)) {
+                continue
+            }
+            return selector
         }
         return null
+    }
+
+    /**
+     * Whether the element at [chunkStart] holds an element matching the selector's `contains`
+     * anywhere below it.
+     *
+     * "Anywhere below" rather than "as a direct child": how deeply a producer nests an element is
+     * its own business, and a selector that had to say which depth it meant would break the first
+     * time that changed. The walk stops at the element's own `END_TAG`, so an element matched
+     * inside a *sibling* cannot satisfy it.
+     */
+    private fun containsElement(
+        buf: ByteBuffer,
+        xml: ByteArray,
+        chunkStart: Int,
+        resourceIds: IntArray,
+        strings: List<String>,
+        selector: ElementSelector
+    ): Boolean {
+        val contained = selector.contains ?: return false
+        val chunkSize = buf.getInt(chunkStart + 4)
+        val end = endOfElement(buf, xml, chunkStart, chunkSize)
+        if (end < 0) return false
+
+        var cursor = chunkStart + chunkSize
+        while (cursor + CHUNK_HEADER_SIZE <= end) {
+            val type = buf.getShort(cursor).toInt() and 0xFFFF
+            val size = buf.getInt(cursor + 4)
+            if (size < CHUNK_HEADER_SIZE || cursor + size > end) return false
+            if (type == RES_XML_START_ELEMENT_TYPE &&
+                matchElement(buf, xml, cursor, resourceIds, strings, listOf(contained)) != null
+            ) {
+                return true
+            }
+            cursor += size
+        }
+        return false
     }
 
     /**

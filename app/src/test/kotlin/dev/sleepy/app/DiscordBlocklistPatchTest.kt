@@ -10,6 +10,7 @@ import dev.sleepy.app.patches.PatchRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -36,7 +37,7 @@ class DiscordBlocklistPatchTest {
      */
     @Test
     fun generatedInterceptorMatchesTheReferenceBuild() {
-        val dexEntries = dexEntriesOf(BASE_APK) ?: return
+        val dexEntries = dexEntriesOf(BASE_APK)
         val target = TargetApk(DexProcessor.buildClassToDexIndex(dexEntries), dexEntries)
 
         val resolution = OkHttpNameResolver.resolve(target)
@@ -61,7 +62,7 @@ class DiscordBlocklistPatchTest {
             protocolField = names.protocolHttp11Field
         )
 
-        val reference = referenceMethodBody() ?: return
+        val reference = referenceMethodBody()
         val referenceLines = reference.lines()
         val generatedLines = generated.lines()
 
@@ -89,7 +90,7 @@ class DiscordBlocklistPatchTest {
      */
     @Test
     fun generatedInterceptorAssemblesAgainstTheRealApk() = runBlocking {
-        val dexEntries = dexEntriesOf(BASE_APK) ?: return@runBlocking
+        val dexEntries = dexEntriesOf(BASE_APK)
         val classToDex = DexProcessor.buildClassToDexIndex(dexEntries)
         val target = TargetApk(classToDex, dexEntries)
 
@@ -125,12 +126,14 @@ class DiscordBlocklistPatchTest {
         println("Blocklist interceptor reassembled into $dexName (${patchedDex.size} bytes)")
     }
 
-    /** Reads the APK's DEX files, or null when the fixture is not present on this machine. */
-    private fun dexEntriesOf(apk: File): Map<String, ByteArray>? {
-        if (!apk.exists()) {
-            println("Discord base.apk not found, skipping the blocklist test")
-            return null
-        }
+    /**
+     * Reads the APK's DEX files.
+     *
+     * The fixture is a build output outside the repository, so a machine without it reports
+     * these tests as skipped rather than passing them without having read anything.
+     */
+    private fun dexEntriesOf(apk: File): Map<String, ByteArray> {
+        assumeTrue("${apk.path} is not on this machine", apk.exists())
         val entries = mutableMapOf<String, ByteArray>()
         ZipInputStream(ByteArrayInputStream(apk.readBytes())).use { zis ->
             var entry = zis.nextEntry
@@ -150,29 +153,27 @@ class DiscordBlocklistPatchTest {
      * way `blocklist.py` cuts it: from the `.method` line through its `.end method`.
      *
      * A tree that has not been through the reference's blocklist step carries the stock method
-     * instead, which is a different thing to compare against, so it is reported as such rather
-     * than as a thousand-line mismatch.
+     * instead, which is a different thing to compare against: the comparison is skipped with
+     * that as its reason, rather than reported as a thousand-line mismatch between two methods
+     * that were never meant to be equal.
      */
-    private fun referenceMethodBody(): String? {
+    private fun referenceMethodBody(): String {
         val relative = "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali"
         val file = SMALI_DIRS.map { File(REFERENCE_TREE, "$it/$relative") }.firstOrNull { it.exists() }
-        if (file == null) {
-            println("Reference Companion.smali not found, skipping the comparison")
-            return null
-        }
+        assumeTrue("the reference tree is not on this machine ($relative)", file != null)
 
-        val source = file.readText(Charsets.UTF_8)
+        val source = file!!.readText(Charsets.UTF_8)
         val start = source.indexOf(INTERCEPTOR_SIGNATURE)
         val end = if (start == -1) -1 else source.indexOf(".end method", start)
-        if (start == -1 || end == -1) {
-            println("Reference tree has no generated $INTERCEPTOR_SIGNATURE, skipping the comparison")
-            return null
-        }
+        assumeTrue(
+            "the reference tree has no generated $INTERCEPTOR_SIGNATURE",
+            start != -1 && end != -1
+        )
         val body = source.substring(start, end + ".end method".length)
-        if (!body.contains("img.litix.io")) {
-            println("Reference tree carries the stock interceptor, not the blocklist, skipping the comparison")
-            return null
-        }
+        assumeTrue(
+            "the reference tree carries the stock interceptor rather than the blocklist",
+            body.contains("img.litix.io")
+        )
         return body
     }
 

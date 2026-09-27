@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -67,12 +68,14 @@ class OctoGramSubsetPatchTest {
         "createNotificationChannel: Notification channel created"
     )
 
-    /** The APK's DEX entries, or null (with a line printed) when the fixture is not on this machine. */
-    private fun readDexEntries(): Map<String, ByteArray>? {
-        if (!apkFile.isFile) {
-            println("OctoGramSubsetPatchTest: ${apkFile.path} is needed for the subset checks; skipping")
-            return null
-        }
+    /**
+     * The APK's DEX entries.
+     *
+     * The fixture is a build output outside the repository, so a machine without it reports
+     * these tests as skipped rather than passing them without having read anything.
+     */
+    private fun readDexEntries(): Map<String, ByteArray> {
+        assumeTrue("${apkFile.path} is not on this machine", apkFile.isFile)
         val entries = mutableMapOf<String, ByteArray>()
         ZipInputStream(ByteArrayInputStream(apkFile.readBytes())).use { zis ->
             var entry = zis.nextEntry
@@ -90,7 +93,7 @@ class OctoGramSubsetPatchTest {
 
     @Test
     fun aSubsetOfOctoGramEditsChangesItsOwnMethodsAndNothingElse() = runBlocking {
-        val dexEntries = readDexEntries() ?: return@runBlocking
+        val dexEntries = readDexEntries()
         val target = TargetApk(DexProcessor.buildClassToDexIndex(dexEntries), dexEntries)
         val classes3 = dexEntries.getValue("classes3.dex")
 
@@ -169,7 +172,7 @@ class OctoGramSubsetPatchTest {
 
     @Test
     fun thePremiumRowsEditFlipsExactlyTheThreeBranchesAndTouchesNothingElse() = runBlocking {
-        val dexEntries = readDexEntries() ?: return@runBlocking
+        val dexEntries = readDexEntries()
         val classes3 = dexEntries.getValue("classes3.dex")
 
         val selection = PatchSelection.ofKeys(

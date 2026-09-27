@@ -19,7 +19,13 @@ val SleepySurfaceContainerLowDark     = Color(0xFF1A1723)
 val SleepySurfaceContainerDark        = Color(0xFF201C2B)
 val SleepySurfaceContainerHighDark    = Color(0xFF2A2536)
 val SleepySurfaceContainerHighestDark = Color(0xFF352F42)
-val SleepyOutline          = Color(0xFF4A4456)
+// The outline is the border of components that carry no fill of their own — an unchecked
+// Switch, an OutlinedTextField — so it is a non-text component and WCAG 2.2 asks 3:1 of it
+// against whatever it is drawn on (SC 1.4.11). The previous 0xFF4A4456 measured 2.01:1 on
+// SleepySurface and 1.78:1 on the container tones: a border a user with low vision cannot see.
+// This is the same hue family raised until it clears 3:1 on every surface in this scheme, with
+// the ratio checked in OutlineContrastTest rather than by eye.
+val SleepyOutline          = Color(0xFF8A8599)
 val SleepyOutlineVariant   = Color(0xFF35313F)
 
 // Light scheme. Same hue, flipped tones: the accents are darkened and the surfaces lightened

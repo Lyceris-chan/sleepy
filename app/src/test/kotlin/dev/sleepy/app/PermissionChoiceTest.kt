@@ -8,6 +8,7 @@ import dev.sleepy.app.patches.PermissionCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.util.zip.ZipFile
@@ -28,14 +29,18 @@ class PermissionChoiceTest {
 
     private val octoGramApk = File("/home/sleepy/Documents/antigravity/telegram/OctoGram_361_arm64.apk")
 
-    /** A manifest from a fixture APK, or null when that fixture is not on this machine. */
-    private fun manifestOf(apk: File): ByteArray? {
-        if (!apk.exists()) {
-            println("${apk.name} not found, skipping test")
-            return null
-        }
+    /**
+     * A manifest from a fixture APK.
+     *
+     * The fixtures are build outputs that live outside the repository, so a machine without one
+     * reports the test as skipped — an early `return` would have reported it as a pass instead.
+     */
+    private fun manifestOf(apk: File): ByteArray {
+        assumeTrue("${apk.path} is not on this machine", apk.exists())
         return ZipFile(apk).use { zip ->
-            val entry = zip.getEntry("AndroidManifest.xml") ?: return null
+            val entry = requireNotNull(zip.getEntry("AndroidManifest.xml")) {
+                "${apk.name} has no AndroidManifest.xml"
+            }
             zip.getInputStream(entry).readBytes()
         }
     }
@@ -56,10 +61,14 @@ class PermissionChoiceTest {
      */
     @Test
     fun everyPermissionTheRealBuildsDeclareIsDescribed() {
+        // Every fixture that is here gets checked; the test skips only when none is, so a machine
+        // holding one of the two builds still checks it rather than skipping both.
+        val fixtures = listOf(discordApk, octoGramApk).filter { it.exists() }
+        assumeTrue("neither fixture APK is on this machine", fixtures.isNotEmpty())
+
         var checked = 0
-        for (apk in listOf(discordApk, octoGramApk)) {
-            val manifest = manifestOf(apk) ?: continue
-            val permissions = declared(manifest)
+        for (apk in fixtures) {
+            val permissions = declared(manifestOf(apk))
             assertTrue("${apk.name} should declare permissions", permissions.size > 5)
             for (name in permissions) {
                 // The one name that is built from the application id, so it is matched by its
@@ -70,7 +79,7 @@ class PermissionChoiceTest {
                 checked++
             }
         }
-        if (checked == 0) println("no fixture APK found, so no declaration was checked")
+        println("$checked declared permissions checked against the catalogue, across ${fixtures.size} builds")
     }
 
     /** Every entry says what removing it costs, and that the cost is permanent. */
@@ -346,7 +355,7 @@ class PermissionChoiceTest {
      */
     @Test
     fun theRealManifestIsEditedByTheChoiceTheListProduces() {
-        val original = manifestOf(discordApk) ?: return
+        val original = manifestOf(discordApk)
         val before = declared(original)
 
         val items = PermissionCatalog.itemsOf(before)

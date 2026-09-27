@@ -2,7 +2,17 @@ package dev.sleepy.app.engine
 
 import android.content.Context
 import android.net.Uri
-import dev.sleepy.app.model.*
+import dev.sleepy.app.model.DeclarationMismatch
+import dev.sleepy.app.model.PatchProgress
+import dev.sleepy.app.model.PatchSelection
+import dev.sleepy.app.model.PermissionCheck
+import dev.sleepy.app.model.SelectivePatchGenerator
+import dev.sleepy.app.model.SmaliPatch
+import dev.sleepy.app.model.StepResult
+import dev.sleepy.app.model.StepStatus
+import dev.sleepy.app.model.TargetApk
+import dev.sleepy.app.model.VerificationReport
+import dev.sleepy.app.patches.DeclaredPermissions
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
@@ -11,7 +21,14 @@ import dev.sleepy.app.patches.PatchRegistry
 import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.util.Downloader
 import dev.sleepy.app.util.HashUtils
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -98,11 +115,12 @@ class PatchingPipeline(private val context: Context) {
     /**
      * The permissions the build at [sourceUrl] declares, in the order it declares them.
      *
-     * This reads the target APK's own manifest rather than a list kept anywhere, which is the
-     * whole point: what a build declares is a fact about that build, and a list written down here
-     * would be wrong the first time either app updated. It costs the same download the patch does,
-     * so a caller reads it once and shows the result; [execute] reads it again from the bytes it
-     * has already fetched, and that second read is the one the removed declarations come from.
+     * The list the section shows is the one shipped with the app for the release it supports, so
+     * this read is the cross-check rather than the source: it answers whether the build at the
+     * source is still the build that list describes, and [execute] reads the same thing again from
+     * the bytes it has already fetched to do the same. It is also the only list there is for a build
+     * nothing is shipped for, which is why the caller is given the declarations themselves rather
+     * than a verdict on them.
      *
      * An APK with no manifest, or one that cannot be read, declares nothing here: the failure is
      * reported as "nothing to remove" rather than as an error, because that is the safe reading —
@@ -156,9 +174,17 @@ class PatchingPipeline(private val context: Context) {
 
         // 3. Merge App Bundle configuration splits into the base.
         var mergedLibraries = 0
-        val nativeLibraryEntries = linkedMapOf<String, ZipRepacker.AdditionalEntry>()
+        var mergedResources = 0
+        var mergedLibraryBytes = 0L
+        var mergedResourceBytes = 0L
+        // The table that makes the merged resources resolve, once one has been built and checked.
+        // It is held rather than written out because the repack is what puts entries into the
+        // archive, and a replacement there keeps the entry STORED and aligned as it was.
+        var mergedResourceTable: ByteArray? = null
+        val splitResourceTables = mutableListOf<ByteArray>()
+        val mergedSplitEntries = linkedMapOf<String, ZipRepacker.AdditionalEntry>()
         if (splitUrls.isNotEmpty()) {
-            _progress.value = PatchProgress.MergingSplits("Fetching native library splits", 0, emptyList())
+            _progress.value = PatchProgress.MergingSplits("Fetching configuration splits", 0, emptyList())
             val abis = linkedSetOf<String>()
             for ((index, splitUrl) in splitUrls.withIndex()) {
                 currentCoroutineContext().ensureActive()
@@ -167,22 +193,30 @@ class PatchingPipeline(private val context: Context) {
                     librariesMerged = mergedLibraries,
                     abis = abis.toList()
                 )
-                // Each library is merged straight to a file, and the map holds where each one
+                // Each entry is merged straight to a file, and the map holds where each one
                 // is rather than what it weighs: the entries themselves are what the repack
                 // streams back in, so the 74 MB of an ABI split never has to be bytes.
-                val report = fetchSplitLibraries(splitUrl, index, workDir)
+                val fetched = fetchSplit(splitUrl, index, workDir)
+                val report = fetched.report
+                // A split's own table is the only part of it a file copy cannot carry across,
+                // and the split file it came out of is deleted before this loop ends, so it is
+                // read now or not at all.
+                fetched.resourceTable?.let { splitResourceTables.add(it) }
                 for (entry in report.entries) {
-                    nativeLibraryEntries[entry.name] = ZipRepacker.AdditionalEntry(
+                    mergedSplitEntries[entry.name] = ZipRepacker.AdditionalEntry(
                         file = entry.file,
                         method = ZipEntry.DEFLATED
                     )
                 }
                 abis.addAll(report.abis.keys)
                 mergedLibraries += report.libraryCount
+                mergedResources += report.resourceCount
+                mergedLibraryBytes += report.libraryBytes
+                mergedResourceBytes += report.resourceBytes
             }
 
             _progress.value = PatchProgress.MergingSplits(
-                step = "Merging native libraries into the base APK",
+                step = "Merging the configuration splits into the base APK",
                 librariesMerged = mergedLibraries,
                 abis = abis.toList()
             )
@@ -194,7 +228,7 @@ class PatchingPipeline(private val context: Context) {
                         explanation = "An App Bundle base split ships without any lib/ directory — the ARM64 shared libraries live in a separate " +
                             "configuration split. Without them the app dies on its first System.loadLibrary call, which is why a base-only APK " +
                             "crashes the moment it opens.",
-                        technicalTarget = "$mergedLibraries libraries for ${abis.joinToString(", ")}, ~${nativeLibraryEntries.values.sumOf { it.size } / (1024 * 1024)} MB",
+                        technicalTarget = "$mergedLibraries libraries for ${abis.joinToString(", ")}, ~${mergedLibraryBytes / (1024 * 1024)} MB",
                         status = StepStatus.OK
                     )
                 )
@@ -207,6 +241,74 @@ class PatchingPipeline(private val context: Context) {
                         status = StepStatus.SKIP
                     )
                 )
+            }
+
+            // A split with no resources is the normal case for an ABI split, so this is
+            // reported only when there is something to report and never as a skip.
+            if (mergedResources > 0) {
+                log(
+                    StepResult(
+                        title = "Merged the resources the base split was missing",
+                        explanation = "A density configuration split carries the bitmaps for the screen densities it covers, and the base split " +
+                            "carries none of them: an App Bundle installs them side by side, and the platform draws each one from whichever split " +
+                            "holds it. This puts those files back at the paths the desktop build's merged APK has them at, which is what the " +
+                            "resource table rebuilt just below then points at.",
+                        technicalTarget = "$mergedResources resources, ~${mergedResourceBytes / (1024 * 1024)} MB",
+                        status = StepStatus.OK
+                    )
+                )
+            }
+
+            // 3b. Rebuild the resource table. Without this the files above arrive at the right
+            // paths with nothing referring to them: every split ships a partial table naming only
+            // what that split carries, and the base's table names none of the split's files.
+            if (splitResourceTables.isNotEmpty()) {
+                val baseTable = extractEntry(sourceApk, RESOURCE_TABLE_ENTRY)
+                val merge = if (baseTable == null) {
+                    null
+                } else {
+                    mergeResourceTables(baseTable, splitResourceTables, mergedSplitEntries.keys)
+                }
+                when (merge) {
+                    null -> log(
+                        StepResult(
+                            title = "The resource table could not be rebuilt",
+                            explanation = "This APK carries no resources.arsc of its own, so there is nothing to merge the splits' tables into. " +
+                                "The merged-in resource files are in the archive but nothing in it names them.",
+                            technicalTarget = RESOURCE_TABLE_ENTRY,
+                            status = StepStatus.SKIP
+                        )
+                    )
+
+                    is ResourceTableMerger.Result.Merged -> {
+                        mergedResourceTable = merge.table
+                        log(
+                            StepResult(
+                                title = "Rebuilt the resource table around the merged resources",
+                                explanation = "An App Bundle deals its resource ids out across the splits, and each split ships a table naming only " +
+                                    "what it holds. The base's table names none of the density split's 1,249 files, so without this the merged files " +
+                                    "would be present and unresolvable. The tables are merged chunk by chunk rather than relinked: the entries are " +
+                                    "copied across byte for byte with the configuration and file path they were compiled with, because a relink " +
+                                    "through apktool's decoder rewrites those paths and would name files this archive does not contain.",
+                                technicalTarget = "${merge.sourceCount} tables -> ${merge.resourceCount} resources over ${merge.typeCount} types, " +
+                                    "${merge.table.size / 1024} KB",
+                                status = StepStatus.OK
+                            )
+                        )
+                    }
+
+                    is ResourceTableMerger.Result.Refused -> log(
+                        StepResult(
+                            title = "Left the resource table as the base split shipped it",
+                            explanation = "The merged table could not be shown to be sound, so the base's own table was kept: a resource table naming " +
+                                "files the APK does not hold is worse than one naming none of the split's. The merged resource files are in the " +
+                                "archive, but the base's table does not name them.",
+                            technicalTarget = "${splitResourceTables.size} split tables were not merged",
+                            status = StepStatus.SKIP,
+                            detail = merge.reason
+                        )
+                    )
+                }
             }
         }
 
@@ -229,9 +331,7 @@ class PatchingPipeline(private val context: Context) {
             )
         )
 
-        // What this build declares, read from the manifest that was just extracted rather than
-        // from a table kept anywhere: the selection names permissions by the name the build
-        // writes, and reading them from the build is what keeps the two from drifting apart.
+        // What this build declares, read from the manifest that was just extracted.
         val declaredPermissions = manifestBytes?.let { manifest ->
             BinaryXmlEditor.readElementAttributeValues(
                 xml = manifest,
@@ -239,12 +339,25 @@ class PatchingPipeline(private val context: Context) {
                 attributeId = BinaryXmlEditor.ATTR_NAME
             )
         } ?: emptyList()
+        // The list a run goes by is the one shipped for the release, because that is the list the
+        // switches were shown against; a build nothing is shipped for supplies its own.
+        val shippedPermissions = DeclaredPermissions.forPackage(originalPackageName)
+        val chosenPermissions = shippedPermissions ?: declaredPermissions
+        // Where the build no longer matches the shipped list, the difference is reported rather than
+        // substituted: a declaration the list does not name has no row for the user to have seen, so
+        // it is never removed — and one they are not told about is one they cannot choose about.
+        val permissionMismatches = when (
+            val check = shippedPermissions?.let { PermissionCheck.of(it, declaredPermissions) }
+        ) {
+            is PermissionCheck.Disagrees -> check.mismatches
+            else -> emptyList()
+        }
         // A selection that names no permission removes none of them, whatever the build declares
         // — see PermissionCatalog.removals, which decides this and is where the two locks live.
         val permissionRemovals = if (selection == null) {
             emptyList()
         } else {
-            PermissionCatalog.removals(declaredPermissions, selection)
+            PermissionCatalog.removals(chosenPermissions, selection)
         }
 
         val classToDexIndex = DexProcessor.buildClassToDexIndex(dexEntries)
@@ -444,31 +557,43 @@ class PatchingPipeline(private val context: Context) {
         if (finalBundle != null && bundleBytes != null) {
             replacements["assets/index.android.bundle"] = finalBundle
         }
+        // A replacement inherits the source entry's compression method, so the table stays
+        // STORED exactly as it was and the repack's alignment pass gives it its 4-byte start
+        // without anything here having to arrange either.
+        mergedResourceTable?.let { replacements[RESOURCE_TABLE_ENTRY] = it }
 
-        // The manifest is edited before the clone rename, because a removal is matched on the
-        // permission name exactly as the build writes it and the rename rewrites every string
-        // that begins with the package name — including the one permission whose name is built
-        // from it.
-        val permissionSelectors = permissionRemovals.map { permission ->
-            BinaryXmlEditor.ElementSelector(
-                namePrefix = BinaryXmlEditor.ELEMENT_USES_PERMISSION,
-                attributeId = BinaryXmlEditor.ATTR_NAME,
-                attributeValue = permission
-            )
-        }
+        // The manifest is edited before the clone rename, because an element is matched on the
+        // name exactly as the build writes it and the rename rewrites every string that begins
+        // with the package name — including the one permission whose name is built from it.
+        //
+        // Which edits this run asks for is decided in [DiscordManifestEdits], which says why each
+        // one is there and what switches it; what follows is the single pass that applies them.
+        val manifestEdits = DiscordManifestEdits.plan(
+            activePatchIds = activePatchSets.map { it.id }.toSet(),
+            mergedLibraries = mergedLibraries,
+            removedPermissions = permissionRemovals
+        )
 
-        // One pass over the manifest for both reasons there is to edit it: a merged APK is no
+        // One pass over the manifest for every reason there is to edit it: a merged APK is no
         // longer a split, so the split declarations must go and the native libraries are now
-        // DEFLATE-compressed so they must be extracted at install; and a permission the user
-        // switched off must be declared no more.
-        if (manifestBytes != null && (mergedLibraries > 0 || permissionSelectors.isNotEmpty())) {
+        // DEFLATE-compressed so they must be extracted at install; a permission the user switched
+        // off must be declared no more; and the components that belong to the things being
+        // disabled have to go with them. One pass rather than five because each pass rewrites the
+        // document and the next would have to re-read what it produced.
+        if (manifestBytes != null && (mergedLibraries > 0 || !manifestEdits.isEmpty)) {
             val edit = if (mergedLibraries > 0) {
-                BinaryXmlEditor.makeStandaloneManifest(manifestBytes, permissionSelectors)
+                BinaryXmlEditor.makeStandaloneManifest(
+                    manifestBytes, manifestEdits.removals, manifestEdits.overrides
+                )
             } else {
                 // Nothing was merged, so nothing needs making standalone: this pass is the
-                // permission removals and nothing else. Turning extractNativeLibs on here would
+                // removals and overrides and nothing else. Turning extractNativeLibs on here would
                 // change an attribute the user never asked about.
-                BinaryXmlEditor.edit(manifestBytes, removeElements = permissionSelectors)
+                BinaryXmlEditor.edit(
+                    xml = manifestBytes,
+                    removeElements = manifestEdits.removals,
+                    elementOverrides = manifestEdits.overrides
+                )
             }
             manifestBytes = edit.bytes
 
@@ -512,33 +637,125 @@ class PatchingPipeline(private val context: Context) {
                 }
             }
 
-            if (permissionSelectors.isNotEmpty()) {
-                val removedCount = edit.elementsRemoved.size
+            // Each group of edits is reported against its own selectors rather than against the
+            // pass's total: one pass carries the permissions, the crash reporter's providers, the
+            // Play markers and the attribution query, and a count taken from the whole edit would
+            // credit every group with the others' removals.
+            if (manifestEdits.permissions.isNotEmpty()) {
                 log(
-                    StepResult(
-                        title = "Removed $removedCount permission ${if (removedCount == 1) "declaration" else "declarations"} from the manifest",
+                    manifestRemovalStep(
+                        selectors = manifestEdits.permissions,
+                        edit = edit,
+                        title = { count -> "Removed $count permission ${if (count == 1) "declaration" else "declarations"} from the manifest" },
                         explanation = "Android grants an app only the permissions its manifest declares, and an installed app cannot declare " +
                             "another one later, so these are gone for good: the app can never ask for them again. The declarations themselves " +
-                            "were deleted — the rest of the manifest, its string pool and every other attribute, is byte-for-byte what the build shipped.",
-                        technicalTarget = edit.elementsRemoved
-                            .take(6)
-                            .joinToString(", ")
-                            .let { if (removedCount > 6) "$it and ${removedCount - 6} more" else it },
-                        status = if (edit.elementsMissing.isEmpty()) StepStatus.OK else StepStatus.SKIP,
-                        detail = edit.elementsMissing.take(5).takeIf { it.isNotEmpty() }
-                            ?.joinToString("; ") { "$it is not declared by this build, so there was nothing to remove" }
+                            "were deleted — the rest of the manifest, its string pool and every other attribute, is byte-for-byte what the build shipped."
+                    )
+                )
+            }
+
+            if (manifestEdits.sentryProviders.isNotEmpty()) {
+                log(
+                    manifestRemovalStep(
+                        selectors = manifestEdits.sentryProviders,
+                        edit = edit,
+                        title = { count -> "Removed $count Sentry ${if (count == 1) "provider" else "providers"} from the manifest" },
+                        explanation = "Sentry declares these as content providers, and the platform instantiates a declared provider while the " +
+                            "process starts — before any Java the crash-reporting patch stubs is reached. Removing the declaration is what stops " +
+                            "the reporter starting at all rather than starting and then discarding what it collects."
+                    )
+                )
+            }
+
+            if (manifestEdits.playSplitMarkers.isNotEmpty()) {
+                log(
+                    manifestRemovalStep(
+                        selectors = manifestEdits.playSplitMarkers,
+                        edit = edit,
+                        title = { count -> "Removed $count Play split ${if (count == 1) "marker" else "markers"} from the manifest" },
+                        explanation = "These entries describe an APK that is one split of an App Bundle. The libraries and resources those " +
+                            "splits carried are inside this APK now, so the markers describe an installation that no longer exists — and " +
+                            "com.android.vending.splits.required is read as a claim that the app is missing the rest of its splits."
+                    )
+                )
+            }
+
+            if (manifestEdits.attributionQuery.isNotEmpty()) {
+                log(
+                    manifestRemovalStep(
+                        selectors = manifestEdits.attributionQuery,
+                        edit = edit,
+                        title = { count -> "Removed $count AppsFlyer attribution ${if (count == 1) "query" else "queries"} from the manifest" },
+                        explanation = "The query exists so the app can see whether the AppsFlyer install-referrer provider is installed on the " +
+                            "device. Its only initialiser is the deep-link init this run no-ops, so the answer could not be used, and a " +
+                            "package-visibility declaration left in place is a permission the app no longer has a purpose for."
+                    )
+                )
+            }
+
+            // The one edit with no switch behind it. It is reported whether or not it landed, but
+            // only for the app it is about: on a build that has never declared this component the
+            // edit matched nothing because it was never meant to, and a step saying so would be a
+            // line about Discord in an OctoGram job. For Discord, "no such service" is worth
+            // saying — it is the build having moved on from the one this was written against.
+            val rpcLabel = manifestEdits.overrides.first().element.label
+            val rpcFound = rpcLabel in edit.elementOverridesApplied
+            val rpcClosed = BinaryXmlEditor.ATTR_EXPORTED in edit.attributesRewritten
+            if (rpcFound || rpcClosed || originalPackageName == DiscordManifestEdits.PACKAGE_NAME) {
+                log(
+                    StepResult(
+                        title = when {
+                            rpcClosed -> "Closed the RPC service to other apps"
+                            rpcFound -> "The RPC service was already closed"
+                            else -> "This build declares no RPC service"
+                        },
+                        explanation = "DiscordRpcService is exported with no permission on it and checks nothing about its caller, so any app " +
+                            "installed on the device can bind it and publish presence frames as the user. It is closed unconditionally rather " +
+                            "than behind a switch, because the other position of such a switch would be to leave that open.",
+                        technicalTarget = "$rpcLabel android:exported=${
+                            if (rpcClosed) "false (was true)" else "false (unchanged)"
+                        }",
+                        status = if (rpcClosed) StepStatus.OK else StepStatus.SKIP,
+                        detail = if (rpcFound) null else "no <service> with this name is declared, so there was nothing to close"
                     )
                 )
             }
         }
 
-        if (permissionSelectors.isEmpty() && selection != null && PermissionCatalog.isEngaged(selection)) {
+        if (permissionMismatches.isNotEmpty()) {
+            val unlisted = permissionMismatches
+                .filterIsInstance<DeclarationMismatch.Unlisted>()
+                .map { it.name }
+            val absent = permissionMismatches
+                .filterIsInstance<DeclarationMismatch.Absent>()
+                .map { it.name }
+            log(
+                StepResult(
+                    title = "This build's permissions are not the ones sleepy lists for it",
+                    explanation = "The permissions this release declares are listed in the app, and this build declares others than " +
+                        "those. Nothing was removed to close the gap: the list is what the switches were shown against, a permission it " +
+                        "does not name has no switch to have been moved, and deleting a declaration nobody was shown would be a change " +
+                        "nobody chose. A build that no longer matches the list is one to check before patching.",
+                    technicalTarget = buildList {
+                        if (unlisted.isNotEmpty()) {
+                            add("declared but not listed: ${unlisted.joinToString(", ")}")
+                        }
+                        if (absent.isNotEmpty()) {
+                            add("listed but not declared: ${absent.joinToString(", ")}")
+                        }
+                    }.joinToString("; "),
+                    status = StepStatus.SKIP
+                )
+            )
+        }
+
+        if (manifestEdits.permissions.isEmpty() && selection != null && PermissionCatalog.isEngaged(selection)) {
             log(
                 StepResult(
                     title = "Kept every permission this build declares",
                     explanation = "Permissions were chosen about but none of them was switched off, so every declaration the build shipped is " +
                         "still in the manifest that was produced.",
-                    technicalTarget = "${declaredPermissions.size} declarations, none removed",
+                    technicalTarget = "${chosenPermissions.size} declarations, none removed",
                     status = StepStatus.SKIP
                 )
             )
@@ -583,7 +800,7 @@ class PatchingPipeline(private val context: Context) {
                 inputApk = sourceApk,
                 output = output,
                 replacements = replacements,
-                additionalEntries = nativeLibraryEntries,
+                additionalEntries = mergedSplitEntries,
                 droppedEntries = droppedArtefacts
             )
         }
@@ -619,13 +836,29 @@ class PatchingPipeline(private val context: Context) {
         // checking it does not mean loading it back into memory.
         _progress.value = PatchProgress.Signing("Verifying the signed result")
         val verification = ApkVerifier.verify(outputFile)
+        val v1Verdict = when (verification.v1SignatureValid) {
+            true -> "valid"
+            false -> "NOT VALID"
+            null -> "not applicable below API 24"
+        }
         log(
             StepResult(
                 title = "Checked the signatures on the finished APK",
-                explanation = "Re-read the signed file and confirmed which signature schemes actually verify, rather than assuming signing worked.",
-                technicalTarget = "v1=${verification.v1SignatureValid}, v2=${verification.v2SignatureValid}, v3=${verification.v3SignatureValid}",
-                status = if (verification.v2SignatureValid || verification.v3SignatureValid) StepStatus.OK else StepStatus.FAIL,
-                detail = verification.signatureErrors.takeIf { it.isNotEmpty() }?.joinToString("; ")
+                explanation = "Re-read the signed file and confirmed which signature schemes actually verify, rather than assuming signing worked. " +
+                    "JAR signing (v1) is only honoured below API 24, so for a build that declares a higher minSdkVersion there is no verdict to " +
+                    "report on it and the scheme is named as not applicable rather than failed.",
+                technicalTarget = "v1=$v1Verdict, v2=${verification.v2SignatureValid}, v3=${verification.v3SignatureValid}",
+                // A scheme that failed where it applies is a failure, and a scheme that does
+                // not apply is not: only the first of those may fail this step.
+                status = if (verification.v1SignatureValid == false ||
+                    !(verification.v2SignatureValid || verification.v3SignatureValid)
+                ) {
+                    StepStatus.FAIL
+                } else {
+                    StepStatus.OK
+                },
+                detail = verification.v1NotApplicableReason
+                    ?: verification.signatureErrors.takeIf { it.isNotEmpty() }?.joinToString("; ")
             )
         )
         log(
@@ -633,10 +866,18 @@ class PatchingPipeline(private val context: Context) {
                 title = "Checked ZIP alignment on the finished APK",
                 explanation = "Confirmed every uncompressed entry starts where the platform needs it to — 4-byte alignment for the " +
                     "resource table, page alignment for any library stored uncompressed. Compressed entries have no alignment " +
-                    "requirement, so they are not counted.",
-                technicalTarget = if (verification.zipalignPassed) "all entries 4-byte aligned" else "${verification.misalignedEntries.size} misaligned",
-                status = if (verification.zipalignPassed) StepStatus.OK else StepStatus.FAIL,
-                detail = verification.misalignedEntries.take(5).takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    "requirement, so they are not counted. An archive whose central directory cannot be read is reported as " +
+                    "unchecked, never as aligned.",
+                technicalTarget = when (verification.zipalignPassed) {
+                    true -> "all entries 4-byte aligned"
+                    false -> "${verification.misalignedEntries.size} misaligned"
+                    null -> "the archive's central directory could not be read"
+                },
+                // An archive this app cannot read is one it cannot vouch for, so an unknown
+                // answer fails the step rather than passing quietly.
+                status = if (verification.zipalignPassed == true) StepStatus.OK else StepStatus.FAIL,
+                detail = verification.directoryError
+                    ?: verification.misalignedEntries.take(5).takeIf { it.isNotEmpty() }?.joinToString(", ")
             )
         )
 
@@ -656,6 +897,7 @@ class PatchingPipeline(private val context: Context) {
                 zipalignPassed = verification.zipalignPassed,
                 sourceIntegrityVerified = expectedSha256?.let { true },
                 mergedNativeLibraries = mergedLibraries,
+                mergedResourceFiles = mergedResources,
                 outputBytes = outputFile.length(),
                 patchesApplied = applied,
                 patchesSkipped = skipped,
@@ -666,6 +908,41 @@ class PatchingPipeline(private val context: Context) {
 
     private fun log(result: StepResult) {
         _stepLog.value = _stepLog.value + result
+    }
+
+    /**
+     * The step result for one group of [selectors] the manifest pass was asked to remove.
+     *
+     * The edit reports what it did for the whole pass, and one pass carries several unrelated
+     * groups — the permissions the user switched off, the crash reporter's providers, the Play
+     * split markers, the attribution query. Counting the pass would credit every group with the
+     * others' work, so each of them is counted against its own selectors here.
+     *
+     * A group whose elements were not all found is a SKIP with the ones that were absent named,
+     * never a quiet pass: a build that has moved on from the one these selectors were written
+     * against is something the user has to be told about, not something to absorb.
+     */
+    private fun manifestRemovalStep(
+        selectors: List<BinaryXmlEditor.ElementSelector>,
+        edit: BinaryXmlEditor.EditResult,
+        title: (Int) -> String,
+        explanation: String
+    ): StepResult {
+        val labels = selectors.map { it.label }
+        val removed = edit.elementsRemoved.filter { it in labels }
+        val missing = edit.elementsMissing.filter { it in labels }
+        return StepResult(
+            title = title(removed.size),
+            explanation = explanation,
+            technicalTarget = removed
+                .take(6)
+                .joinToString(", ")
+                .let { if (removed.size > 6) "$it and ${removed.size - 6} more" else it }
+                .ifEmpty { "${labels.size} asked for, none present" },
+            status = if (missing.isEmpty()) StepStatus.OK else StepStatus.SKIP,
+            detail = missing.take(5).takeIf { it.isNotEmpty() }
+                ?.joinToString("; ") { "$it is not declared by this build, so there was nothing to remove" }
+        )
     }
 
     /**
@@ -723,25 +1000,64 @@ class PatchingPipeline(private val context: Context) {
         return bytes.size.toLong()
     }
 
+    /** What a fetched split contributes: its files, and its resource table when it has one. */
+    private class FetchedSplit(
+        val report: SplitMerger.MergeReport<SplitMerger.MergedFileEntry>,
+        val resourceTable: ByteArray?
+    )
+
     /**
      * Downloads configuration split [index] and merges its native libraries into [workDir].
      *
      * The split itself is a file for the length of the merge and then deleted: it is another
      * tens of megabytes, and only the libraries inside it are wanted. As with
-     * [downloadSource], the split's bytes never become a local of [execute].
+     * [downloadSource], the split's bytes never become a local of [execute] — only its resource
+     * table does, and a split's table is a few hundred kilobytes rather than tens of megabytes.
      */
-    private suspend fun fetchSplitLibraries(
-        url: String,
-        index: Int,
-        workDir: File
-    ): SplitMerger.MergeReport<SplitMerger.MergedFileEntry> {
+    private suspend fun fetchSplit(url: String, index: Int, workDir: File): FetchedSplit {
         val splitApk = File(workDir, "split_$index.apk")
         try {
             splitApk.writeBytes(Downloader.download(url) { _, _ -> })
-            return SplitMerger.mergeNativeLibrariesToDir(splitApk, workDir)
+            // Read before the merge rather than after: the merge writes the split's entries out
+            // as files and the split itself is deleted on the way out of this call, so a table
+            // not read here would have to be downloaded again.
+            val table = extractEntry(splitApk, RESOURCE_TABLE_ENTRY)
+            return FetchedSplit(SplitMerger.mergeSplitToDir(splitApk, workDir), table)
         } finally {
             splitApk.delete()
         }
+    }
+
+    /**
+     * The one table naming every merged resource, or why one was not built.
+     *
+     * [ResourceTableMerger] checks what it builds structurally. This adds the check that is about
+     * the archive rather than the table: every file path the merged table names and the base's
+     * did not must be a file the repack is about to write. A path that is named and absent is a
+     * resource that resolves to nothing, which is the exact failure this step exists to remove —
+     * so a table that would introduce one is refused, and the caller keeps the base's.
+     */
+    private fun mergeResourceTables(
+        baseTable: ByteArray,
+        splitTables: List<ByteArray>,
+        mergedEntryNames: Set<String>
+    ): ResourceTableMerger.Result {
+        val result = ResourceTableMerger.merge(baseTable, splitTables)
+        if (result !is ResourceTableMerger.Result.Merged) return result
+
+        val basePaths = ResourceTableMerger.namedPaths(baseTable) ?: return ResourceTableMerger.Result.Refused(
+            "the base's own resource table could not be read back for comparison"
+        )
+        val added = ResourceTableMerger.namedPaths(result.table) ?: return ResourceTableMerger.Result.Refused(
+            "the merged resource table could not be read back for comparison"
+        )
+        val missing = (added - basePaths) - mergedEntryNames
+        if (missing.isNotEmpty()) {
+            return ResourceTableMerger.Result.Refused(
+                "the merged table names ${missing.size} files this APK would not hold, starting with ${missing.first()}"
+            )
+        }
+        return result
     }
 
     private fun extractDexEntries(apk: File): Map<String, ByteArray> {
@@ -782,5 +1098,6 @@ class PatchingPipeline(private val context: Context) {
 
         const val BUNDLE_ENTRY = "assets/index.android.bundle"
         const val MANIFEST_ENTRY = "AndroidManifest.xml"
+        const val RESOURCE_TABLE_ENTRY = "resources.arsc"
     }
 }

@@ -7,8 +7,9 @@
     "discord_348205": [
       "JavaScript patches match the desktop reference build exactly: all 142 functions it changes are changed identically, verified byte for byte against that build's shipped bundle. Those patches are pinned to Discord 348.5's bundle; a different release's bundle is refused rather than patched with stale function ids, because Hermes numbers functions per bundle and an id from one release names an unrelated function in another.",
       "The network blocklist is generated against the selected APK rather than shipped as fixed text. The desktop reference writes down three names R8 renames on every release - the okhttp3.Response constructor, the Protocol enum and that enum's HTTP/1.1 field - and this build reads all three out of the target's DEX instead. The method it produces reproduces the desktop build's byte for byte; a build where they cannot be resolved is skipped with the reason stated rather than patched with another release's names.",
-      "Most AndroidManifest edits are not ported. The split declarations and extractNativeLibs are handled, but removing whole elements (five dead permissions, the Sentry providers, Play split metadata, the AppsFlyer intent query) and rewriting the RPC service's exported flag are not implemented yet.",
-      "Adding or rebuilding resource-table entries is not possible in a surgical repack, so the ExoPlayer drawable aliases the desktop build creates are absent. The upstream APK ships without them and runs, so this matches Discord's own behaviour rather than introducing a gap.",
+      "Every AndroidManifest edit the reference build makes is applied except one. The split declarations, extractNativeLibs, the five dead permissions, the two Sentry providers, the three Play split metadata entries, the AppsFlyer intent query and the RPC service's exported flag are all edited into the compiled manifest, and each is reported as its own step. The one edit not ported is the reference's rewrite of the three Google Analytics components - AnalyticsReceiver, AnalyticsService and AnalyticsJobService - from android:enabled=true to false: those components do nothing once the analytics initialiser is stubbed, which is what the reference's own comment on that edit says, so the rewrite would change the manifest without changing what the app does.",
+      "Resources are merged in from the density and language splits, and the resource table is rebuilt around them. Every split ships a partial table naming only the files it carries - the base's names its own 3,606 and not one of the density split's 1,249 - so without this the merged-in files would sit at the paths the desktop build uses with nothing in the APK's table pointing at them. The table shipped in the result is merged from the base's and the splits' tables at patch time, keeping each source's resource ids, configurations and compiled file paths; the merge is refused, and the base's table kept, when the tables cannot be reconciled. The merged table names 4,855 paths, which is every resource file the merged APK holds and no others.",
+      "The RPC service is closed without a switch. com.discord.socialrpc.DiscordRpcService is exported with no permission declared on it and no check on its caller, so any app installed on the device can bind it and publish presence frames as the user. There is no switch that re-opens it, because the other position of such a switch would be the unsafe one.",
       "The reference's four media edits stay disabled for the reasons it documents: they crash the camera on open, shrink capture below the encoder's expectation, strip a live string, or pass an undocumented value to the native media engine.",
       "Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates."
     ],
@@ -28,11 +29,14 @@
       "version_code": 348205,
       "url": "https://tracker.vendetta.rocks/tracker/download/348205/base",
       "split_urls": [
-        "https://tracker.vendetta.rocks/tracker/download/348205/config.arm64_v8a"
+        "https://tracker.vendetta.rocks/tracker/download/348205/config.arm64_v8a",
+        "https://tracker.vendetta.rocks/tracker/download/348205/config.hdpi",
+        "https://tracker.vendetta.rocks/tracker/download/348205/config.de",
+        "https://tracker.vendetta.rocks/tracker/download/348205/config.en"
       ],
       "apk_type": "split_base",
       "sha256_expected": null,
-      "description": "Discord Alpha from Vendetta tracker. Automatically merges ARM64 native shared libraries into a universal APK, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, and locks the patched JS bundle.",
+      "description": "Discord Alpha from Vendetta tracker. Automatically merges ARM64 native shared libraries and the density and language splits' resources into a universal APK and rebuilds the resource table around them, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, and locks the patched JS bundle.",
       "changelog_url": "https://discord.com/blog",
       "patch_ids": [
         "discord_ota_bundle",

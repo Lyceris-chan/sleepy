@@ -50,6 +50,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sleepy.app.model.DeclarationMismatch
+import dev.sleepy.app.model.DeclarationSource
+import dev.sleepy.app.model.PermissionCheck
 import dev.sleepy.app.model.PermissionScan
 import dev.sleepy.app.patches.PatchRegistry
 import dev.sleepy.app.patches.PermissionCatalog
@@ -208,6 +211,48 @@ fun PatchSelectScreen(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // The permission section comes before the patch sets, not after them: its list is
+            // shipped with the app, so it is ready before anything is downloaded, and a section
+            // below twenty-two set cards is a section most people never scroll to.
+            item(key = PatchRows.permissionCardKey(), contentType = "permissions") {
+                PermissionCard(
+                    scan = permissionScan,
+                    rows = permissionRows,
+                    expanded = PermissionCatalog.SET_ID in expandedSetIds,
+                    onRead = { viewModel.readPermissions() },
+                    onExpandedChange = {
+                        expandedSetIds = if (PermissionCatalog.SET_ID in expandedSetIds) {
+                            expandedSetIds - PermissionCatalog.SET_ID
+                        } else {
+                            expandedSetIds + PermissionCatalog.SET_ID
+                        }
+                    }
+                )
+            }
+
+            if (permissionRows.isNotEmpty() && PermissionCatalog.SET_ID in expandedSetIds) {
+                item(key = PatchRows.permissionGroupKey(), contentType = "group") {
+                    GroupHeading(
+                        label = PermissionCatalog.DECLARED_GROUP,
+                        itemCount = permissionRows.size
+                    )
+                }
+                items(
+                    items = permissionRows,
+                    key = { it.key },
+                    contentType = { "row" }
+                ) { row ->
+                    PatchItemRow(
+                        row = row,
+                        onToggle = { viewModel.toggleItem(it) }
+                    )
+                }
+            }
+
+            item(key = "pipeline") {
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "Configure modding pipeline",
@@ -271,38 +316,6 @@ fun PatchSelectScreen(
                 }
             }
 
-            item(key = PatchRows.permissionCardKey(), contentType = "permissions") {
-                PermissionCard(
-                    scan = permissionScan,
-                    rows = permissionRows,
-                    expanded = PermissionCatalog.SET_ID in expandedSetIds,
-                    onRead = { viewModel.readPermissions() },
-                    onExpandedChange = {
-                        expandedSetIds = if (PermissionCatalog.SET_ID in expandedSetIds) {
-                            expandedSetIds - PermissionCatalog.SET_ID
-                        } else {
-                            expandedSetIds + PermissionCatalog.SET_ID
-                        }
-                    }
-                )
-            }
-
-            if (permissionRows.isNotEmpty() && PermissionCatalog.SET_ID in expandedSetIds) {
-                item(key = PatchRows.permissionGroupKey(), contentType = "group") {
-                    GroupHeading(label = PermissionCatalog.DECLARED_GROUP, itemCount = permissionRows.size)
-                }
-                items(
-                    items = permissionRows,
-                    key = { it.key },
-                    contentType = { "row" }
-                ) { row ->
-                    PatchItemRow(
-                        row = row,
-                        onToggle = { viewModel.toggleItem(it) }
-                    )
-                }
-            }
-
             item(key = "footer") {
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -326,23 +339,22 @@ private fun patchButtonLabel(selectedItems: Int, permissionRemovals: Int): Strin
 }
 
 /**
- * The permission section: which of the declarations the build being patched makes it keeps.
+ * The permission section: which of the declarations the release being patched makes it keeps.
  *
- * The list is read from the APK the source publishes — its own manifest — and never from a table
- * in the app, so it cannot offer a permission this build does not declare or hide one it does.
- * Reading it costs a download of that build, which is why it is a button rather than something
- * that happens when the screen opens, and why nothing can be switched off before it has run: the
- * engine reads the manifest again when it patches, so a build whose permissions were never read is
- * a build whose permissions are left exactly as they are.
+ * The list is the one shipped with the app for this exact release, so the rows are there the
+ * moment a target is chosen and nothing has to be downloaded to switch one off. It used to be read
+ * from the build, which meant the section held nothing at all until a whole APK had been fetched —
+ * no rows, no switches, and nothing to say that any of it existed.
+ *
+ * The build's own manifest is still read, but as a cross-check rather than as the list: a source
+ * pointed at another release is the case where a shipped list would be wrong, and a permission the
+ * build declares that the list does not name is a permission with no row — so it is stated instead
+ * of being kept quiet. What the read finds never replaces the list on its own.
  *
  * There is deliberately no switch for the whole section. Everywhere else a set's header carries
  * one, and a header switch here would put "remove every permission this build declares" behind one
  * tap — a state that cannot be undone on an installed app, and one the model refuses anyway once
  * the last permission stands. The rows are the only way in.
- *
- * The section appears for every source, because the only way to know whether a build declares
- * permissions is to read it; a build that declares none says so in one line rather than showing an
- * empty list of switches.
  */
 @Composable
 private fun PermissionCard(
@@ -402,8 +414,7 @@ private fun PermissionCard(
             }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Read from this build's own manifest, so it is exactly what this release " +
-                    "declares — not a list of names that could go stale.",
+                text = permissionListSource(scan),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -423,21 +434,7 @@ private fun PermissionCard(
                     }
                 }
 
-                PermissionScan.Reading -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Downloading the build and reading its manifest…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                PermissionScan.Reading -> ReadProgress()
 
                 is PermissionScan.Failed -> {
                     Text(
@@ -457,7 +454,145 @@ private fun PermissionCard(
                     }
                 }
 
-                is PermissionScan.Read -> PermissionSummary(rows)
+                is PermissionScan.Read -> {
+                    PermissionSummary(rows)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PermissionCheckReport(check = scan.check, onRead = onRead)
+                }
+            }
+        }
+    }
+}
+
+/** Where the list above came from, said in the section rather than only in the code. */
+private fun permissionListSource(scan: PermissionScan): String = when {
+    scan is PermissionScan.Read && scan.from == DeclarationSource.SHIPPED ->
+        "The permissions this release declares, shipped with sleepy, so they are here before " +
+            "anything is downloaded. Check them against the build at the source to be sure it is " +
+            "still the build this list describes."
+    scan is PermissionScan.Read ->
+        "Read from this build's own manifest, because sleepy ships no list for this release. " +
+            "This is exactly what it declares — not a list of names that could go stale."
+    else ->
+        "sleepy ships no list for this release, so what it declares has to be read from it. That " +
+            "downloads the same APK the patch does, and reads its manifest."
+}
+
+/** The spinner both reads share: one for the list, one for the check. */
+@Composable
+private fun ReadProgress() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = "Downloading the build and reading its manifest…",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * What the cross-check against the build found — the one place a difference between what sleepy
+ * lists and what a build declares is stated.
+ *
+ * Both directions are named in full rather than counted, because they are different problems with
+ * different answers. A declaration the list does not name has no row, so it stays whatever the user
+ * does; a listed permission the build does not declare means the switch above governs nothing. The
+ * list is not rewritten in either case: it describes the release sleepy supports, and a run goes by
+ * the choice the user made against it.
+ */
+@Composable
+private fun PermissionCheckReport(check: PermissionCheck, onRead: () -> Unit) {
+    when (check) {
+        PermissionCheck.NotChecked -> Column {
+            Text(
+                text = "Not checked against the build yet. Checking downloads it and compares " +
+                    "what it declares with the list above — nothing you switch is affected " +
+                    "either way.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(onClick = onRead, shape = MaterialTheme.shapes.large) {
+                Text("Check against the build")
+            }
+        }
+
+        PermissionCheck.Checking -> ReadProgress()
+
+        PermissionCheck.Agrees -> Text(
+            text = "Checked against this build's own manifest: it declares exactly these " +
+                "permissions.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        is PermissionCheck.Disagrees -> Column {
+            val unlisted = check.mismatches
+                .filterIsInstance<DeclarationMismatch.Unlisted>()
+                .map { it.name }
+            val absent = check.mismatches
+                .filterIsInstance<DeclarationMismatch.Absent>()
+                .map { it.name }
+
+            Text(
+                text = "This build is not the one sleepy lists permissions for.",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.error
+            )
+            if (unlisted.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "It also declares ${unlisted.joinToString(", ")}. sleepy has no entry " +
+                        "for ${if (unlisted.size == 1) "it" else "them"}, so " +
+                        "${if (unlisted.size == 1) "it has" else "they have"} no row above and " +
+                        "will not be removed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (absent.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "It no longer declares ${absent.joinToString(", ")}, so " +
+                        "${if (absent.size == 1) "that row" else "those rows"} above would " +
+                        "remove nothing.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "The list above is the one for the release sleepy supports, so a run goes " +
+                    "by your choices in it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        is PermissionCheck.Failed -> Column {
+            Text(
+                text = check.reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "The list above is the one sleepy ships for this release and is unaffected.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(onClick = onRead, shape = MaterialTheme.shapes.large) {
+                Text("Try again")
             }
         }
     }

@@ -159,6 +159,14 @@ object ZipRepacker {
                 var entry = zis.nextEntry
                 while (entry != null) {
                     val name = entry.name
+                    // Read here, above the drop check, because a replaced entry is dropped from
+                    // the copied stream and rewritten from the replacement — with the source's own
+                    // method, which is the one thing about it the replacement does not carry. Read
+                    // below the check it was never seen for exactly the entries that needed it,
+                    // and every replacement fell back to DEFLATE: the resource table the merge
+                    // builds and the JavaScript bundle the patch writes both came out compressed
+                    // where the source APK stores them for the platform to map rather than unpack.
+                    sourceMethods[name] = entry.method
                     if (shouldDrop(name, replacements, additionalEntries, droppedEntries)) {
                         dropped.add(name)
                         zis.closeEntry()
@@ -166,7 +174,6 @@ object ZipRepacker {
                         continue
                     }
 
-                    sourceMethods[name] = entry.method
                     val newEntry = ZipEntry(name).apply {
                         method = entry.method
                         time = entry.time

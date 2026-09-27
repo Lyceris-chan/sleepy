@@ -13,10 +13,13 @@ import dev.sleepy.app.model.SmaliPatch
  * patch in this object was invented.
  *
  * This object is the **core** subset, not the whole reference suite. The remaining smali
- * edits live in [DiscordNativePatches]; edits that rewrite `AndroidManifest.xml` or the
- * resource table are not portable to an on-device patcher and are absent by design. Hermes
- * function ids are per-bundle and shift on every Discord release, so the ids below are tied
- * to the 348.5 build the pipeline is pointed at.
+ * edits live in [DiscordNativePatches]. The manifest edits the reference makes by rewriting
+ * text are here as the facts they match on — element names, attribute values, component
+ * names — and are applied by `BinaryXmlEditor`, which edits the compiled document rather than
+ * the text form an on-device patcher never has. The resource table is rebuilt by
+ * `ResourceTableMerger` for the same reason. Hermes function ids are per-bundle and shift on
+ * every Discord release, so the ids below are tied to the 348.5 build the pipeline is pointed
+ * at.
  *
  * Stubs telemetry, Sentry crash reporters, and locks the on-device Hermes JS bundle.
  */
@@ -378,6 +381,45 @@ object DiscordPatches {
         "META-INF/sentry-android-replay_release.kotlin_module",
         "io/sentry/android/core/internal/tombstone/tombstone.proto"
     )
+
+    /**
+     * The two Sentry components AndroidManifest.xml declares as `<provider>`s.
+     *
+     * They are the reason stubbing the SDK's entry points is not enough on its own: the platform
+     * instantiates every declared content provider while the process starts, before any Java the
+     * patches touch is entered, and the SDK's own provider is what starts the reporter. Removing
+     * the declaration is what actually keeps it from starting.
+     */
+    val SENTRY_PROVIDERS = listOf(
+        "io.sentry.android.core.SentryInitProvider",
+        "io.sentry.android.core.SentryPerformanceProvider"
+    )
+
+    /**
+     * The `<meta-data>` entries the Play Core split installer writes into a bundle's manifest.
+     *
+     * They describe an APK that is one split of a bundle. This patcher merges the splits into a
+     * single APK, so the markers describe an installation that no longer exists — and
+     * `com.android.vending.splits.required` is read by the Play Store as a claim that the app is
+     * missing the rest of its splits, which is the opposite of true once they are merged in.
+     */
+    val PLAY_SPLIT_MARKERS = listOf(
+        "com.android.vending.splits.required",
+        "com.android.vending.splits",
+        "com.android.vending.derived.apk.id"
+    )
+
+    /** The `<action>` naming the AppsFlyer install-referrer query in the manifest's `<queries>`. */
+    const val APPSFLYER_INSTALL_PROVIDER_ACTION = "com.appsflyer.referrer.INSTALL_PROVIDER"
+
+    /**
+     * The service that publishes Discord's Rich Presence to other applications on the device.
+     *
+     * The reference build closes it because it is exported with no permission and checks nothing
+     * about the caller, so any installed app can bind it and push arbitrary presence frames as the
+     * user. See [dev.sleepy.app.engine.DiscordManifestEdits] for why this one carries no switch.
+     */
+    const val RPC_SERVICE_NAME = "com.discord.socialrpc.DiscordRpcService"
 
     val ALL = listOf(
         BUNDLE_LOCK,

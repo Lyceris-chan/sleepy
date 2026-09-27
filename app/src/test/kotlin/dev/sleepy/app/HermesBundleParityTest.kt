@@ -5,6 +5,7 @@ import dev.sleepy.app.engine.HermesFunctionTable
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
@@ -19,8 +20,9 @@ import java.util.concurrent.TimeUnit
  * one byte at a time. Nothing is sampled and nothing is compared through a disassembler, so a
  * function that was patched into something that merely decompiles alike still fails here.
  *
- * The bundles live outside the repository (55 MB each), so the test skips when they are absent
- * rather than failing on a machine that never had them.
+ * The bundles live outside the repository (55 MB each), so a machine without them reports these
+ * tests as skipped rather than failing on something it never had — and skipped is a visible
+ * outcome, unlike the early `return` that used to make an absent bundle look like a pass.
  */
 class HermesBundleParityTest {
 
@@ -35,13 +37,10 @@ class HermesBundleParityTest {
 
     @Test
     fun testPatchedBundleMatchesReferenceFunctionForFunction() {
-        if (!baseBundle.isFile || !referenceBundle.isFile) {
-            println(
-                "HermesBundleParityTest: ${baseBundle.path} and ${referenceBundle.path} are needed " +
-                    "for the Discord 348.5 parity check; skipping"
-            )
-            return
-        }
+        assumeTrue(
+            "the Discord 348.5 bundles are not on this machine (${baseBundle.path}, ${referenceBundle.path})",
+            baseBundle.isFile && referenceBundle.isFile
+        )
 
         val base = baseBundle.readBytes()
         assertEquals(
@@ -134,23 +133,31 @@ class HermesBundleParityTest {
             "the SHA-1 footer does not cover the patched file",
             digest.digest().contentEquals(patched.copyOfRange(fileLength - sha1FooterSize, fileLength))
         )
-
-        crossCheckRelocatedFunctionsWithHermesDecomp(result, patched)
     }
 
     /**
      * Re-reads the relocated bodies with the reference disassembler, which parses the bundle
      * from the file header rather than from [HermesFunctionTable]'s reading of it. A relocated
      * body that only our own reader can find would pass the comparison above and fail here.
+     *
+     * A test of its own because `hermes-decomp` is a tool this machine may not have: as a branch
+     * inside the comparison above, its absence was a line of printed output and the cross-check
+     * was reported as covered. Here it is reported as skipped, and the comparison keeps its own,
+     * separately reported verdict either way.
      */
-    private fun crossCheckRelocatedFunctionsWithHermesDecomp(
-        result: HermesBundlePatcher.Result,
-        patched: ByteArray
-    ) {
-        if (!hermesDecomp.canExecute()) {
-            println("HermesBundleParityTest: ${hermesDecomp.path} is not executable; skipping the decompiler cross-check")
-            return
-        }
+    @Test
+    fun aRealDisassemblerAcceptsEveryRelocatedFunction() {
+        assumeTrue("the Discord base bundle is not on this machine (${baseBundle.path})", baseBundle.isFile)
+        assumeTrue("${hermesDecomp.path} is not executable", hermesDecomp.canExecute())
+
+        val base = baseBundle.readBytes()
+        assertEquals(
+            "the base bundle is not the build the patch set was extracted from",
+            DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong(),
+            baseBundle.length()
+        )
+        val result = HermesBundlePatcher.apply(base, DiscordHermesBundlePatch.PATCHES)
+        val patched = result.bundleBytes
 
         val temp = File.createTempFile("hermes-parity-", ".bundle")
         try {

@@ -7,6 +7,7 @@ import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
@@ -41,13 +42,10 @@ class HermesSubsetPatchTest {
 
     @Test
     fun testASubsetChangesTheChosenFunctionsAndNothingElse() {
-        if (!baseBundle.isFile || !referenceBundle.isFile) {
-            println(
-                "HermesSubsetPatchTest: ${baseBundle.path} and ${referenceBundle.path} are needed " +
-                    "for the Discord 348.5 subset check; skipping"
-            )
-            return
-        }
+        assumeTrue(
+            "the Discord 348.5 bundles are not on this machine (${baseBundle.path}, ${referenceBundle.path})",
+            baseBundle.isFile && referenceBundle.isFile
+        )
 
         val selection = PatchSelection.ofKeys(
             *chosen.reversed().map { DiscordHermesFunctionCatalog.itemKeyOf(it) }.toTypedArray()
