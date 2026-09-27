@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-27
+
 ### Added
 
 - The permissions each supported app asks for are listed in sleepy itself, so the permission switches are on screen as soon as you pick a target. They used to be read out of the APK you were patching, which meant the section stayed empty until the whole download had finished, and there was no way to see what an app asks for without downloading it.
@@ -39,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sleepy releases are no longer signed with the debug key. Every Android SDK installs that key and publishes it, so a release signed with it is one that anyone can build a newer version of. Without a signing key of its own a release is now left unsigned and named so.
 - The password on the signing key sleepy creates on your device is generated for that installation rather than written into the source. It is kept in the app's private storage beside the key, which is what actually protects it; what changes is that a password read out of the source no longer opens anyone's key, and one that leaks opens a single installation instead of all of them.
+- Releases from this one are signed with a new key. The key the earlier releases were signed with is no longer used, so this build will not install over 1.0.0 to 1.4.0 — Android treats two builds as the same app only when the package name and the signing key both match. Uninstall the earlier version first.
+
+  That has a second effect worth knowing before you do it. Uninstalling removes sleepy's private storage, and the key sleepy generates on your device to sign the apps it patches is kept there. After reinstalling, sleepy makes a new one, so patched apps you still have will not accept patches signed by the new install. Uninstall those too, and patch them again, if you want to be able to update them.
 
 ## [1.4.0] - 2026-09-27
 
@@ -127,7 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript changes are checked against the app's code before they are written, so a change aimed at the wrong place cannot corrupt it.
 - OctoGram changes that matched more than one place in the code are resolved, and each change now applies only to the app version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.1.0...v1.2.0
