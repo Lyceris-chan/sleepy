@@ -61,13 +61,11 @@ object ZipRepacker {
      * @param replacements entry name -> new contents, written with the source entry's own
      *   storage method (DEFLATE for entries the source APK lacks).
      * @param additionalEntries entry name -> contents to append, for entries the source APK lacks.
-     * @param alignment byte boundary every entry's data must start on.
      */
     fun repack(
         inputApkBytes: ByteArray,
         replacements: Map<String, ByteArray>,
-        additionalEntries: Map<String, AdditionalEntry> = emptyMap(),
-        alignment: Int = 4
+        additionalEntries: Map<String, AdditionalEntry> = emptyMap()
     ): RepackResult {
         val addedSize = additionalEntries.values.sumOf { it.data.size.toLong() }
         val initialCapacity = (inputApkBytes.size.toLong() + addedSize + 8L * 1024 * 1024)
@@ -100,7 +98,7 @@ object ZipRepacker {
                     if (entry.method == ZipEntry.STORED) {
                         setStoredMetadata(newEntry, entryData)
                     }
-                    writeEntry(zos, counter, newEntry, entryData, alignment, sanitizeExtra(entry.extra))
+                    writeEntry(zos, counter, newEntry, entryData, sanitizeExtra(entry.extra))
                     zis.closeEntry()
                     entry = zis.nextEntry
                 }
@@ -115,7 +113,7 @@ object ZipRepacker {
                 if (method == ZipEntry.STORED) {
                     setStoredMetadata(newEntry, data)
                 }
-                writeEntry(zos, counter, newEntry, data, alignment, ByteArray(0))
+                writeEntry(zos, counter, newEntry, data, ByteArray(0))
             }
 
             for ((name, additional) in additionalEntries) {
@@ -126,7 +124,7 @@ object ZipRepacker {
                 if (additional.method == ZipEntry.STORED) {
                     setStoredMetadata(newEntry, additional.data)
                 }
-                writeEntry(zos, counter, newEntry, additional.data, alignment, ByteArray(0))
+                writeEntry(zos, counter, newEntry, additional.data, ByteArray(0))
             }
         }
 
@@ -158,8 +156,9 @@ object ZipRepacker {
     }
 
     /**
-     * Writes one entry, first extending its extra field so the entry data lands on an
-     * [alignment] boundary given the archive's current length.
+     * Writes one entry, first extending its extra field so the entry data lands on the
+     * boundary [ZipAlignment] requires for it. Compressed entries are exempt and are written
+     * with no padding at all, which is what keeps the output comparable to `zipalign`'s.
      *
      * A DEFLATED entry's sizes are unknown up front, so the stream appends a 16-byte data
      * descriptor *after* the data. That shifts the following entry, not this one, and the
@@ -170,12 +169,16 @@ object ZipRepacker {
         counter: CountingOutputStream,
         entry: ZipEntry,
         data: ByteArray,
-        alignment: Int,
         extra: ByteArray
     ) {
+        val required = ZipAlignment.requiredFor(entry.name, entry.method)
         val nameLength = entry.name.toByteArray(Charsets.UTF_8).size
         val base = counter.count + 30 + nameLength + extra.size
-        entry.extra = extra + alignmentField(paddingFor(base, alignment))
+        entry.extra = if (required > 0) {
+            extra + alignmentField(paddingFor(base, required))
+        } else {
+            extra
+        }
 
         zos.putNextEntry(entry)
         zos.write(data)

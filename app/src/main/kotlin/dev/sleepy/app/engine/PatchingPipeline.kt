@@ -395,7 +395,6 @@ class PatchingPipeline(private val context: Context) {
             inputApkBytes = apkBytes,
             replacements = replacements,
             additionalEntries = nativeLibraryEntries,
-            alignment = 4
         )
         log(
             StepResult(
@@ -437,7 +436,9 @@ class PatchingPipeline(private val context: Context) {
         log(
             StepResult(
                 title = "Checked ZIP alignment on the finished APK",
-                explanation = "Confirmed every entry starts on a 4-byte boundary, which is what stops the resource table from failing to load.",
+                explanation = "Confirmed every uncompressed entry starts where the platform needs it to — 4-byte alignment for the " +
+                    "resource table, page alignment for any library stored uncompressed. Compressed entries have no alignment " +
+                    "requirement, so they are not counted.",
                 technicalTarget = if (verification.zipalignPassed) "all entries 4-byte aligned" else "${verification.misalignedEntries.size} misaligned",
                 status = if (verification.zipalignPassed) StepStatus.OK else StepStatus.FAIL,
                 detail = verification.misalignedEntries.take(5).takeIf { it.isNotEmpty() }?.joinToString(", ")

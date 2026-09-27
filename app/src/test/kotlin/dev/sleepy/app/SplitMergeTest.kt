@@ -116,6 +116,66 @@ class SplitMergeTest {
         assertTrue(result.addedEntries.contains("lib/arm64-v8a/libfoo.so"))
     }
 
+    /**
+     * Compressed entries carry no alignment requirement, and treating them as if they did
+     * is what made the patcher report "zipalign failed" on a perfectly valid APK. The real
+     * `zipalign -c -v 4` labels them "(OK - compressed)"; this asserts the verifier agrees.
+     */
+    @Test
+    fun compressedEntriesAreExemptFromAlignment() {
+        // Data lengths chosen so the deflated payloads land off any 4-byte boundary.
+        val original = zipOf(
+            "assets/one.bin" to ByteArray(1001) { 1 },
+            "assets/two.bin" to ByteArray(5003) { 2 },
+            "assets/three.bin" to ByteArray(7001) { 3 }
+        )
+
+        val repacked = ZipRepacker.repack(original, replacements = emptyMap())
+        val result = ApkVerifier.verify(repacked.bytes)
+        assertTrue(
+            "compressed entries must not be treated as misaligned: ${result.misalignedEntries}",
+            result.zipalignPassed
+        )
+
+        // And the raw offsets really are unaligned, so the check above is not vacuous.
+        val offsets = mutableListOf<Long>()
+        ApkVerifier.readCentralDirectory(repacked.bytes) { _, dataOffset, _ -> offsets.add(dataOffset) }
+        assertTrue("expected at least one unaligned compressed entry, got $offsets", offsets.any { it % 4 != 0L })
+    }
+
+    /**
+     * The full path that produced the alignment report: merge the real Discord ABI split
+     * into the real base split and repack. The output is written to a temporary file so it
+     * can be handed to the actual `zipalign` binary, which is the authority on this.
+     */
+    @Test
+    fun mergedDiscordApkPassesAlignment() {
+        val extracted = File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted")
+        val base = File(extracted, "base.apk")
+        val split = File(extracted, "config.arm64_v8a.apk")
+        if (!base.exists() || !split.exists()) {
+            println("Discord splits not found, skipping merged-alignment test")
+            return
+        }
+
+        val merge = SplitMerger.mergeNativeLibraries(split.readBytes())
+        assertTrue("the ABI split must carry libraries", merge.libraryCount > 0)
+
+        val additional = merge.entries.associate { entry ->
+            entry.name to ZipRepacker.AdditionalEntry(entry.data, ZipEntry.DEFLATED)
+        }
+        val repacked = ZipRepacker.repack(base.readBytes(), emptyMap(), additional)
+
+        val result = ApkVerifier.verify(repacked.bytes)
+        assertTrue(
+            "merged APK must pass the alignment check, misaligned: ${result.misalignedEntries}",
+            result.zipalignPassed
+        )
+        val out = File("/tmp/sleepy-merged-test.apk")
+        out.writeBytes(repacked.bytes)
+        println("Merged ${merge.libraryCount} libraries -> ${repacked.bytes.size} bytes, alignment OK, wrote $out")
+    }
+
     @Test
     fun repackDropsSignatureFiles() {
         val original = zipOfStored(

@@ -57,15 +57,17 @@ object ApkVerifier {
     }
 
     /**
-     * Returns the names of entries whose data does not start on a 4-byte boundary.
+     * Names of entries whose data does not start where [ZipAlignment] requires.
      *
-     * Android requires uncompressed entries to be aligned; an unaligned `resources.arsc`
-     * is the classic repack failure, so this is checked on every entry rather than assumed.
+     * Only uncompressed entries are checked. Compressed entries have no alignment
+     * requirement — `zipalign -c` marks them "OK - compressed" — so testing `offset % 4`
+     * across every entry reports thousands of failures on a stock, perfectly valid APK.
      */
     private fun findMisalignedEntries(apkBytes: ByteArray): List<String> {
         val misaligned = mutableListOf<String>()
-        readCentralDirectory(apkBytes) { name, dataOffset, _ ->
-            if (dataOffset % 4 != 0L) misaligned.add(name)
+        readCentralDirectory(apkBytes) { name, dataOffset, method ->
+            val required = ZipAlignment.requiredFor(name, method)
+            if (required > 0 && dataOffset % required != 0L) misaligned.add(name)
         }
         return misaligned
     }

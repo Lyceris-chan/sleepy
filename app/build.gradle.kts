@@ -58,6 +58,13 @@ android {
         compose = true
         buildConfig = true
     }
+
+}
+
+// The merge tests hold a ~96 MB base split, ~74 MB of native libraries and the ~131 MB
+// repacked archive at once, which is the point: it exercises the same peak the device hits.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    maxHeapSize = "3g"
 }
 
 kotlin {
