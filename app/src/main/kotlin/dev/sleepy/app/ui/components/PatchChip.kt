@@ -55,6 +55,7 @@ fun PatchCard(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val hookCount = patch.smaliPatches.size + patch.hermesPatches.size
 
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
@@ -155,7 +156,14 @@ fun PatchCard(
                         text = if (expanded) {
                             "Hide technical targets"
                         } else {
-                            "View technical details (${patch.smaliPatches.size + patch.hermesPatches.size} hooks)"
+                            // A set whose patch is generated from the target APK has no hooks to
+                            // count, and "0 hooks" would read as "changes nothing" when it is the
+                            // largest edit in the set.
+                            when {
+                                hookCount > 0 -> "View technical details ($hookCount hooks)"
+                                patch.generator != null -> "View technical details (generated for this build)"
+                                else -> "View technical details (0 hooks)"
+                            }
                         },
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
@@ -235,6 +243,25 @@ fun PatchCard(
                                 )
                             }
                         }
+                    }
+
+                    if (patch.generator != null) {
+                        if (patch.smaliPatches.isNotEmpty() || patch.hermesPatches.isNotEmpty()) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        }
+                        Text(
+                            text = "GENERATED FROM THE TARGET APK",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "This method is written while the APK is patched rather than ahead of " +
+                                "time: the names it has to spell out are renamed on every build, so they " +
+                                "are read from the APK being patched.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

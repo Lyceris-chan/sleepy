@@ -4,7 +4,7 @@ import dev.sleepy.app.model.PatchSet
 
 object PatchRegistry {
     private val allPatches: Map<String, PatchSet> =
-        (OctoGramPatches.ALL + DiscordPatches.ALL + DiscordNativePatches.ALL)
+        (OctoGramPatches.ALL + DiscordPatches.ALL + DiscordNativePatches.ALL + DiscordBlocklistPatch.ALL)
             .associateBy { it.id }
 
     fun get(id: String): PatchSet? = allPatches[id]

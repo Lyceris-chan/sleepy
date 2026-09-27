@@ -65,12 +65,54 @@ data class HermesPatch(
 )
 
 /**
+ * The target APK as a [PatchGenerator] sees it.
+ *
+ * A generated patch cannot be a static string: R8 renames the internals it has to spell out —
+ * the OkHttp types behind the blocklist interceptor, for instance — so the names differ on
+ * every release. The generator therefore reads the build the user actually selected, and the
+ * patch is written against what is in it.
+ *
+ * @property classToDexIndex class descriptor (e.g. `Lokhttp3/Response;`) to the DEX entry name
+ *   holding that class.
+ * @property dexEntries DEX entry name (e.g. `classes3.dex`) to its bytes.
+ */
+class TargetApk(
+    val classToDexIndex: Map<String, String>,
+    val dexEntries: Map<String, ByteArray>
+)
+
+/**
+ * What a [PatchGenerator] made of a target APK.
+ *
+ * @property patches the patches to apply. Empty when the target build cannot support the set.
+ * @property skipReason why nothing could be generated. The pipeline reports it as the reason the
+ *   set was skipped, so a build whose obfuscated names moved is visibly not patched rather than
+ *   silently left alone — the failure mode this whole mechanism exists to prevent.
+ */
+data class GeneratedPatches(
+    val patches: List<SmaliPatch>,
+    val skipReason: String? = null
+)
+
+/**
+ * A patch that is written against the target APK rather than ahead of time.
+ */
+fun interface PatchGenerator {
+    /** Produces this set's patches for [target], or the reason it produced none. */
+    fun generate(target: TargetApk): GeneratedPatches
+}
+
+/**
  * PatchSet: User-toggleable group of related patches
+ *
+ * [generator] is for the patches that cannot be written down ahead of time; a set may have
+ * static patches, a generator, or both, and the pipeline applies the union.
  */
 data class PatchSet(
     val id: String,
     val label: String,
     val description: String,
     val smaliPatches: List<SmaliPatch> = emptyList(),
-    val hermesPatches: List<HermesPatch> = emptyList()
+    val hermesPatches: List<HermesPatch> = emptyList(),
+    val generator: PatchGenerator? = null
 )

@@ -215,8 +215,14 @@ class PatchingPipeline(private val context: Context) {
         }
 
         val smaliPatchesToApply = mutableListOf<SmaliPatch>()
+        val targetApk = TargetApk(classToDexIndex = classToDexIndex, dexEntries = dexEntries)
         for (patchSet in activePatchSets) {
-            val matchingPatches = patchSet.smaliPatches.filter { patch ->
+            // A generated set has nothing to filter until it has read the target APK, so it is
+            // asked first and its patches join the set's static ones.
+            val generated = patchSet.generator?.generate(targetApk)
+            val candidates = patchSet.smaliPatches + (generated?.patches ?: emptyList())
+
+            val matchingPatches = candidates.filter { patch ->
                 if (patch.versionTag != null && detectedOctoGramVersion != null && patch.versionTag != detectedOctoGramVersion) {
                     return@filter false
                 }
@@ -231,8 +237,18 @@ class PatchingPipeline(private val context: Context) {
                     val actualDex = patch.dexName ?: classToDexIndex[descriptor]!!
                     smaliPatchesToApply.add(patch.copy(dexName = actualDex))
                 }
-            } else if (patchSet.smaliPatches.isNotEmpty()) {
-                val reason = if (detectedOctoGramVersion != null && patchSet.smaliPatches.any { it.versionTag != null && it.versionTag != detectedOctoGramVersion }) {
+            } else if (generated?.skipReason != null) {
+                log(
+                    StepResult(
+                        title = patchSet.label,
+                        explanation = patchSet.description,
+                        technicalTarget = "not applicable to this build",
+                        status = StepStatus.SKIP,
+                        detail = generated.skipReason
+                    )
+                )
+            } else if (candidates.isNotEmpty()) {
+                val reason = if (detectedOctoGramVersion != null && candidates.any { it.versionTag != null && it.versionTag != detectedOctoGramVersion }) {
                     "Written for a different app version, so it was not attempted on this build."
                 } else {
                     "The classes this patch edits are not present in this APK, so it was not attempted."
