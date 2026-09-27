@@ -35,6 +35,13 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # compileSdk 37 resolves to the minor-versioned package platforms;android-37.0,
+      # which a default runner image does not carry. Install it rather than assume.
+      - name: Install required SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
+
       # The patcher engine tests self-check the ZIP alignment maths and the binary-XML
       # attribute editor. Tests that need a local reference APK skip themselves when the
       # file is absent, so this is safe on a clean runner.
@@ -69,6 +76,11 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      - name: Install required SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
 
       - name: Resolve tag name
         id: vars

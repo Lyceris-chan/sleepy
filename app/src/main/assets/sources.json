@@ -3,6 +3,22 @@
   "app_name": "sleepy",
   "manifest_url": "https://raw.githubusercontent.com/Lyceris-chan/sleepy/main/sources.json",
   "project_url": "https://github.com/Lyceris-chan/sleepy",
+  "known_limitations": {
+    "discord_348205": [
+      "JavaScript (Hermes) patching covers 14 of the 133 targets in the reference suite. The remaining 119 are not ported yet, so patches you would expect from the reference build may be absent.",
+      "One of those 14 is refused rather than applied: the central analytics event emitter has to return a resolved promise, which needs string identifiers read out of the bundle itself. Returning undefined would break every caller that awaits it, so nothing is written and the step reports FAIL.",
+      "The 81-entry network blocklist is not ported at all.",
+      "The reference's manifest and resource edits cannot be made by an on-device DEX patcher: 18 AndroidManifest edits, the ExoPlayer drawable aliases and the intl cache strip are all absent. This is separate from the split declarations the pipeline removes to make a merged APK installable.",
+      "The reference's four media edits stay disabled for the reasons it documents: they crash the camera on open, shrink capture below the encoder's expectation, strip a live string, or pass an undocumented value to the native media engine.",
+      "Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates."
+    ],
+    "octogram_361": [
+      "Two patch entries target OctoGram 3.6.0, for which no source is registered, so they never run on this build.",
+      "The OTA update check is disabled and the logger is silenced, but stub bodies here use .locals 0 where the reference reuses each method's original register count. The assembled code is equivalent; the text differs.",
+      "Premium paywall removal is partial. The reference documents 53 of 61 presentation paths blocked, with profile premium rows, PremiumFeatureCell and LimitPreviewView still rendering.",
+      "Signed with sleepy's own key, so it installs as a different app identity and will not receive official updates."
+    ]
+  },
   "sources": [
     {
       "id": "discord_348205",
