@@ -5,10 +5,10 @@
   "project_url": "https://github.com/Lyceris-chan/sleepy",
   "known_limitations": {
     "discord_348205": [
-      "JavaScript (Hermes) patching covers 14 of the 133 targets in the reference suite. The remaining 119 are not ported yet, so patches you would expect from the reference build may be absent.",
-      "One of those 14 is refused rather than applied: the central analytics event emitter has to return a resolved promise, which needs string identifiers read out of the bundle itself. Returning undefined would break every caller that awaits it, so nothing is written and the step reports FAIL.",
-      "The 81-entry network blocklist is not ported at all.",
-      "The reference's manifest and resource edits cannot be made by an on-device DEX patcher: 18 AndroidManifest edits, the ExoPlayer drawable aliases and the intl cache strip are all absent. This is separate from the split declarations the pipeline removes to make a merged APK installable.",
+      "JavaScript patches match the desktop reference build exactly: all 142 functions it changes are changed identically, verified byte for byte against that build's shipped bundle. Those patches are pinned to Discord 348.5's bundle; a different release's bundle is refused rather than patched with stale function ids, because Hermes numbers functions per bundle and an id from one release names an unrelated function in another.",
+      "The 81-entry network blocklist is not ported. It is a generated interceptor method rather than a set of edits, and its absence is the main remaining gap against the desktop build.",
+      "Most AndroidManifest edits are not ported. The split declarations and extractNativeLibs are handled, but removing whole elements (five dead permissions, the Sentry providers, Play split metadata, the AppsFlyer intent query) and rewriting the RPC service's exported flag are not implemented yet.",
+      "Adding or rebuilding resource-table entries is not possible in a surgical repack, so the ExoPlayer drawable aliases the desktop build creates are absent. The upstream APK ships without them and runs, so this matches Discord's own behaviour rather than introducing a gap.",
       "The reference's four media edits stay disabled for the reasons it documents: they crash the camera on open, shrink capture below the encoder's expectation, strip a live string, or pass an undocumented value to the native media engine.",
       "Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates."
     ],

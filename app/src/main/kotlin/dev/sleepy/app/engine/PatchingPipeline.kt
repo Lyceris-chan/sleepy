@@ -3,6 +3,7 @@ package dev.sleepy.app.engine
 import android.content.Context
 import android.net.Uri
 import dev.sleepy.app.model.*
+import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchRegistry
 import dev.sleepy.app.util.Downloader
@@ -204,7 +205,14 @@ class PatchingPipeline(private val context: Context) {
         }
 
         val activePatchSets = selectedPatchIds.mapNotNull { PatchRegistry.get(it) }
+        // [DiscordPatches.HERMES] catalogues the stub shapes for audit; the bundle itself is
+        // patched from the pinned table, so the progress total follows whichever will run.
         val hermesPatches = activePatchSets.flatMap { it.hermesPatches }
+        val hermesWorkCount = if (bundleBytes != null && bundleBytes.size == DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE) {
+            DiscordHermesBundlePatch.PATCHES.size
+        } else {
+            hermesPatches.size
+        }
 
         val smaliPatchesToApply = mutableListOf<SmaliPatch>()
         for (patchSet in activePatchSets) {
@@ -244,7 +252,7 @@ class PatchingPipeline(private val context: Context) {
         currentCoroutineContext().ensureActive()
 
         // 5. Apply the bytecode patches.
-        val totalPatchCount = smaliPatchesToApply.size + hermesPatches.size
+        val totalPatchCount = smaliPatchesToApply.size + hermesWorkCount
         var completedPatchCount = 0
         val repackedDexMap = mutableMapOf<String, ByteArray>()
         val groupedPatches = smaliPatchesToApply.groupBy { it.dexName!! }
@@ -284,30 +292,58 @@ class PatchingPipeline(private val context: Context) {
 
         currentCoroutineContext().ensureActive()
 
-        // 6. Apply Hermes JS bytecode patches.
+        // 6. Apply the Hermes JS bytecode patches.
         var finalBundle = bundleBytes
-        if (hermesPatches.isNotEmpty() && bundleBytes != null) {
+        val hermesSelected = activePatchSets.any { it.id == DiscordPatches.HERMES.id }
+        if (hermesSelected && bundleBytes != null) {
             _progress.value = PatchProgress.Patching(
-                step = "Preparing JavaScript bytecode patches",
+                step = "Neutralizing the JavaScript Sentry endpoint",
                 current = completedPatchCount,
                 total = totalPatchCount
             )
-            val (patchedBundle, hermesResults) = HermesPatcher.applyPatches(
-                bundleBytes = bundleBytes,
-                patches = hermesPatches,
-                onPatchStart = { patch ->
-                    _progress.value = PatchProgress.Patching(
-                        step = patch.title ?: patch.functionName,
-                        current = completedPatchCount,
-                        total = totalPatchCount,
-                        explanation = patch.explanation
+            val (afterDsn, dsnResult) = HermesPatcher.nullifySentryDsn(bundleBytes)
+            if (dsnResult != null) log(dsnResult)
+            finalBundle = afterDsn
+
+            if (bundleBytes.size == DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE) {
+                _progress.value = PatchProgress.Patching(
+                    step = "Patching JavaScript functions",
+                    current = completedPatchCount,
+                    total = totalPatchCount
+                )
+                val outcome = HermesBundlePatcher.apply(afterDsn, DiscordHermesBundlePatch.PATCHES)
+                finalBundle = outcome.bundleBytes
+                completedPatchCount += outcome.appliedCount
+
+                log(
+                    StepResult(
+                        title = "Neutralized ${outcome.appliedCount} JavaScript functions",
+                        explanation = "Discord's JavaScript drives its analytics, its crash reporting and the promotional screens " +
+                            "that keep appearing. Each function below was replaced with one that returns a neutral value, using the " +
+                            "same bytes the desktop reference build produces for this release.",
+                        technicalTarget = buildString {
+                            append("${outcome.writtenInPlace.size} rewritten in place")
+                            if (outcome.relocated.isNotEmpty()) append(", ${outcome.relocated.size} moved to make room")
+                        },
+                        status = if (outcome.skipped.isEmpty()) StepStatus.OK else StepStatus.FAIL,
+                        detail = outcome.skipped.take(5)
+                            .joinToString("; ") { "${it.name.ifBlank { "fn ${it.functionId}" }}: ${it.detail}" }
+                            .takeIf { it.isNotEmpty() }
                     )
-                }
-            )
-            finalBundle = patchedBundle
-            hermesResults.forEach { log(it) }
-            completedPatchCount += hermesPatches.size
-        } else if (hermesPatches.isNotEmpty()) {
+                )
+            } else {
+                log(
+                    StepResult(
+                        title = "JavaScript patches skipped",
+                        explanation = "This build's JavaScript bundle is not the one these patches were derived from. Hermes numbers " +
+                            "its functions per bundle, so an id from one release points at an unrelated function in another, and " +
+                            "patching it would break the app rather than fix it. Nothing was written to the bundle.",
+                        technicalTarget = "bundle is ${bundleBytes.size} bytes, patches target ${DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE}",
+                        status = StepStatus.SKIP
+                    )
+                )
+            }
+        } else if (hermesSelected) {
             log(
                 StepResult(
                     title = "JavaScript patches skipped",

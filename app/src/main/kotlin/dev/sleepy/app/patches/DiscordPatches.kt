@@ -173,6 +173,20 @@ object DiscordPatches {
         )
     )
 
+    /**
+     * The JavaScript stub catalogue.
+     *
+     * These are the auditable shapes — one entry per reference table membership, naming the
+     * function and the value its stub must return. The pipeline does **not** apply them
+     * directly: a Hermes function id is only meaningful for the bundle it was taken from, and
+     * these ids are pinned to Discord 348.5. What actually runs is
+     * [DiscordHermesBundlePatch], whose 142 entries were extracted from a paired
+     * base/patched bundle of that exact release and are applied only when the bundle matches
+     * it byte-length for byte-length.
+     *
+     * This object is kept because it is what makes the 142 auditable against the reference
+     * tables: it records *why* each function is stubbed, which the extracted bodies cannot.
+     */
     val HERMES = PatchSet(
         id = "discord_hermes",
         label = "Hermes JS Bytecode Telemetry Stubs",
