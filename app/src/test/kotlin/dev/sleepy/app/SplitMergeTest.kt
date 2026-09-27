@@ -195,6 +195,28 @@ class SplitMergeTest {
         assertTrue("non-signature META-INF entries must survive", names.contains("META-INF/services/keep.me"))
     }
 
+    @Test
+    fun repackDropsCallerSuppliedArtefacts() {
+        val original = zipOfStored(
+            "classes.dex" to byteArrayOf(1),
+            "lib/arm64-v8a/libsentry.so" to byteArrayOf(2),
+            "lib/arm64-v8a/libkeep.so" to byteArrayOf(3),
+            "META-INF/sentry-android-replay_release.kotlin_module" to byteArrayOf(4)
+        )
+
+        val result = ZipRepacker.repack(
+            inputApkBytes = original,
+            replacements = emptyMap(),
+            droppedEntries = dev.sleepy.app.patches.DiscordPatches.SENTRY_ARTEFACTS
+        )
+        val names = entryMethods(result.bytes).keys
+
+        assertFalse("the Sentry shared object must go", names.contains("lib/arm64-v8a/libsentry.so"))
+        assertFalse("the Sentry metadata must go", names.contains("META-INF/sentry-android-replay_release.kotlin_module"))
+        assertTrue("unrelated libraries must survive", names.contains("lib/arm64-v8a/libkeep.so"))
+        assertTrue("unrelated classes must survive", names.contains("classes.dex"))
+    }
+
     // ---- BinaryXmlEditor ---------------------------------------------------------------
 
     @Test

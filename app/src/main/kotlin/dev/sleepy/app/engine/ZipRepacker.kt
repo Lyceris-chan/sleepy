@@ -61,11 +61,15 @@ object ZipRepacker {
      * @param replacements entry name -> new contents, written with the source entry's own
      *   storage method (DEFLATE for entries the source APK lacks).
      * @param additionalEntries entry name -> contents to append, for entries the source APK lacks.
+     * @param droppedEntries extra names to leave out, on top of the built-in set. The calling
+     *   pipeline supplies these from whichever patch set is active, so dropping a crash
+     *   reporter's own artefacts happens only when that reporter is being disabled.
      */
     fun repack(
         inputApkBytes: ByteArray,
         replacements: Map<String, ByteArray>,
-        additionalEntries: Map<String, AdditionalEntry> = emptyMap()
+        additionalEntries: Map<String, AdditionalEntry> = emptyMap(),
+        droppedEntries: Set<String> = emptySet()
     ): RepackResult {
         val addedSize = additionalEntries.values.sumOf { it.data.size.toLong() }
         val initialCapacity = (inputApkBytes.size.toLong() + addedSize + 8L * 1024 * 1024)
@@ -81,7 +85,7 @@ object ZipRepacker {
                 var entry = zis.nextEntry
                 while (entry != null) {
                     val name = entry.name
-                    if (shouldDrop(name, replacements, additionalEntries)) {
+                    if (shouldDrop(name, replacements, additionalEntries, droppedEntries)) {
                         dropped.add(name)
                         zis.closeEntry()
                         entry = zis.nextEntry
@@ -139,9 +143,10 @@ object ZipRepacker {
     private fun shouldDrop(
         name: String,
         replacements: Map<String, ByteArray>,
-        additionalEntries: Map<String, AdditionalEntry>
+        additionalEntries: Map<String, AdditionalEntry>,
+        droppedEntries: Set<String>
     ): Boolean {
-        if (name in SIGNATURE_ENTRIES || name in DROPPED_ENTRIES) return true
+        if (name in SIGNATURE_ENTRIES || name in DROPPED_ENTRIES || name in droppedEntries) return true
         if (name in replacements || name in additionalEntries) return true
         if (name.startsWith("META-INF/") && (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA"))) return true
         return false

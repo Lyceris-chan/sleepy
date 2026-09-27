@@ -339,6 +339,30 @@ object DiscordPatches {
         )
     )
 
+    /**
+     * Files that carry the crash reporter rather than call it, and so cannot be neutralised by
+     * editing code.
+     *
+     * The reference build deletes these alongside stubbing the Sentry SDK. The native shared
+     * objects install the signal handlers and the `unknown/` paths are what the SDK writes a
+     * tombstone through, so leaving them in place leaves the mechanism intact even with every
+     * Java entry point stubbed.
+     */
+    val SENTRY_ARTEFACTS = setOf(
+        "lib/arm64-v8a/libsentry.so",
+        "lib/arm64-v8a/libsentry-android.so",
+        "lib/armeabi-v7a/libsentry.so",
+        "lib/armeabi-v7a/libsentry-android.so",
+        "lib/x86/libsentry.so",
+        "lib/x86/libsentry-android.so",
+        "lib/x86_64/libsentry.so",
+        "lib/x86_64/libsentry-android.so",
+        "META-INF/io.sentry/sentry-android-replay/verification.properties",
+        "META-INF/native-image/io.sentry/sentry/native-image.properties",
+        "META-INF/sentry-android-replay_release.kotlin_module",
+        "io/sentry/android/core/internal/tombstone/tombstone.proto"
+    )
+
     val ALL = listOf(
         BUNDLE_LOCK,
         SENTRY,

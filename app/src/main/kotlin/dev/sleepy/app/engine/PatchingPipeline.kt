@@ -3,6 +3,7 @@ package dev.sleepy.app.engine
 import android.content.Context
 import android.net.Uri
 import dev.sleepy.app.model.*
+import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchRegistry
 import dev.sleepy.app.util.Downloader
 import dev.sleepy.app.util.HashUtils
@@ -391,10 +392,19 @@ class PatchingPipeline(private val context: Context) {
             replacements["AndroidManifest.xml"] = manifestBytes
         }
 
+        // Artefacts that carry a crash reporter rather than call it go only when that
+        // reporter is being disabled, so the drop is tied to the selected patch set.
+        val droppedArtefacts = if (activePatchSets.any { it.id == DiscordPatches.SENTRY.id }) {
+            DiscordPatches.SENTRY_ARTEFACTS
+        } else {
+            emptySet()
+        }
+
         val repack = ZipRepacker.repack(
             inputApkBytes = apkBytes,
             replacements = replacements,
             additionalEntries = nativeLibraryEntries,
+            droppedEntries = droppedArtefacts
         )
         log(
             StepResult(
