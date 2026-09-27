@@ -33,8 +33,8 @@ object ZipRepacker {
                 while (entry != null) {
                     val name = entry.name
 
-                    // Drop old signature files and replaced files
-                    if (name in SIGNATURE_ENTRIES || name in replacements || name.startsWith("META-INF/") && (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA"))) {
+                    // Drop old signature files, replaced files, and Discord bundle patch
+                    if (name in SIGNATURE_ENTRIES || name in replacements || name == "assets/index.android.bundle.patch" || (name.startsWith("META-INF/") && (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA")))) {
                         zis.closeEntry()
                         entry = zis.nextEntry
                         continue

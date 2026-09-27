@@ -107,4 +107,29 @@ class PatcherPipelineTest {
         outDex.delete()
         smaliDir.deleteRecursively()
     }
+
+    @Test
+    fun testBinaryXmlPackageRename() {
+        val apkFile = File("/home/sleepy/Documents/antigravity/telegram/OctoGram_arm64.apk")
+        if (!apkFile.exists()) return
+
+        val zip = ZipFile(apkFile)
+        val entry = zip.getEntry("AndroidManifest.xml")
+        assertNotNull(entry)
+        val origBytes = zip.getInputStream(entry).readBytes()
+        zip.close()
+
+        val modifiedBytes = dev.sleepy.app.engine.BinaryXmlModifier.modifyPackageName(
+            manifestBytes = origBytes,
+            oldPackageName = "it.octogram.android",
+            newPackageName = "it.octogram.android.sleepy"
+        )
+
+        val targetUtf16 = "it.octogram.android.sleepy".toByteArray(Charsets.UTF_16LE)
+        val found = (0 until modifiedBytes.size - targetUtf16.size).any { i ->
+            targetUtf16.indices.all { j -> modifiedBytes[i + j] == targetUtf16[j] }
+        }
+        assertTrue("Modified manifest must contain new package name in UTF-16", found)
+        println("Binary XML Package renaming verified successfully! Modified size: ${modifiedBytes.size} bytes")
+    }
 }

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,9 @@ fun PatchSelectScreen(
     val availablePatches = remember(source) {
         source?.patchIds?.let { PatchRegistry.getAllForSource(it) } ?: emptyList()
     }
+
+    val isCloneMode by viewModel.isCloneMode.collectAsState()
+    val customPackageName by viewModel.customPackageName.collectAsState()
 
     Scaffold(
         topBar = {
@@ -105,6 +109,66 @@ fun PatchSelectScreen(
         ) {
             item {
                 Spacer(modifier = Modifier.height(4.dp))
+                // Package Name / Clone Configuration Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Clone App (Change Package Name)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Allows installing alongside the original app with no signature conflicts.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = isCloneMode,
+                                onCheckedChange = { viewModel.setCloneMode(it) }
+                            )
+                        }
+
+                        if (isCloneMode) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = customPackageName,
+                                onValueChange = { viewModel.setCustomPackageName(it) },
+                                label = { Text("Cloned Package Name") },
+                                placeholder = { Text("${source?.packageName}.sleepy") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.small,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                ),
+                                supportingText = {
+                                    Text("Original: ${source?.packageName ?: ""}")
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = "Configure Modding Pipeline",
                     style = MaterialTheme.typography.titleMedium,
@@ -113,11 +177,11 @@ fun PatchSelectScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Select modifications to apply in memory during the build step.",
+                    text = "Select modifications to apply surgically in memory during the build step.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
             items(availablePatches, key = { it.id }) { patch ->

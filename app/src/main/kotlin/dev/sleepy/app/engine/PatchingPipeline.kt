@@ -26,6 +26,8 @@ class PatchingPipeline(private val context: Context) {
 
     fun start(
         sourceUrl: String,
+        originalPackageName: String,
+        customPackageName: String? = null,
         selectedPatchIds: List<String>,
         scope: CoroutineScope
     ) {
@@ -34,7 +36,7 @@ class PatchingPipeline(private val context: Context) {
 
         currentJob = scope.launch(Dispatchers.IO) {
             try {
-                execute(sourceUrl, selectedPatchIds)
+                execute(sourceUrl, originalPackageName, customPackageName, selectedPatchIds)
             } catch (e: CancellationException) {
                 _progress.value = PatchProgress.Idle
             } catch (e: Exception) {
@@ -51,7 +53,12 @@ class PatchingPipeline(private val context: Context) {
         _progress.value = PatchProgress.Idle
     }
 
-    private suspend fun execute(sourceUrl: String, selectedPatchIds: List<String>) {
+    private suspend fun execute(
+        sourceUrl: String,
+        originalPackageName: String,
+        customPackageName: String?,
+        selectedPatchIds: List<String>
+    ) {
         // 1. Download
         _progress.value = PatchProgress.Downloading(0, 0, 0)
         log(StepResult("Download APK from verified source", StepStatus.OK))
@@ -121,6 +128,20 @@ class PatchingPipeline(private val context: Context) {
             replacements["assets/index.android.bundle"] = finalBundle
         }
 
+        // Apply package name clone rename if requested
+        if (!customPackageName.isNullOrBlank() && customPackageName != originalPackageName) {
+            val origManifest = extractManifest(apkBytes)
+            if (origManifest != null) {
+                val modifiedManifest = BinaryXmlModifier.modifyPackageName(
+                    manifestBytes = origManifest,
+                    oldPackageName = originalPackageName,
+                    newPackageName = customPackageName
+                )
+                replacements["AndroidManifest.xml"] = modifiedManifest
+                log(StepResult("Clone APK: Package renamed to $customPackageName", StepStatus.OK))
+            }
+        }
+
         val repackedApkBytes = ZipRepacker.repack(apkBytes, replacements)
         log(StepResult("Repacked APK preserving STORED tables", StepStatus.OK))
 
@@ -179,6 +200,20 @@ class PatchingPipeline(private val context: Context) {
             var entry = zis.nextEntry
             while (entry != null) {
                 if (entry.name == "assets/index.android.bundle") {
+                    return zis.readBytes()
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+        return null
+    }
+
+    private fun extractManifest(apkBytes: ByteArray): ByteArray? {
+        ZipInputStream(ByteArrayInputStream(apkBytes)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                if (entry.name == "AndroidManifest.xml") {
                     return zis.readBytes()
                 }
                 zis.closeEntry()
