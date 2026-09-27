@@ -51,7 +51,7 @@ object Downloader {
             throw IOException("Download failed with HTTP ${response.code}: ${response.message}")
         }
 
-        val body = response.body ?: throw IOException("Empty response body from $url")
+        val body = response.body
         val contentLength = body.contentLength()
 
         if (contentLength > MAX_SIZE_BYTES) {

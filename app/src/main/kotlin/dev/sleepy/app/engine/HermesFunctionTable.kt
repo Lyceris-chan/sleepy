@@ -5,29 +5,49 @@ package dev.sleepy.app.engine
  *
  * Patching a JavaScript function on-device means writing new bytecode over the old, which
  * requires knowing exactly where that function's bytecode starts and how long it is. Hermes
- * stores both in a function header table whose position and entry packing are **not**
- * documented and change between bytecode versions; there is no field in the header that
- * points at it directly.
+ * keeps both in a function header table that follows the file header directly.
  *
  * ## Why this refuses to guess
  *
- * An earlier implementation assumed the table began at byte 128 with a 12-byte stride and a
- * particular bit packing. Measured against the real Discord 348.5 bundle that assumption is
- * false: all fourteen target functions resolved to the table's *overflow* branch, which then
- * read a body offset and length out of unrelated bytes and used them to overwrite roughly
- * 3 KB of live JavaScript bytecode at effectively arbitrary positions — after recomputing
- * the SHA-1 footer, so Hermes happily loaded the corrupted bundle and the app died on
- * launch.
+ * An earlier implementation assumed the table began at byte 128 with a **12-byte** stride,
+ * read the flags byte at `slot + 11`, and reconstructed the overflow pointer from the
+ * `functionName` field. Measured against the real Discord 348.5 bundle, all fourteen target
+ * functions took the overflow branch, which then read a body offset and length out of
+ * unrelated bytes and used them to overwrite roughly 3 KB of live JavaScript bytecode at
+ * effectively arbitrary positions — after recomputing the SHA-1 footer, so Hermes happily
+ * loaded the corrupted bundle and the app died on launch.
  *
- * The failure was silent because nothing checked that the located bytes were really the
- * target function. [validateContiguity] exists so that a future layout cannot be trusted on
- * its shape alone: Hermes lays function bodies out back to back, so a correct table must
- * reproduce `offset[i] + size[i] == offset[i + 1]` across the whole bundle. A layout that
- * does not satisfy that is wrong, however plausible its arithmetic looks.
+ * ## What the format actually says
  *
- * Until a layout has been verified this way against a real bundle, [locate] returns `null`
- * and the patcher writes nothing. A skipped patch is visible and harmless; a misplaced write
- * corrupts the bundle.
+ * `facebook/hermes` `include/hermes/BCGen/HBC/BytecodeFileFormat.h` defines the layout. The
+ * non-obvious parts, all of which the old code got wrong:
+ *
+ * - `BytecodeFileHeader` ends with `BytecodeOptions options` plus `uint8_t padding[19]`, and
+ *   is `static_assert`ed to be a multiple of 32. Function headers follow it **immediately**,
+ *   which puts the table at byte 128 — the one part of the old assumption that was right.
+ * - `SmallFuncHeader` is `offset:25 | paramCount:7`, `bytecodeSizeInBytes:15 |
+ *   functionName:17`, `infoOffset:25 | frameSize:7`, then `environmentSize`,
+ *   `highestReadCacheIndex`, `highestWriteCacheIndex`, and a one-byte `FunctionHeaderFlag`.
+ *   That is **16 bytes**, not 12; the format `static_assert`s the size divides 32.
+ * - `FunctionHeaderFlag` is `prohibitInvoke:2, strictMode:1, hasExceptionHandler:1,
+ *   hasDebugInfo:1, overflowed:1`, so the overflow bit is `0x20` at byte `slot + 15`.
+ * - An overflowed entry stores its `FunctionHeader` offset as
+ *   `(infoOffset << 16) | offset` — built from `infoOffset`, not `functionName` — and that
+ *   `FunctionHeader` is a run of full `uint32_t` fields followed by the same flags byte.
+ *
+ * ## Status
+ *
+ * The field layout above is taken from the Hermes source and is authoritative, but the byte
+ * position of the table has **not** yet been confirmed against a v98 bundle: reading it at
+ * byte 128 with a 16-byte stride does not reproduce the function offsets `hermes-decomp`
+ * reports for Discord 348.5. Until that is resolved — and checked with [validateContiguity],
+ * which uses the invariant that Hermes lays bodies out back to back, so a correct table must
+ * satisfy `offset[i] + size[i] == offset[i + 1]` — [locate] returns `null` and the patcher
+ * writes nothing.
+ *
+ * A skipped patch is visible and harmless; a misplaced write corrupts the bundle. Do not
+ * reinstate a guessed layout: the previous guess produced a build that installed, launched
+ * and crashed.
  */
 object HermesFunctionTable {
 

@@ -1,16 +1,16 @@
 [versions]
-agp             = "8.7.3"
-kotlin          = "2.1.0"
-compose-bom     = "2024.12.01"
-activity-compose = "1.10.0"
-navigation      = "2.8.5"
-lifecycle       = "2.8.7"
-coroutines      = "1.9.0"
-adaptive        = "1.0.0"
-smali           = "3.0.9"
-apksig          = "8.7.3"
-okhttp          = "4.12.0"
-datastore       = "1.1.1"
+agp             = "9.4.1"
+kotlin          = "2.4.20"
+compose-bom     = "2026.09.00"
+activity-compose = "1.13.0"
+navigation      = "2.10.2"
+lifecycle       = "2.11.0"
+coroutines      = "1.11.0"
+adaptive        = "1.3.0"
+smali           = "3.0.10"
+apksig          = "9.4.1"
+okhttp          = "5.5.0"
+datastore       = "1.2.1"
 
 [libraries]
 # Compose — managed by BOM
@@ -40,5 +40,5 @@ okhttp                  = { group = "com.squareup.okhttp3", name = "okhttp", ver
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android      = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+# AGP 9 provides Kotlin compilation itself; org.jetbrains.kotlin.android must not be applied.
 kotlin-compose      = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

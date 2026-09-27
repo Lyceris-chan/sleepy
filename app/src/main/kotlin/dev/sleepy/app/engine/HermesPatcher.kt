@@ -140,8 +140,8 @@ object HermesPatcher {
             )
         }
 
-        val start = bodyOffset.toInt()
-        val len = bcSize.toInt()
+        val start = bodyOffset
+        val len = bcSize
 
         if (start < 0 || start + len > bundleBytes.size) {
             return StepResult(

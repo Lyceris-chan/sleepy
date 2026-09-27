@@ -2,6 +2,7 @@ package dev.sleepy.app.engine
 
 import android.content.Context
 import com.android.apksig.ApkSigner
+import com.android.apksig.KeyConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -48,7 +49,7 @@ object ApkSignerHelper {
             try {
                 val signerConfig = ApkSigner.SignerConfig.Builder(
                     "sleepy",
-                    privateKey,
+                    KeyConfig.Jca(privateKey),
                     listOf(certificate)
                 ).build()
 

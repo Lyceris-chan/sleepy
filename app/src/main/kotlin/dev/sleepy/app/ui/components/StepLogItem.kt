@@ -126,9 +126,10 @@ fun StepLogItem(
 
             AnimatedVisibility(visible = expanded && hasDetail) {
                 Column(modifier = Modifier.padding(top = 10.dp, start = 40.dp)) {
-                    if (!result.detail.isNullOrBlank()) {
+                    val detailText = result.detail
+                    if (!detailText.isNullOrBlank()) {
                         Text(
-                            text = result.detail!!,
+                            text = detailText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
