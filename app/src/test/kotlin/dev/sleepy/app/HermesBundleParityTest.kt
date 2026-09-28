@@ -10,6 +10,7 @@ import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import java.util.zip.ZipFile
 
 /**
  * Proves that patching the Discord 348.5 bundle with [DiscordHermesBundlePatch.PATCHES] lands on
@@ -20,14 +21,39 @@ import java.util.concurrent.TimeUnit
  * one byte at a time. Nothing is sampled and nothing is compared through a disassembler, so a
  * function that was patched into something that merely decompiles alike still fails here.
  *
- * The bundles live outside the repository (55 MB each), so a machine without them reports these
- * tests as skipped rather than failing on something it never had — and skipped is a visible
- * outcome, unlike the early `return` that used to make an absent bundle look like a pass.
+ * The bundles are not in the repository (55 MB each), so they are read out of the two Discord
+ * 348.5 APKs at test time: the base split the patch table was extracted from, and the desktop
+ * build's patched reference. Deriving them from those APKs is what makes them durable — the
+ * earlier arrangement read a hand-extracted copy under `/tmp`, which no reboot survives, and a
+ * fixture that is gone for good turns this comparison into a permanent skip, the same coverage
+ * loss as the early `return` that used to make an absent bundle look like a pass. The reference
+ * comes from the patched APK the desktop build produced rather than from the loose
+ * `decompiled/` copy beside it, because the APK is the artefact that was built; a hand-placed
+ * copy can drift from it without anything noticing.
+ *
+ * A machine that has neither APK — CI on a clean runner — reports these tests as skipped rather
+ * than failing on something it never had. Skipped is a visible outcome.
  */
 class HermesBundleParityTest {
 
-    private val baseBundle = File("/tmp/dgt/x/assets/index.android.bundle")
-    private val referenceBundle = File("/tmp/ref/x/assets/index.android.bundle")
+    private companion object {
+        /**
+         * The two Discord 348.5 APKs, both outside the repository. The first is the shipped
+         * build the patch table was extracted from and whose bundle size the patch set pins;
+         * the second is the desktop build's patched output, the bundle this test compares
+         * against function for function.
+         */
+        const val BASE_APK =
+            "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk"
+        const val REFERENCE_APK =
+            "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/out/discord-alpha-348.5-patched-unsigned.apk"
+
+        /** The entry both APKs carry the bundle in. */
+        const val BUNDLE_ENTRY = "assets/index.android.bundle"
+    }
+
+    private val baseApk = File(BASE_APK)
+    private val referenceApk = File(REFERENCE_APK)
     private val hermesDecomp = File(
         "/home/sleepy/Documents/antigravity/quirky-noether/discord/tools/hermes-decomp"
     )
@@ -38,20 +64,20 @@ class HermesBundleParityTest {
     @Test
     fun testPatchedBundleMatchesReferenceFunctionForFunction() {
         assumeTrue(
-            "the Discord 348.5 bundles are not on this machine (${baseBundle.path}, ${referenceBundle.path})",
-            baseBundle.isFile && referenceBundle.isFile
+            "the Discord 348.5 APKs are not on this machine (${baseApk.path}, ${referenceApk.path})",
+            baseApk.isFile && referenceApk.isFile
         )
 
-        val base = baseBundle.readBytes()
+        val base = bundleOf(baseApk)
         assertEquals(
             "the base bundle is not the build the patch set was extracted from",
             DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong(),
-            baseBundle.length()
+            base.size.toLong()
         )
 
         val result = HermesBundlePatcher.apply(base, DiscordHermesBundlePatch.PATCHES)
         val patched = result.bundleBytes
-        val reference = referenceBundle.readBytes()
+        val reference = bundleOf(referenceApk)
 
         // The bundle handed in must come back unmodified: callers keep using theirs.
         val baseDigest = MessageDigest.getInstance("SHA-1")
@@ -147,14 +173,14 @@ class HermesBundleParityTest {
      */
     @Test
     fun aRealDisassemblerAcceptsEveryRelocatedFunction() {
-        assumeTrue("the Discord base bundle is not on this machine (${baseBundle.path})", baseBundle.isFile)
+        assumeTrue("the Discord base APK is not on this machine (${baseApk.path})", baseApk.isFile)
         assumeTrue("${hermesDecomp.path} is not executable", hermesDecomp.canExecute())
 
-        val base = baseBundle.readBytes()
+        val base = bundleOf(baseApk)
         assertEquals(
             "the base bundle is not the build the patch set was extracted from",
             DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong(),
-            baseBundle.length()
+            base.size.toLong()
         )
         val result = HermesBundlePatcher.apply(base, DiscordHermesBundlePatch.PATCHES)
         val patched = result.bundleBytes
@@ -179,6 +205,21 @@ class HermesBundleParityTest {
         } finally {
             temp.delete()
         }
+    }
+
+    /**
+     * [apk]'s `assets/index.android.bundle` entry, read out of the archive rather than from a
+     * copy of it placed beside the APK. The archive is opened as a `ZipFile` and only the one
+     * entry is read, so the 96 MB the APK weighs is never held in memory.
+     *
+     * A missing entry throws rather than skips: the APK being absent is the machine saying it
+     * never had the fixture, but an APK that is here and holds no bundle is one that is not the
+     * build this test is about, and that has to fail loudly.
+     */
+    private fun bundleOf(apk: File): ByteArray = ZipFile(apk).use { zip ->
+        val entry = zip.getEntry(BUNDLE_ENTRY)
+            ?: throw AssertionError("${apk.path} carries no $BUNDLE_ENTRY entry")
+        zip.getInputStream(entry).use { it.readBytes() }
     }
 
     private fun decompile(bundle: File, functionId: Int): Pair<Int, String> {

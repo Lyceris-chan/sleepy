@@ -4,6 +4,7 @@ import dev.sleepy.app.engine.ApkVerifier
 import dev.sleepy.app.engine.BinaryXmlEditor
 import dev.sleepy.app.engine.SplitMerger
 import dev.sleepy.app.engine.ZipRepacker
+import dev.sleepy.app.patches.DiscordPatches
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -333,12 +334,15 @@ class SplitMergeTest {
                 merged.libraries + merged.resources,
                 gained.size
             )
-            // The repack always leaves out artefacts a later build supersedes, and the base
-            // carries one of them: Discord's own JS patch file, dropped by the "locked bundle"
-            // patch. Nothing else may go missing.
+            // The repack always leaves out two things the base carries, and both are entries no
+            // rebuilt archive may hold rather than files this merge lost: Discord's own JS patch
+            // file, superseded by the "locked bundle" patch, and `stamp-cert-sha256`, the Play
+            // source stamp, which describes the signed build this one was derived from — a
+            // provenance an APK signed with a key of our own does not have, and one the desktop
+            // reference build does not carry either. Nothing else may go missing.
             assertEquals(
-                "only the superseded artefact the repack drops may leave the archive",
-                setOf("assets/index.android.bundle.patch"),
+                "only the artefacts the repack drops may leave the archive",
+                setOf("assets/index.android.bundle.patch", "stamp-cert-sha256"),
                 lost
             )
             assertEquals(
@@ -478,7 +482,7 @@ class SplitMergeTest {
         val result = ZipRepacker.repack(
             inputApkBytes = original,
             replacements = emptyMap(),
-            droppedEntries = dev.sleepy.app.patches.DiscordPatches.SENTRY_ARTEFACTS
+            droppedEntries = DiscordPatches.SENTRY_ARTEFACTS
         )
         val names = entryMethods(result.bytes).keys
 
@@ -486,6 +490,93 @@ class SplitMergeTest {
         assertFalse("the Sentry metadata must go", names.contains("META-INF/sentry-android-replay_release.kotlin_module"))
         assertTrue("unrelated libraries must survive", names.contains("lib/arm64-v8a/libkeep.so"))
         assertTrue("unrelated classes must survive", names.contains("classes.dex"))
+    }
+
+    /**
+     * The drop reaches the entries the **split merge** contributes, which are the ones the source
+     * archive cannot answer for.
+     *
+     * A configuration split's libraries are entries the base APK never held: they arrive at the
+     * repack as [ZipRepacker.AdditionalEntry]s, after the source archive has been walked and left
+     * behind. A drop list matched against that walk's entries alone therefore says nothing about
+     * them, and a build that reports the crash reporter's artefacts as removed keeps carrying them
+     * — 724 KB of `libsentry.so` and its 16 KB Android shim, loaded from the APK the moment any
+     * code path that survived the stubbing touches the SDK.
+     *
+     * The ABI split is the real one, because that is where the names came from, and the fixture
+     * asserts it carries them before the drop is tested: a rename upstream would otherwise turn
+     * this into a test that passes by having nothing to check. The base archive is synthetic and
+     * holds none of the dropped names, so the only way one of them reaches the output is through
+     * the merge — which is exactly the path under test.
+     */
+    @Test
+    fun repackDropsTheMergedSplitsSentryLibraries() {
+        val split = File(DISCORD_EXTRACTED, "config.arm64_v8a.apk")
+        assumeTrue("the Discord ABI split is not on this machine (${split.path})", split.exists())
+
+        val workDir = Files.createTempDirectory("sleepy-merged-drop-test").toFile()
+        try {
+            val merged = SplitMerger.mergeSplitToDir(split, workDir)
+            val arriving = merged.entries.filter { it.name in DiscordPatches.SENTRY_ARTEFACTS }
+            assertTrue(
+                "the ABI split must carry the artefacts this test is about, it carries " +
+                    "${merged.entries.map { it.name }.take(8)}",
+                arriving.isNotEmpty()
+            )
+            val surviving = merged.entries.filter { it.name !in DiscordPatches.SENTRY_ARTEFACTS }
+            assertTrue("the split must contribute more than the dropped artefacts", surviving.isNotEmpty())
+
+            val result = ZipRepacker.repack(
+                inputApkBytes = zipOfStored(
+                    "classes.dex" to byteArrayOf(1),
+                    "lib/arm64-v8a/libkeep.so" to byteArrayOf(2)
+                ),
+                replacements = emptyMap(),
+                additionalEntries = merged.entries.associate {
+                    it.name to ZipRepacker.AdditionalEntry(it.file, ZipEntry.DEFLATED)
+                },
+                droppedEntries = DiscordPatches.SENTRY_ARTEFACTS
+            )
+            val names = entryMethods(result.bytes).keys
+
+            for (entry in arriving) {
+                assertFalse("${entry.name} came from the split and must not be written", names.contains(entry.name))
+            }
+            // The drop is a list of names, not "leave the split out": the other libraries the
+            // merge contributed are what the merged APK is for and all of them must arrive.
+            for (entry in surviving) {
+                assertTrue("${entry.name} was not dropped and must be written", names.contains(entry.name))
+            }
+            assertEquals(
+                "the report must name exactly the artefacts that arrived",
+                arriving.map { it.name }.toSet(),
+                result.droppedEntries.toSet()
+            )
+            assertTrue("the base's own entries must survive", names.contains("classes.dex"))
+        } finally {
+            workDir.deleteRecursively()
+        }
+    }
+
+    /**
+     * The same claim for the artefact that is dropped for every build rather than for a caller's
+     * reason: `stamp-cert-sha256`, the Play source stamp, records which signed build this APK was
+     * derived from and has no business in an archive signed with a key of our own.
+     */
+    @Test
+    fun repackDropsThePlaySourceStamp() {
+        val result = ZipRepacker.repack(
+            inputApkBytes = zipOfStored(
+                "classes.dex" to byteArrayOf(1),
+                "stamp-cert-sha256" to byteArrayOf(2)
+            ),
+            replacements = emptyMap()
+        )
+
+        val names = entryMethods(result.bytes).keys
+        assertFalse("the source stamp must go", names.contains("stamp-cert-sha256"))
+        assertTrue("nothing else may be affected", names.contains("classes.dex"))
+        assertEquals(listOf("stamp-cert-sha256"), result.droppedEntries)
     }
 
     // ---- BinaryXmlEditor ---------------------------------------------------------------

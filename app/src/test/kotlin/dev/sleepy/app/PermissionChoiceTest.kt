@@ -4,6 +4,8 @@ import dev.sleepy.app.engine.BinaryXmlEditor
 import dev.sleepy.app.model.BlocklistCoverage
 import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.PermissionCoverage
+import dev.sleepy.app.patches.DeclaredPermissions
+import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PermissionCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,6 +23,11 @@ import java.util.zip.ZipFile
  * permanent. A choice is a [PatchSelection] like every other choice in the app, so it is made and
  * unmade with the same calls the rows use. And two things can never be removed however the
  * selection is built: a permission the app cannot work without, and the last declaration standing.
+ *
+ * A fourth claim is about the runs that are not the user's to make at all: [DiscordPatches.
+ * DEAD_PERMISSIONS] are declarations the Discord pass deletes from every build it produces, so on
+ * a Discord build they are rows fixed on removed rather than switches, and they stay out of the
+ * list the manifest pass is handed even when a saved selection names them as switched off.
  */
 class PermissionChoiceTest {
 
@@ -28,6 +35,10 @@ class PermissionChoiceTest {
         File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
 
     private val octoGramApk = File("/home/sleepy/Documents/antigravity/telegram/OctoGram_361_arm64.apk")
+
+    /** The package names the two builds answer to, as the sources name them. */
+    private val DISCORD = "com.discord"
+    private val OCTOGRAM = "it.octogram.android"
 
     /**
      * A manifest from a fixture APK.
@@ -346,6 +357,82 @@ class PermissionChoiceTest {
         val removals = PermissionCatalog.removals(declared, stale)
         assertEquals("one declaration must survive", declared.size - 1, removals.size)
         assertTrue(removals.contains("android.permission.RECORD_AUDIO"))
+    }
+
+    /**
+     * A declaration the build removes by itself is not offered as a choice on that build: the row
+     * reads as removed, says why, and its switch cannot be moved.
+     *
+     * The switch is the thing under test. Every other fixed row refuses a *removal* and reads as
+     * kept; this one refuses the choice, because the declaration is not in the app the run
+     * produces whatever the switch says. Showing it as kept would tell the user the app has a
+     * permission the run is about to take out of it, and they would act on that.
+     */
+    @Test
+    fun theDeclarationsThisBuildRemovesItselfAreNotAChoiceOnIt() {
+        val declared = requireNotNull(DeclaredPermissions.forPackage(DISCORD)) { "Discord's list is shipped" }
+        val dead = DiscordPatches.DEAD_PERMISSIONS.filter { it in declared.toSet() }
+        assertEquals("the list should still name every declaration this build strips", DiscordPatches.DEAD_PERMISSIONS, dead)
+
+        // Every declaration named as kept, which is the state a read list starts in and the one
+        // that used to put a live switch over each of these.
+        val selection = PatchSelection().with(PermissionCatalog.itemsOf(declared))
+        val rows = PermissionCatalog.rows(declared, selection, DISCORD)
+
+        assertEquals(
+            "the rows fixed on removed must be exactly the declarations this build removes",
+            dead,
+            rows.filter { !it.switchable && !it.kept }.map { it.permission.name }
+        )
+        for (name in dead) {
+            assertEquals(
+                "$name must say why its switch is not the user's to move",
+                PermissionCoverage.ALWAYS_REMOVED_REASON,
+                rows.first { it.permission.name == name }.lockedReason
+            )
+        }
+        // And nothing else changed hands: every declaration that is not one of these, and not one
+        // the platform enforces with an exception, is still the user's to move.
+        val essential = rows.filter { it.permission.essential }.map { it.permission.name }.toSet()
+        assertEquals(
+            declared.toSet() - dead.toSet() - essential,
+            rows.filter { it.switchable }.map { it.permission.name }.toSet()
+        )
+    }
+
+    /**
+     * A declaration the build removes itself is never also in the user's own removal list, however
+     * the selection was built — and the same list for another app is the user's to remove.
+     *
+     * The second half is what makes the first a claim about the build rather than about the name:
+     * sleepy only takes READ_CONTACTS out of Discord, and a run against OctoGram has to leave the
+     * choice to the user there, because OctoGram syncs the address book through it.
+     *
+     * The first half is the one that bites. A saved selection from before these rows stopped
+     * offering a switch still names the declaration as switched off, and the build removes it on
+     * its own, in its own group — so a name reaching this list as well would be one selector the
+     * manifest pass is handed twice, reported the second time as an element the build does not
+     * have.
+     */
+    @Test
+    fun aDeclarationThisBuildRemovesIsNeverAlsoTheUsersToRemove() {
+        val dead = DiscordPatches.DEAD_PERMISSIONS.first()
+        val declared = listOf(dead, "android.permission.CAMERA", "android.permission.RECORD_AUDIO")
+        // The state a selection saved before this was fixed is in: the dead declaration is not
+        // named, and the two ordinary ones are.
+        val selection = PatchSelection()
+            .with(PermissionCatalog.itemsOf(declared).filter { it.identity != dead })
+
+        assertEquals(
+            "a declaration this build removes on its own is not a removal of the user's",
+            emptyList<String>(),
+            PermissionCatalog.removals(declared, selection, DISCORD)
+        )
+        assertEquals(
+            "the same list for another app leaves the choice with the user",
+            listOf(dead),
+            PermissionCatalog.removals(declared, selection, OCTOGRAM)
+        )
     }
 
     /**

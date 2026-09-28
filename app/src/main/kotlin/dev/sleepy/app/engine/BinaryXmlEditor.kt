@@ -31,6 +31,7 @@ object BinaryXmlEditor {
 
     /** `AndroidManifest.xml` attribute resource IDs (`android` namespace). */
     const val ATTR_NAME = 0x01010003
+    const val ATTR_ENABLED = 0x0101000e
     const val ATTR_EXPORTED = 0x01010010
     const val ATTR_REQUIRED_SPLIT_TYPES = 0x0101064e
     const val ATTR_SPLIT_TYPES = 0x0101064f
@@ -43,6 +44,7 @@ object BinaryXmlEditor {
     const val ELEMENT_PROVIDER = "provider"
     const val ELEMENT_META_DATA = "meta-data"
     const val ELEMENT_SERVICE = "service"
+    const val ELEMENT_RECEIVER = "receiver"
     const val ELEMENT_INTENT = "intent"
     const val ELEMENT_ACTION = "action"
 

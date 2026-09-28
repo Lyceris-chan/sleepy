@@ -219,16 +219,23 @@ object PatchRows {
      * mechanism, because a permission that cannot be switched off is the same kind of claim as a
      * blocklist gate: [InertKind.REQUIRED], the model's own reason, and no switch to move. What
      * differs is only where the list comes from — the declarations shipped for the release being
-     * patched, or its own manifest when nothing is shipped for it.
+     * patched, or its own manifest when nothing is shipped for it — and that a fixed row is not
+     * always a kept one: [packageName]'s build removes some declarations itself, whatever the
+     * choice says, and those rows read as removed and say why rather than showing a switch whose
+     * position is a lie.
      *
      * The switch reads "kept", so a permission is removed by switching it off, and the rows are
      * derived from the selection on every read like everything else here: the last permission
      * standing starts refusing the moment it is the last, and stops the moment another is
      * switched back on.
      */
-    fun permissionRows(declared: List<String>, selection: PatchSelection): List<PatchRow> {
+    fun permissionRows(
+        declared: List<String>,
+        selection: PatchSelection,
+        packageName: String? = null
+    ): List<PatchRow> {
         val items = PermissionCatalog.itemsOf(declared).associateBy { it.identity }
-        return PermissionCatalog.rows(declared, selection).map { row ->
+        return PermissionCatalog.rows(declared, selection, packageName).map { row ->
             val item = items.getValue(row.permission.identity)
             PatchRow(
                 key = item.key,
@@ -248,10 +255,14 @@ object PatchRows {
 
     /** Where a permission row's declaration is, and what the row's current state does to it. */
     private fun permissionDetail(item: PatchItem, row: PermissionRow): String {
-        val effect = if (row.switchable && !row.kept) {
-            "Switched off, so this declaration is deleted from the manifest of the build this run produces."
-        } else {
-            "Left declared, so the app keeps this permission."
+        val effect = when {
+            // The build's own edit rather than the user's: a switch over it would be a control that
+            // changes nothing, so the row says what the run does instead of offering one.
+            !row.switchable && !row.kept ->
+                "Removed from the manifest of every build this patch makes, whatever this switch is set to."
+            row.switchable && !row.kept ->
+                "Switched off, so this declaration is deleted from the manifest of the build this run produces."
+            else -> "Left declared, so the app keeps this permission."
         }
         return "Declared in the manifest of this release. $effect Selection key ${item.key}."
     }

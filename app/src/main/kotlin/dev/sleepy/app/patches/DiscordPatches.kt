@@ -1,5 +1,6 @@
 package dev.sleepy.app.patches
 
+import dev.sleepy.app.engine.BinaryXmlEditor
 import dev.sleepy.app.model.HermesPatch
 import dev.sleepy.app.model.HermesStubShape
 import dev.sleepy.app.model.PatchSet
@@ -407,6 +408,64 @@ object DiscordPatches {
         "com.android.vending.splits.required",
         "com.android.vending.splits",
         "com.android.vending.derived.apk.id"
+    )
+
+    /**
+     * The permissions this build declares and has no live code behind, so the reference strips them
+     * from every build it makes.
+     *
+     * These are not a preference, which is why joining this list is a decision about the app and
+     * not a switch over it: each was checked against the patched tree before being written down,
+     * and a permission is only listed here when nothing reachable refers to it — stripping one that
+     * is still used turns a working call into a SecurityException.
+     *
+     *   `READ_CONTACTS`                     - the only reference left is React Native's
+     *       permission-request module; contact sync is stubbed out, so the address book is never
+     *       read. Removing the declaration makes that structural rather than dependent on the stub
+     *       holding.
+     *   `AD_ID`                             - the advertising identifier. [TELEMETRY] resolves every
+     *       request for it with null, so nothing downstream can be attributed to this device.
+     *   `ACCESS_ADSERVICES_ATTRIBUTION`     - Privacy Sandbox attribution, with no ad SDK left to
+     *       report through it.
+     *   `READ_APP_INFO` (Samsung)           - a dead declaration: no code in the dex names it.
+     *   `GET_COMMON_DATA` (Huawei)          - the same, for the Huawei app market.
+     *   `BIND_GET_INSTALL_REFERRER_SERVICE` - bound only by the Play Install Referrer SDK and
+     *       AppsFlyer: `InstallReferrerModule` is stubbed and `AppsFlyerLib.start()` has no callers
+     *       anywhere, so nothing ever binds the service.
+     */
+    val DEAD_PERMISSIONS = listOf(
+        "android.permission.READ_CONTACTS",
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.ACCESS_ADSERVICES_ATTRIBUTION",
+        "com.samsung.android.mapsagent.permission.READ_APP_INFO",
+        "com.huawei.appmarket.service.commondata.permission.GET_COMMON_DATA",
+        "com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE"
+    )
+
+    /**
+     * One component a manifest declares: the element it is declared in, and its `android:name`.
+     *
+     * Most of the components this object matches on share an element, which is why
+     * [SENTRY_PROVIDERS] and [PLAY_SPLIT_MARKERS] are lists of bare names. The Google Analytics set
+     * below is not uniform — a receiver and two services — so what element a component lives in is
+     * part of the fact rather than something the manifest pass should read back out of its name.
+     */
+    data class ManifestComponent(val element: String, val name: String)
+
+    /**
+     * The Google Analytics components the reference build switches off.
+     *
+     * Google Analytics is inert in this app: the SDK's classes ship in the dex and its components
+     * are declared, but every tracker initialisation site is on a code path the patches have
+     * already cut. The reference sets `android:enabled="false"` on all three rather than deleting
+     * the declarations, and the difference matters — the platform never instantiates a disabled
+     * component, so the receiver never sees a broadcast and the JobService is never bound, while
+     * the manifest still describes the classes the dex actually holds.
+     */
+    val GOOGLE_ANALYTICS_COMPONENTS = listOf(
+        ManifestComponent(BinaryXmlEditor.ELEMENT_RECEIVER, "com.google.android.gms.analytics.AnalyticsReceiver"),
+        ManifestComponent(BinaryXmlEditor.ELEMENT_SERVICE, "com.google.android.gms.analytics.AnalyticsService"),
+        ManifestComponent(BinaryXmlEditor.ELEMENT_SERVICE, "com.google.android.gms.analytics.AnalyticsJobService")
     )
 
     /** The `<action>` naming the AppsFlyer install-referrer query in the manifest's `<queries>`. */

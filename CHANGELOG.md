@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-28
+
+### Changed
+
+- The permission list no longer offers a switch over a declaration the patch takes out of every build it makes. Those rows read as removed and give the reason, instead of showing a control that would move without changing anything: which of an app's permissions sleepy removes by itself is a fact about the build being patched rather than a choice about the run, and a switch that described the opposite of what the run produces is one you would act on.
+- Three checks that compare the patched JavaScript bundle against the reference build run instead of skipping. Each of them read a copy of a bundle out of a temporary directory, and a restart emptied that directory, so all three had been reporting themselves as skipped while covering nothing — a green run that said, in a count nobody was watching, that the comparison had not happened. They read the bundles out of the two APKs now, the build the patch set was extracted from and the desktop build's patched output, which are the artefacts the comparison is actually about.
+
+### Fixed
+
+- The crash reporter's own native libraries were still in the finished APK — `libsentry.so` and the Android shim over it, about 740 KB — in every build, including the ones whose step list said they had been removed. The list of entries to leave out was only ever checked against the base APK's own entries, and the base split carries no native libraries at all: they arrive from the ABI split, which the merge adds afterwards, so there was nothing there for the names to match. The same rebuild kept `stamp-cert-sha256`, the Play source stamp naming the signed build an APK was derived from, in an APK signed with a key of its own. Both go now, from whichever part of the merge they arrive in.
+- Six permission declarations the desktop build strips were being kept: the contact list, the advertising ID, Privacy Sandbox attribution, and three that name services the patched app never binds — Samsung's app information, the Huawei app market's common data and Play's install-referrer binding. Nothing in the patched build reads any of them, so each was a capability the app still asked the platform for and never used. They are removed on Discord builds and by name, because OctoGram declares the contact list for real and syncs the address book through it: a rule that travelled to every app would have taken a live permission away from that one.
+- The three Google Analytics components the SDK declares were left switched on. They are inert here — the patches cut every path that would report through one — but the desktop build sets `android:enabled` false on all three all the same, and the platform never starts a component declared that way. The manifest matches that build now.
+- The split-install metadata was kept too. `res/xml/splits0.xml` lists the configuration splits an installation has and is read by the installer that puts them there, and an APK with all of its splits inside it is not a split of anything — the file described an installation that no longer exists. It goes along with the row in the resource table that named it, because the two have to go together: a table resolving a path to a file the APK does not hold is worse than either half on its own.
+- Some translated strings showed the wrong text. 48 string values inside the resources that carry lists of their own — arrays and plurals — kept the string-pool position they held in the split they were merged in from, so they resolved to whichever string now sat at that position: German playback-speed labels came out as a resource path. Values that are a plain string were unaffected, which is why it went unnoticed, and the check that should have caught it worked out where a value sits the same way the merge did — so it agreed with the mistake rather than finding it. Both are fixed.
+
 ## [1.5.0] - 2026-09-27
 
 ### Added
@@ -132,7 +147,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript changes are checked against the app's code before they are written, so a change aimed at the wrong place cannot corrupt it.
 - OctoGram changes that matched more than one place in the code are resolved, and each change now applies only to the app version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.2.0...v1.3.0

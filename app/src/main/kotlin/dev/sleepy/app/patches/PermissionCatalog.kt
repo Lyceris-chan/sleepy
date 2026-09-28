@@ -1,5 +1,6 @@
 package dev.sleepy.app.patches
 
+import dev.sleepy.app.engine.DiscordManifestEdits
 import dev.sleepy.app.model.BlocklistCoverage
 import dev.sleepy.app.model.PatchItem
 import dev.sleepy.app.model.PatchSelection
@@ -19,6 +20,14 @@ import dev.sleepy.app.model.PermissionRow
  * go stale differently: a name this table has never heard of is still a row (it is described as
  * unknown rather than hidden), while a permission a build declares and its shipped list does not
  * name has no row at all, which is why that case is reported instead of resolved silently.
+ *
+ * ## Which declarations are not a choice
+ * Two of the rows a build declares are decided rather than offered, and neither decision lives
+ * here. The app's own essential permissions carry a [Permission.lockReason]; the declarations the
+ * patch takes out of this build whatever the user says are named by
+ * [DiscordManifestEdits.deadPermissionsIn], which is the same call the manifest pass edits with. A
+ * row over one of those reads as removed and says why, so the section describes the build the run
+ * produces rather than a switch that would change nothing.
  *
  * ## Removal is permanent, and every description says so
  * Android grants an app only the permissions its manifest declares. An installed app cannot add a
@@ -40,7 +49,9 @@ import dev.sleepy.app.model.PermissionRow
  * removing them; both are enforced by the platform with an exception rather than a refusal, so the
  * app does not degrade without them, it crashes or hangs on the first thing it tries to do. Every
  * other declaration here — a camera, a contact list, an advertising id — is a feature the user can
- * weigh, and is offered as a choice.
+ * weigh, and is offered as a choice. Which of those choices a given build gets to make is a
+ * separate question, and it is the one in the section above: on Discord the contact list is removed
+ * by every build this patch makes, and its row says that rather than offering a switch over it.
  */
 object PermissionCatalog {
 
@@ -707,14 +718,21 @@ object PermissionCatalog {
     }
 
     /**
-     * The declared permissions as rows, each locked when it cannot be removed.
+     * The declared permissions as rows, each fixed when the choice cannot change what the build
+     * declares.
      *
      * [PermissionCoverage.rows] supplies both the per-permission locks and the rule that the last
      * remaining permission stays, so the list and [removals] cannot disagree about what is
-     * removable: they are the same call.
+     * removable: they are the same call. [removedRegardless] names the declarations the build
+     * removes on its own — see [dev.sleepy.app.engine.DiscordManifestEdits.deadPermissionsIn],
+     * which is what decides them — and the rows over them read as removed rather than kept.
      */
-    fun rows(declared: List<String>, isKept: (Permission) -> Boolean): List<PermissionRow> =
-        PermissionCoverage.rows(entriesFor(declared), isKept)
+    fun rows(
+        declared: List<String>,
+        isKept: (Permission) -> Boolean,
+        removedRegardless: Set<String> = emptySet()
+    ): List<PermissionRow> =
+        PermissionCoverage.rows(entriesFor(declared), isKept, removedRegardless)
 
     /**
      * [rows] against a selection, which is what both the list and the pipeline read.
@@ -724,10 +742,22 @@ object PermissionCatalog {
      * cosmetic: a selection is a list of what is *on*, so a selection made for the patch sets
      * names no permission by construction, and reading that as a list of removals would show the
      * user a manifest being gutted that nothing is going to touch.
+     *
+     * [packageName] is the build being patched, and it is what decides which declarations are
+     * fixed-removed rather than a choice: the same list rendered for another app offers switches
+     * over names sleepy only takes out of this one.
      */
-    fun rows(declared: List<String>, selection: PatchSelection): List<PermissionRow> {
+    fun rows(
+        declared: List<String>,
+        selection: PatchSelection,
+        packageName: String? = null
+    ): List<PermissionRow> {
         val asked = isEngaged(selection)
-        return rows(declared) { !asked || selection.contains(itemKeyOf(it.name)) }
+        return rows(
+            declared = declared,
+            isKept = { !asked || selection.contains(itemKeyOf(it.name)) },
+            removedRegardless = DiscordManifestEdits.deadPermissionsIn(packageName).toSet()
+        )
     }
 
     /**
@@ -744,14 +774,24 @@ object PermissionCatalog {
      * The declarations to remove, in the order the manifest declares them.
      *
      * A permission is removed when the selection does not name it *and* the row it produces is
-     * switchable — so a locked row, and the last permission standing, are never in this list
-     * whatever the selection says. Both gates are re-applied here rather than trusted to the
-     * caller: this is the list a build is edited with, and an empty selection reaching it means
-     * "nothing to do", never "remove everything".
+     * switchable — so a locked row, the last permission standing, and a declaration the build
+     * removes on its own are never in this list whatever the selection says. All three gates are
+     * re-applied here rather than trusted to the caller: this is the list a build is edited with,
+     * and an empty selection reaching it means "nothing to do", never "remove everything".
+     *
+     * [packageName] is passed on to [rows], and it is load-bearing for the same reason: the
+     * declarations sleepy takes out of this build by itself are taken out by
+     * [dev.sleepy.app.engine.DiscordManifestEdits.plan]'s own group, and a name reaching this list
+     * as well would be one selector the manifest pass is asked to remove twice — reported the
+     * second time as an element the build does not have.
      */
-    fun removals(declared: List<String>, selection: PatchSelection): List<String> {
+    fun removals(
+        declared: List<String>,
+        selection: PatchSelection,
+        packageName: String? = null
+    ): List<String> {
         if (!isEngaged(selection)) return emptyList()
-        return rows(declared, selection)
+        return rows(declared, selection, packageName)
             .filter { it.switchable && !it.kept }
             .map { it.permission.name }
     }

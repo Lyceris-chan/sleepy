@@ -2,8 +2,11 @@ package dev.sleepy.app
 
 import dev.sleepy.app.engine.BinaryXmlEditor
 import dev.sleepy.app.engine.DiscordManifestEdits
+import dev.sleepy.app.model.PatchSelection
+import dev.sleepy.app.patches.DeclaredPermissions
 import dev.sleepy.app.patches.DiscordNativePatches
 import dev.sleepy.app.patches.DiscordPatches
+import dev.sleepy.app.patches.PermissionCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -21,10 +24,12 @@ import java.util.zip.ZipOutputStream
  * them to a real manifest actually does.
  *
  * Two claims are under test, and they are separate. The first is the decision — a component is
- * only removed when the thing it belongs to is being disabled, and the RPC service is closed
- * whatever the switches say. The second is the effect: on the real Discord base manifest, the plan
- * deletes exactly the elements it names and changes exactly one attribute, which is checked at the
- * chunk level and then again through `aapt2` as an independent reader.
+ * only removed when the thing it belongs to is being disabled, the declarations this build has no
+ * code behind are removed on every run against it and on no run against another app, and the RPC
+ * service is closed whatever the switches say. The second is the effect: on the real Discord base
+ * manifest, the plan deletes exactly the elements it names and rewrites exactly the attributes it
+ * names, which is checked at the chunk level and then again through `aapt2` as an independent
+ * reader.
  */
 class DiscordManifestEditsTest {
 
@@ -32,6 +37,10 @@ class DiscordManifestEditsTest {
         File("/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk")
 
     private val octoGramApk = File("/home/sleepy/Documents/antigravity/telegram/OctoGram_361_arm64.apk")
+
+    /** The application the edits were written for, and one they were not. */
+    private val DISCORD = DiscordManifestEdits.PACKAGE_NAME
+    private val OCTOGRAM = "it.octogram.android"
 
     /** Where `aapt2` lives when the Android SDK build tools are installed beside this checkout. */
     private val aapt2Candidates = listOf(
@@ -53,33 +62,94 @@ class DiscordManifestEditsTest {
     /** The plan a run that has switched on everything this suite is about would ask for. */
     private fun fullPlan(mergedLibraries: Int = 8): DiscordManifestEdits.Plan =
         DiscordManifestEdits.plan(
+            packageName = DISCORD,
             activePatchIds = setOf(DiscordPatches.SENTRY.id, DiscordNativePatches.DEEP_LINKS.id),
             mergedLibraries = mergedLibraries,
-            removedPermissions = listOf("android.permission.READ_CONTACTS")
+            removedPermissions = listOf("android.permission.CAMERA")
         )
 
     // --- the decision -------------------------------------------------------------------
 
     /**
-     * With nothing switched on, nothing is removed. The RPC override is still there, and that is
-     * the point of it: it is not a thing a run can decline.
+     * With nothing switched on, nothing the switches control is removed. The two edits that carry
+     * no switch are still there, and that is the point of them: they are not things a run can
+     * decline.
      */
     @Test
-    fun aRunThatDisablesNothingRemovesNothing() {
-        val plan = DiscordManifestEdits.plan(emptySet(), mergedLibraries = 0, removedPermissions = emptyList())
-        assertTrue("no elements may be removed", plan.removals.isEmpty())
-        assertEquals("the RPC service is closed regardless", 1, plan.overrides.size)
-        assertEquals(DiscordPatches.RPC_SERVICE_NAME, plan.overrides.first().element.attributeValue)
-        assertFalse("closing it is not a removal", plan.isEmpty)
+    fun aRunThatDisablesNothingRemovesOnlyTheDeadDeclarations() {
+        val plan = DiscordManifestEdits.plan(DISCORD, emptySet(), mergedLibraries = 0, removedPermissions = emptyList())
+        assertTrue("nothing the user chose is removed", plan.permissions.isEmpty())
+        assertEquals(
+            "the declarations this build has no code behind go anyway",
+            DiscordPatches.DEAD_PERMISSIONS,
+            plan.removals.map { it.attributeValue }
+        )
+        assertEquals("the RPC service is closed regardless", DiscordPatches.RPC_SERVICE_NAME, plan.rpcService.element.attributeValue)
+        assertEquals("and the analytics components are switched off", 3, plan.googleAnalytics.size)
+        assertFalse("neither is a removal", plan.isEmpty)
+    }
+
+    /**
+     * The two groups that are facts about one build are asked for on that build and on no other.
+     *
+     * Both are lists of names read off Discord 348.5, and names do not travel: OctoGram declares
+     * `READ_CONTACTS` and syncs the address book through it, so a dead-permission removal carried
+     * across would take away a permission that app is using. What a job against another app asks
+     * for is therefore the groups that are decided by the run itself — its switches, its merge and
+     * the service that is closed unconditionally — and not the two that were read from this build.
+     */
+    @Test
+    fun theGroupsReadOffOneBuildAreAskedForOnThatBuildAlone() {
+        val other = DiscordManifestEdits.plan(
+            OCTOGRAM, emptySet(), mergedLibraries = 8, removedPermissions = emptyList()
+        )
+        assertTrue("a dead declaration from another app's list is not removed", other.deadPermissions.isEmpty())
+        assertTrue("and its analytics components are not touched", other.googleAnalytics.isEmpty())
+        assertEquals("the edits the run decides for itself still apply", 3, other.playSplitMarkers.size)
+        assertEquals(DiscordPatches.RPC_SERVICE_NAME, other.rpcService.element.attributeValue)
+    }
+
+    /**
+     * The two halves of "this build removes it anyway" are one answer: the declarations the pass
+     * strips are exactly the declarations the permission list fixes its rows on.
+     *
+     * They are read from the same function rather than written out twice — see
+     * [DiscordManifestEdits.deadPermissionsIn] — so what this rules out is a later edit that goes
+     * back to spelling one of the two lists out by hand. Either direction is the bug the rows were
+     * fixed for: a list offering a live switch over a declaration the pass is about to delete, or a
+     * switch fixed over a declaration the build keeps.
+     */
+    @Test
+    fun theDeclarationsTheListFixesAreTheOnesThePassRemoves() {
+        val declared = requireNotNull(DeclaredPermissions.forPackage(DISCORD)) { "Discord's list is shipped" }
+        val selection = PatchSelection().with(PermissionCatalog.itemsOf(declared))
+        val plan = fullPlan()
+
+        val fixedByTheList = PermissionCatalog.rows(declared, selection, DISCORD)
+            .filter { !it.switchable && !it.kept }
+            .map { it.permission.name }
+        assertEquals(
+            "the pass and the list have to remove the same declarations, in the same order",
+            plan.deadPermissions.map { it.attributeValue },
+            fixedByTheList
+        )
+        // And the pass's own group is not the user's: the two carry different reasons and are
+        // reported separately, so a name in both would be one element asked for twice.
+        val theUsersOwn = plan.permissions.map { it.attributeValue }
+        assertEquals(listOf("android.permission.CAMERA"), theUsersOwn)
+        assertTrue(
+            "no declaration may be in both groups, found: ${fixedByTheList.filter { it in theUsersOwn }}",
+            fixedByTheList.none { it in theUsersOwn }
+        )
     }
 
     /** The crash reporter's providers go with the crash reporter's switch, and only with it. */
     @Test
     fun theSentryProvidersGoOnlyWithTheCrashReporterSwitch() {
-        val off = DiscordManifestEdits.plan(emptySet(), 0, emptyList())
+        val off = DiscordManifestEdits.plan(DISCORD, emptySet(), 0, emptyList())
         assertTrue("a build keeping the crash reporter keeps its providers", off.sentryProviders.isEmpty())
 
-        val on = DiscordManifestEdits.plan(setOf(DiscordPatches.SENTRY.id), 0, emptyList())
+        val on = DiscordManifestEdits.plan(DISCORD, setOf(DiscordPatches.SENTRY.id), 0, emptyList())
         assertEquals(DiscordPatches.SENTRY_PROVIDERS, on.sentryProviders.map { it.attributeValue })
         // The element name is the framework's, and what tells one provider from another is the
         // android:name attribute — the same shape the permission removal uses.
@@ -92,10 +162,10 @@ class DiscordManifestEditsTest {
     /** The Play markers describe a split, so they go exactly when there are no longer splits. */
     @Test
     fun thePlaySplitMarkersGoOnlyWhenTheSplitsWereMergedIn() {
-        val notMerged = DiscordManifestEdits.plan(emptySet(), mergedLibraries = 0, removedPermissions = emptyList())
+        val notMerged = DiscordManifestEdits.plan(DISCORD, emptySet(), mergedLibraries = 0, removedPermissions = emptyList())
         assertTrue(notMerged.playSplitMarkers.isEmpty())
 
-        val merged = DiscordManifestEdits.plan(emptySet(), mergedLibraries = 8, removedPermissions = emptyList())
+        val merged = DiscordManifestEdits.plan(DISCORD, emptySet(), mergedLibraries = 8, removedPermissions = emptyList())
         assertEquals(DiscordPatches.PLAY_SPLIT_MARKERS, merged.playSplitMarkers.map { it.attributeValue })
         assertEquals(BinaryXmlEditor.ELEMENT_META_DATA, merged.playSplitMarkers.first().namePrefix)
     }
@@ -108,10 +178,10 @@ class DiscordManifestEditsTest {
      */
     @Test
     fun theAttributionQueryGoesOnlyWithTheDeepLinkSwitch() {
-        val off = DiscordManifestEdits.plan(setOf(DiscordPatches.SENTRY.id), 8, emptyList())
+        val off = DiscordManifestEdits.plan(DISCORD, setOf(DiscordPatches.SENTRY.id), 8, emptyList())
         assertTrue(off.attributionQuery.isEmpty())
 
-        val on = DiscordManifestEdits.plan(setOf(DiscordNativePatches.DEEP_LINKS.id), 8, emptyList())
+        val on = DiscordManifestEdits.plan(DISCORD, setOf(DiscordNativePatches.DEEP_LINKS.id), 8, emptyList())
         assertEquals(1, on.attributionQuery.size)
         val selector = on.attributionQuery.first()
         assertEquals(BinaryXmlEditor.ELEMENT_INTENT, selector.namePrefix)
@@ -126,7 +196,7 @@ class DiscordManifestEditsTest {
     @Test
     fun thePermissionsTheUserSwitchedOffBecomeTheirOwnGroup() {
         val plan = DiscordManifestEdits.plan(
-            emptySet(), 0, listOf("android.permission.CAMERA", "android.permission.RECORD_AUDIO")
+            DISCORD, emptySet(), 0, listOf("android.permission.CAMERA", "android.permission.RECORD_AUDIO")
         )
         assertEquals(
             listOf("android.permission.CAMERA", "android.permission.RECORD_AUDIO"),
@@ -161,25 +231,34 @@ class DiscordManifestEditsTest {
             result.elementsMissing.isEmpty()
         )
         assertEquals(
-            setOf(
-                "android.permission.READ_CONTACTS",
-                DiscordPatches.SENTRY_PROVIDERS[0],
-                DiscordPatches.SENTRY_PROVIDERS[1],
-                DiscordPatches.PLAY_SPLIT_MARKERS[0],
-                DiscordPatches.PLAY_SPLIT_MARKERS[1],
-                DiscordPatches.PLAY_SPLIT_MARKERS[2],
-                DiscordPatches.APPSFLYER_INSTALL_PROVIDER_ACTION
-            ),
+            "every element the plan names must be the elements that went",
+            buildSet {
+                addAll(DiscordPatches.DEAD_PERMISSIONS)
+                add("android.permission.CAMERA")
+                addAll(DiscordPatches.SENTRY_PROVIDERS)
+                addAll(DiscordPatches.PLAY_SPLIT_MARKERS)
+                add(DiscordPatches.APPSFLYER_INSTALL_PROVIDER_ACTION)
+            },
             result.elementsRemoved.toSet()
         )
         assertEquals(
-            "the edit must say which element it closed",
-            listOf(DiscordPatches.RPC_SERVICE_NAME),
-            result.elementOverridesApplied
+            "the edit must say which elements it closed and switched off",
+            setOf(
+                DiscordPatches.RPC_SERVICE_NAME,
+                DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS[0].name,
+                DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS[1].name,
+                DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS[2].name
+            ),
+            result.elementOverridesApplied.toSet()
         )
         assertEquals(
-            "exactly one attribute may be rewritten",
-            listOf(BinaryXmlEditor.ATTR_EXPORTED),
+            "one attribute per override may be rewritten, and no more",
+            listOf(
+                BinaryXmlEditor.ATTR_EXPORTED,
+                BinaryXmlEditor.ATTR_ENABLED,
+                BinaryXmlEditor.ATTR_ENABLED,
+                BinaryXmlEditor.ATTR_ENABLED
+            ),
             result.attributesRewritten
         )
         assertTilesExactly(result.bytes, "discord manifest after the manifest edits")
@@ -196,7 +275,7 @@ class DiscordManifestEditsTest {
     @Test
     fun removingThePlayMarkersLeavesTheStampMarkersBesideThem() {
         val original = manifestOf(discordApk)
-        val plan = DiscordManifestEdits.plan(emptySet(), mergedLibraries = 8, removedPermissions = emptyList())
+        val plan = DiscordManifestEdits.plan(DISCORD, emptySet(), mergedLibraries = 8, removedPermissions = emptyList())
 
         val result = BinaryXmlEditor.edit(xml = original, removeElements = plan.removals)
         val names = BinaryXmlEditor.readElementAttributeValues(
@@ -214,45 +293,68 @@ class DiscordManifestEditsTest {
     }
 
     /**
-     * Closing the RPC service rewrites one attribute of one element and leaves every other chunk
-     * of the document alone.
+     * The attribute rewrites land on the elements they name and leave every other chunk of the
+     * document alone.
      *
-     * The manifest has dozens of components that are exported and dozens that are not, so "one
-     * attribute changed" is a statement about the whole file rather than about the service: the
-     * chunks are compared one for one, and exactly one of them may differ.
+     * The manifest has dozens of components that are exported and dozens that are enabled, so
+     * "one attribute per override changed" is a statement about the whole file rather than about
+     * the four components: the chunks are compared one for one, and exactly the four that carry an
+     * override may differ.
+     *
+     * The removals are applied in a pass of their own first. The chunk lists are compared index by
+     * index, and a deletion shifts every index after it, so a test that removed and rewrote in one
+     * pass could not tell a rewrite that reached too far from a rewrite the walk had drifted past.
      */
     @Test
-    fun closingTheRpcServiceTouchesNoOtherComponent() {
+    fun theAttributeRewritesTouchNoOtherComponent() {
         val original = manifestOf(discordApk)
-        val plan = DiscordManifestEdits.plan(emptySet(), 0, emptyList())
+        val plan = DiscordManifestEdits.plan(DISCORD, emptySet(), 0, emptyList())
 
-        val result = BinaryXmlEditor.edit(
-            xml = original,
-            removeElements = plan.removals,
-            elementOverrides = plan.overrides
+        val withoutElements = BinaryXmlEditor.edit(xml = original, removeElements = plan.removals).bytes
+        val result = BinaryXmlEditor.edit(xml = withoutElements, elementOverrides = plan.overrides)
+
+        assertEquals(
+            "every override must land, and on the component it names",
+            plan.overrides.map { it.element.attributeValue }.toSet(),
+            result.elementOverridesApplied.toSet()
+        )
+        assertEquals(
+            "one attribute each",
+            listOf(
+                BinaryXmlEditor.ATTR_EXPORTED,
+                BinaryXmlEditor.ATTR_ENABLED,
+                BinaryXmlEditor.ATTR_ENABLED,
+                BinaryXmlEditor.ATTR_ENABLED
+            ),
+            result.attributesRewritten
         )
 
-        assertEquals(listOf(DiscordPatches.RPC_SERVICE_NAME), result.elementOverridesApplied)
-        assertEquals(listOf(BinaryXmlEditor.ATTR_EXPORTED), result.attributesRewritten)
-
-        val before = chunksOf(original)
+        val before = chunksOf(withoutElements)
         val after = chunksOf(result.bytes)
         assertEquals("no chunk may be added or dropped", before.size, after.size)
         val differing = before.indices.filter { !sameChunk(before[it], after[it]) }
-        assertEquals("only the one START_TAG may differ", 1, differing.size)
-        val changed = after[differing.single()]
-        assertEquals("the difference must be in a START_TAG", 0x0102, changed.first)
+        assertEquals("only the four overridden elements may differ", plan.overrides.size, differing.size)
+        for (index in differing) {
+            assertEquals("the difference must be in a START_TAG", 0x0102, after[index].first)
+        }
 
-        // The manifest's `android:exported="true"` is a *typed* boolean on the wire: a four-byte
-        // Res_value whose data is 0xFFFFFFFF for true and 0 for false. So the whole change is
-        // those four bytes, and they are the last four of the element — the Res_value of its last
-        // attribute. Anything else differing, anywhere, would mean the rewrite reached past it.
-        val offsets = differingOffsets(before, after)
-        assertEquals(
-            "the only change may be one attribute's four-byte Res_value",
-            (changed.second.size - 4 until changed.second.size).toList(),
-            offsets.map { it.second }
-        )
+        // `android:enabled` and `android:exported` are *typed* booleans on the wire: a four-byte
+        // Res_value whose data is 0xFFFFFFFF for true and 0 for false. So each change is those
+        // four bytes and nothing else. Where they sit in their element is not asserted, because
+        // it is not the same in all four — `AnalyticsReceiver` declares `exported` after
+        // `enabled`, `AnalyticsJobService` declares a permission before it — and what matters is
+        // that the rewrite touched one attribute rather than that it touched a particular offset.
+        val runs = differingOffsets(before, after).groupBy { it.first }
+            .mapValues { (_, offsets) -> offsets.map { it.second }.sorted() }
+        assertEquals("one differing run per override, and no other chunk touched", plan.overrides.size, runs.size)
+        for ((index, offsets) in runs) {
+            assertEquals("chunk $index must change in one attribute's Res_value", 4, offsets.size)
+            assertEquals(
+                "and the four bytes must be contiguous",
+                (offsets.first() until offsets.first() + 4).toList(),
+                offsets
+            )
+        }
     }
 
     /**
@@ -261,11 +363,20 @@ class DiscordManifestEditsTest {
      * The RPC override is applied on every run, so on a build with no such service it has to match
      * nothing and leave nothing behind — not a rewritten attribute, not a re-serialised document
      * whose string pool was rebuilt.
+     *
+     * This is also where the two groups read off Discord are held to their scope. OctoGram
+     * declares `READ_CONTACTS` and keeps the address book in step through it, so a dead-permission
+     * removal that travelled would take a permission this app is using; and if the analytics
+     * components were switched off without checking the package first, a build that happens to
+     * declare a component of the same name would be edited for a reason that was never about it.
      */
     @Test
     fun aBuildWithNoneOfTheseComponentsKeepsItsManifestByteForByte() {
         val original = manifestOf(octoGramApk)
-        val plan = DiscordManifestEdits.plan(emptySet(), mergedLibraries = 0, removedPermissions = emptyList())
+        val plan = DiscordManifestEdits.plan(OCTOGRAM, emptySet(), mergedLibraries = 0, removedPermissions = emptyList())
+
+        assertTrue("no dead permission may be asked for", plan.deadPermissions.isEmpty())
+        assertTrue("no analytics component may be asked for", plan.googleAnalytics.isEmpty())
 
         val result = BinaryXmlEditor.edit(
             xml = original,
@@ -305,17 +416,28 @@ class DiscordManifestEditsTest {
 
         assertTrue("the fixture must carry the elements this plan removes", expected.size < before.size)
         assertEquals("the listing must be the original with exactly those elements dropped", expected.size, after.size)
+
         val differing = expected.indices.filter { expected[it] != after[it] }
-        assertEquals("exactly one line may differ, and it is the export flag", 1, differing.size)
-        val index = differing.single()
-        assertTrue("${expected[index]} is not an export flag", expected[index].contains("exported(0x01010010)="))
+        assertEquals("one flag per override may differ, and no other line", plan.overrides.size, differing.size)
+        for (index in differing) {
+            assertTrue("the flag was not set before: ${expected[index]}", expected[index].endsWith("=true"))
+            assertTrue("the flag was not cleared: ${after[index]}", after[index].endsWith("=false"))
+        }
         assertEquals(
-            "the flag must be the RPC service's, and it must only have been flipped",
-            DiscordPatches.RPC_SERVICE_NAME,
-            enclosingName(expected, index)
+            "each flag must belong to the component its override names",
+            setOf(
+                DiscordPatches.RPC_SERVICE_NAME to "exported(0x01010010)",
+                DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS[0].name to "enabled(0x0101000e)",
+                DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS[1].name to "enabled(0x0101000e)",
+                DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS[2].name to "enabled(0x0101000e)"
+            ),
+            differing.map { index ->
+                val line = expected[index]
+                val flag = listOf("exported(0x01010010)", "enabled(0x0101000e)").firstOrNull { line.contains(it) }
+                assertTrue("${line.trim()} is neither an export nor an enabled flag", flag != null)
+                requireNotNull(enclosingName(expected, index)) { "no element owns ${line.trim()}" } to flag
+            }.toSet()
         )
-        assertTrue("the flag was not flipped", after[index].endsWith("false"))
-        assertTrue("the flag was not flipped from true", expected[index].endsWith("true"))
     }
 
     /**

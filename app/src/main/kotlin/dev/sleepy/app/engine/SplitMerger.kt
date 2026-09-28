@@ -105,7 +105,23 @@ object SplitMerger {
     private val ABI_ENTRY = Regex("^lib/.+")
 
     /** The resource directory, in the base split as in every configuration split. */
-    private const val RES_DIR = "res/"
+    const val RES_DIR = "res/"
+
+    /**
+     * The split-install metadata a bundle's base split ships, and nothing else does.
+     *
+     * It lists the configuration splits an installation has and the flags that go with them, and the
+     * platform's split installer is what reads it — Play's, on a bundle install. An APK with every
+     * one of its splits inside it is not a split of anything, so the file describes an installation
+     * that does not exist: it is the resource-side twin of the Play split markers removed from the
+     * manifest, and the reference merge removes it in the same step as them.
+     *
+     * It cannot be removed on its own. The row that names it is in the resource table, and a table
+     * resolving to a file the archive does not hold is worse than an archive holding a file nothing
+     * names — so the file goes only where the table that named it was rebuilt without it. See
+     * [ResourceTableMerger.merge]'s `droppedPaths`.
+     */
+    const val SPLIT_INSTALL_METADATA = "res/xml/splits0.xml"
 
     /**
      * A split's own default resources, which it carries only to stand in for the base's.

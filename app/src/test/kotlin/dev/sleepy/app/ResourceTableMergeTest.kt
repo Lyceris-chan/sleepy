@@ -1,6 +1,7 @@
 package dev.sleepy.app
 
 import dev.sleepy.app.engine.ResourceTableMerger
+import dev.sleepy.app.engine.SplitMerger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -72,11 +73,11 @@ class ResourceTableMergeTest {
         }
     }
 
-    private fun mergeFixtures(): ResourceTableMerger.Result.Merged {
+    private fun mergeFixtures(droppedPaths: Set<String> = emptySet()): ResourceTableMerger.Result.Merged {
         for (apk in listOf(baseApk) + splitApks) {
             assumeTrue("${apk.path} is not on this machine", apk.exists())
         }
-        val result = ResourceTableMerger.merge(tableOf(baseApk), splitApks.map { tableOf(it) })
+        val result = ResourceTableMerger.merge(tableOf(baseApk), splitApks.map { tableOf(it) }, droppedPaths)
         assertTrue("the merge refused: ${(result as? ResourceTableMerger.Result.Refused)?.reason}", result is ResourceTableMerger.Result.Merged)
         return result as ResourceTableMerger.Result.Merged
     }
@@ -161,6 +162,77 @@ class ResourceTableMergeTest {
         val base = ResourceTableMerger.namedPaths(tableOf(baseApk))!!
         val named = ResourceTableMerger.namedPaths(merged.table)!!
         assertEquals("the base lost paths", emptySet<String>(), base - named)
+    }
+
+    /**
+     * A path the archive is not going to hold is left out of the table, and the merge says which
+     * path that was.
+     *
+     * This is how the split-install metadata goes: the file and the row that names it are removed
+     * together, and the row can only be left out of a table that is being rebuilt. So what is
+     * checked here is that the entry is gone rather than blanked — a table with an entry still in
+     * place, pointing at a pool index that still spells the dropped path, names a file the APK
+     * does not hold, which is worse than the file being there unnamed.
+     */
+    @Test
+    fun dropsTheEntriesNamingAPathTheArchiveWillNotHold() {
+        val named = ResourceTableMerger.namedPaths(tableOf(baseApk))!!
+        assertTrue(
+            "the fixture's base should name the split-install metadata",
+            SplitMerger.SPLIT_INSTALL_METADATA in named
+        )
+
+        val whole = mergeFixtures()
+        val merged = mergeFixtures(setOf(SplitMerger.SPLIT_INSTALL_METADATA))
+        assertEquals("the merge must report the path it left out", setOf(SplitMerger.SPLIT_INSTALL_METADATA), merged.droppedPaths)
+
+        // The path goes, and nothing else goes with it.
+        val after = ResourceTableMerger.namedPaths(merged.table)!!
+        assertEquals("the dropped path is not the only difference", named - after, setOf(SplitMerger.SPLIT_INSTALL_METADATA))
+
+        // And the entries that named it are gone rather than emptied: an entry left in place, or
+        // left as a hole where the merged table would resolve nothing, is not a drop.
+        val withoutDropped = ResourceTableMerger.slotsOf(whole.table)!! - ResourceTableMerger.slotsOf(merged.table)!!
+        assertTrue("no entry was left out", withoutDropped.isNotEmpty())
+        assertEquals(
+            "every entry left out must have named the dropped path",
+            whole.resourceCount - merged.resourceCount,
+            withoutDropped.size
+        )
+    }
+
+    /** A path no table names has no entry to leave out, so it is not reported as dropped. */
+    @Test
+    fun aPathTheTablesDoNotNameIsNotReportedAsDropped() {
+        val merged = mergeFixtures(setOf("res/xml/not_a_resource_this_build_has.xml"))
+        assertEquals("nothing was left out", emptySet<String>(), merged.droppedPaths)
+        assertTrue(
+            "a drop that matches nothing must not change the merge",
+            mergeFixtures().table.contentEquals(merged.table)
+        )
+    }
+
+    /**
+     * A drop with no splits in it still drops: the base's own table is rebuilt without the entries
+     * naming the path, because the archive being built will not hold the file.
+     *
+     * This is the shape the merge takes when the caller fetched no configuration splits at all —
+     * the file is in the base, so it has to be droppable without a split to merge.
+     */
+    @Test
+    fun aDropWithNoSplitsRebuildsTheBaseTableWithoutTheEntry() {
+        val base = tableOf(baseApk)
+        val named = ResourceTableMerger.namedPaths(base)!!
+        val result = ResourceTableMerger.merge(base, emptyList(), setOf(SplitMerger.SPLIT_INSTALL_METADATA))
+        assertTrue("the merge refused: ${(result as? ResourceTableMerger.Result.Refused)?.reason}", result is ResourceTableMerger.Result.Merged)
+        val merged = result as ResourceTableMerger.Result.Merged
+
+        assertEquals(setOf(SplitMerger.SPLIT_INSTALL_METADATA), merged.droppedPaths)
+        assertEquals(
+            "the base's other paths must all still be named",
+            named - merged.droppedPaths,
+            ResourceTableMerger.namedPaths(merged.table)
+        )
     }
 
     /**

@@ -181,6 +181,10 @@ class PatchingPipeline(private val context: Context) {
         // It is held rather than written out because the repack is what puts entries into the
         // archive, and a replacement there keeps the entry STORED and aligned as it was.
         var mergedResourceTable: ByteArray? = null
+        // The split-install metadata the rebuilt table stopped naming, and so the files the repack
+        // may drop. Empty until a rebuild has landed without them: the file and the row that names
+        // it go together or not at all, and this is what makes "not at all" the default.
+        var droppedSplitMetadata: Set<String> = emptySet()
         val splitResourceTables = mutableListOf<ByteArray>()
         val mergedSplitEntries = linkedMapOf<String, ZipRepacker.AdditionalEntry>()
         if (splitUrls.isNotEmpty()) {
@@ -267,7 +271,12 @@ class PatchingPipeline(private val context: Context) {
                 val merge = if (baseTable == null) {
                     null
                 } else {
-                    mergeResourceTables(baseTable, splitResourceTables, mergedSplitEntries.keys)
+                    mergeResourceTables(
+                        baseTable = baseTable,
+                        splitTables = splitResourceTables,
+                        mergedEntryNames = mergedSplitEntries.keys,
+                        droppablePaths = setOf(SplitMerger.SPLIT_INSTALL_METADATA)
+                    )
                 }
                 when (merge) {
                     null -> log(
@@ -295,6 +304,32 @@ class PatchingPipeline(private val context: Context) {
                                 status = StepStatus.OK
                             )
                         )
+                        // The split-install metadata, which the base's table named and the rebuilt one
+                        // does not. It is reported here and dropped from the archive at the repack,
+                        // because the two halves of the removal are decided by the same fact: the
+                        // table that stopped naming the file is what says the file may go, and a file
+                        // dropped while a table still resolved paths into it would be the broken half
+                        // of this rather than a smaller version of it.
+                        droppedSplitMetadata = merge.droppedPaths
+                        if (droppedSplitMetadata.isNotEmpty()) {
+                            log(
+                                StepResult(
+                                    title = "Dropped the split-install metadata and the table row that named it",
+                                    explanation = "A base split ships res/xml/splits0.xml, which lists the configuration splits an installation has " +
+                                        "and is read by Play's split installer — the resource-side twin of the Play split markers removed from the " +
+                                        "manifest. Everything those splits carried is inside this APK now, so the file describes an installation " +
+                                        "that no longer exists, and it goes with the row the table named it by: the row was left out of the rebuild " +
+                                        "above and the entry follows it out of the archive, so the table never resolves to a file this APK does not hold.",
+                                    technicalTarget = buildString {
+                                        append(droppedSplitMetadata.joinToString(", "))
+                                        append(", and the ")
+                                        append(if (droppedSplitMetadata.size == 1) "row" else "rows")
+                                        append(" naming it")
+                                    },
+                                    status = StepStatus.OK
+                                )
+                            )
+                        }
                     }
 
                     is ResourceTableMerger.Result.Refused -> log(
@@ -353,11 +388,14 @@ class PatchingPipeline(private val context: Context) {
             else -> emptyList()
         }
         // A selection that names no permission removes none of them, whatever the build declares
-        // — see PermissionCatalog.removals, which decides this and is where the two locks live.
+        // — see PermissionCatalog.removals, which decides this and is where the locks live. The
+        // package goes in with it because the declarations this build removes by itself are not
+        // the user's to remove, and this list is the user's: a name that reached both would be a
+        // selector the manifest pass is handed twice.
         val permissionRemovals = if (selection == null) {
             emptyList()
         } else {
-            PermissionCatalog.removals(chosenPermissions, selection)
+            PermissionCatalog.removals(chosenPermissions, selection, originalPackageName)
         }
 
         val classToDexIndex = DexProcessor.buildClassToDexIndex(dexEntries)
@@ -569,6 +607,7 @@ class PatchingPipeline(private val context: Context) {
         // Which edits this run asks for is decided in [DiscordManifestEdits], which says why each
         // one is there and what switches it; what follows is the single pass that applies them.
         val manifestEdits = DiscordManifestEdits.plan(
+            packageName = originalPackageName,
             activePatchIds = activePatchSets.map { it.id }.toSet(),
             mergedLibraries = mergedLibraries,
             removedPermissions = permissionRemovals
@@ -641,6 +680,29 @@ class PatchingPipeline(private val context: Context) {
             // pass's total: one pass carries the permissions, the crash reporter's providers, the
             // Play markers and the attribution query, and a count taken from the whole edit would
             // credit every group with the others' removals.
+            //
+            // This group goes first because it is the one no switch moves: the declarations the
+            // build has no code behind are removed on every run, and the permissions the user
+            // switched off are removed after them. Both report through the same helper, so a build
+            // that declares fewer dead permissions than were asked for says so rather than
+            // reporting six removals it did not make.
+            if (manifestEdits.deadPermissions.isNotEmpty()) {
+                log(
+                    manifestRemovalStep(
+                        selectors = manifestEdits.deadPermissions,
+                        edit = edit,
+                        title = { count ->
+                            "Removed $count dead permission " +
+                                "${if (count == 1) "declaration" else "declarations"} from the manifest"
+                        },
+                        explanation = "Nothing in this build reads these: the code that would have used them is stubbed out, or was never there. " +
+                            "A permission the app does not use is a capability it still asks the platform for, so the declarations are removed " +
+                            "rather than left declared and unexercised — and unlike the permissions the user chose about, this is the same answer " +
+                            "for every run."
+                    )
+                )
+            }
+
             if (manifestEdits.permissions.isNotEmpty()) {
                 log(
                     manifestRemovalStep(
@@ -693,12 +755,48 @@ class PatchingPipeline(private val context: Context) {
                 )
             }
 
-            // The one edit with no switch behind it. It is reported whether or not it landed, but
-            // only for the app it is about: on a build that has never declared this component the
-            // edit matched nothing because it was never meant to, and a step saying so would be a
-            // line about Discord in an OctoGram job. For Discord, "no such service" is worth
-            // saying — it is the build having moved on from the one this was written against.
-            val rpcLabel = manifestEdits.overrides.first().element.label
+            // The Google Analytics components. Disabled in place rather than removed, so what says
+            // whether the edit landed is not a removal count but which of the three elements the
+            // override found — the same signal the RPC service is reported on below.
+            //
+            // Like the RPC service it is reported whether or not it landed, but only for the app it
+            // is about: on a build that never declared these components the override matched nothing
+            // because it was never meant to, and a step saying so would be a line about Discord in
+            // an OctoGram job. For Discord, "no such component" is worth saying — it is the build
+            // having moved on from the one this was written against.
+            val analyticsLabels = manifestEdits.googleAnalytics.map { it.element.label }
+            val analyticsFound = analyticsLabels.count { it in edit.elementOverridesApplied }
+            val analyticsDisabled = BinaryXmlEditor.ATTR_ENABLED in edit.attributesRewritten
+            if (analyticsFound > 0 || analyticsDisabled || originalPackageName == DiscordManifestEdits.PACKAGE_NAME) {
+                log(
+                    StepResult(
+                        title = when {
+                            analyticsDisabled -> "Disabled the Google Analytics components"
+                            analyticsFound > 0 -> "The Google Analytics components were already disabled"
+                            else -> "This build declares no Google Analytics components"
+                        },
+                        explanation = "Google Analytics is inert in this build: the stub patches cut every path that would report through it, so " +
+                            "its receiver has nothing to hand on and its job service has nothing to run. They are switched off rather than " +
+                            "deleted because the SDK's classes are still in the dex — android:enabled=\"false\" is what the platform reads to " +
+                            "leave a declared component uninstantiated, and it is the edit the reference makes.",
+                        technicalTarget = "$analyticsFound of ${analyticsLabels.size} components, android:enabled=false",
+                        status = if (analyticsDisabled) StepStatus.OK else StepStatus.SKIP,
+                        detail = when {
+                            analyticsFound < analyticsLabels.size ->
+                                "no <receiver> or <service> with these names is declared, so there was nothing to disable"
+                            !analyticsDisabled -> "every component this build declares was already switched off"
+                            else -> null
+                        }
+                    )
+                )
+            }
+
+            // Closing the RPC service carries no switch either, and it is reported whether or not
+            // it landed, but only for the app it is about: on a build that has never declared this
+            // component the edit matched nothing because it was never meant to, and a step saying so
+            // would be a line about Discord in an OctoGram job. For Discord, "no such service" is
+            // worth saying — it is the build having moved on from the one this was written against.
+            val rpcLabel = manifestEdits.rpcService.element.label
             val rpcFound = rpcLabel in edit.elementOverridesApplied
             val rpcClosed = BinaryXmlEditor.ATTR_EXPORTED in edit.attributesRewritten
             if (rpcFound || rpcClosed || originalPackageName == DiscordManifestEdits.PACKAGE_NAME) {
@@ -754,8 +852,9 @@ class PatchingPipeline(private val context: Context) {
                 StepResult(
                     title = "Kept every permission this build declares",
                     explanation = "Permissions were chosen about but none of them was switched off, so every declaration the build shipped is " +
-                        "still in the manifest that was produced.",
-                    technicalTarget = "${chosenPermissions.size} declarations, none removed",
+                        "still in the manifest that was produced. The dead declarations removed above are the exception, and no choice moves " +
+                        "those: they go because nothing in the build reads them, not because anyone asked.",
+                    technicalTarget = "${chosenPermissions.size} declarations, none removed by choice",
                     status = StepStatus.SKIP
                 )
             )
@@ -801,7 +900,7 @@ class PatchingPipeline(private val context: Context) {
                 output = output,
                 replacements = replacements,
                 additionalEntries = mergedSplitEntries,
-                droppedEntries = droppedArtefacts
+                droppedEntries = droppedArtefacts + droppedSplitMetadata
             )
         }
         log(
@@ -1032,29 +1131,44 @@ class PatchingPipeline(private val context: Context) {
      * The one table naming every merged resource, or why one was not built.
      *
      * [ResourceTableMerger] checks what it builds structurally. This adds the check that is about
-     * the archive rather than the table: every file path the merged table names and the base's
-     * did not must be a file the repack is about to write. A path that is named and absent is a
-     * resource that resolves to nothing, which is the exact failure this step exists to remove —
-     * so a table that would introduce one is refused, and the caller keeps the base's.
+     * the archive rather than the table, and it is the same claim in both directions: the files the
+     * table names are exactly the resource files the repack is about to write — the base's own,
+     * less the ones [droppablePaths] says this run drops, plus the ones the split merge brought in.
+     * A path named and absent is a resource that resolves to nothing; a file present and unnamed is
+     * a resource nothing can ask for, which is what "merged but unreachable" means. Either one is
+     * the failure this step exists to remove, so a table that would introduce one is refused and
+     * the caller keeps the base's.
+     *
+     * Only the names the merge was asked to drop are subtracted, never the whole of
+     * [droppablePaths]: what the archive is about to lose is what the table actually stopped
+     * naming, and [ResourceTableMerger.Result.Merged.droppedPaths] is that and nothing more.
      */
     private fun mergeResourceTables(
         baseTable: ByteArray,
         splitTables: List<ByteArray>,
-        mergedEntryNames: Set<String>
+        mergedEntryNames: Set<String>,
+        droppablePaths: Set<String>
     ): ResourceTableMerger.Result {
-        val result = ResourceTableMerger.merge(baseTable, splitTables)
+        val result = ResourceTableMerger.merge(baseTable, splitTables, droppablePaths)
         if (result !is ResourceTableMerger.Result.Merged) return result
 
         val basePaths = ResourceTableMerger.namedPaths(baseTable) ?: return ResourceTableMerger.Result.Refused(
             "the base's own resource table could not be read back for comparison"
         )
-        val added = ResourceTableMerger.namedPaths(result.table) ?: return ResourceTableMerger.Result.Refused(
+        val named = ResourceTableMerger.namedPaths(result.table) ?: return ResourceTableMerger.Result.Refused(
             "the merged resource table could not be read back for comparison"
         )
-        val missing = (added - basePaths) - mergedEntryNames
-        if (missing.isNotEmpty()) {
+        val held = (basePaths - result.droppedPaths) + mergedEntryNames.filter { it.startsWith(RES_DIR) }
+        val unheld = named - held
+        if (unheld.isNotEmpty()) {
             return ResourceTableMerger.Result.Refused(
-                "the merged table names ${missing.size} files this APK would not hold, starting with ${missing.first()}"
+                "the merged table names ${unheld.size} files this APK would not hold, starting with ${unheld.first()}"
+            )
+        }
+        val unnamed = held - named
+        if (unnamed.isNotEmpty()) {
+            return ResourceTableMerger.Result.Refused(
+                "this APK would hold ${unnamed.size} resource files the merged table does not name, starting with ${unnamed.first()}"
             )
         }
         return result
@@ -1099,5 +1213,14 @@ class PatchingPipeline(private val context: Context) {
         const val BUNDLE_ENTRY = "assets/index.android.bundle"
         const val MANIFEST_ENTRY = "AndroidManifest.xml"
         const val RESOURCE_TABLE_ENTRY = "resources.arsc"
+
+        /**
+         * The directory a merged entry must sit under to be a resource the table can name.
+         *
+         * A merged split contributes shared objects as well as resources, and the table names files
+         * under `res/` and nothing else: an entry under any other directory is one the table could
+         * not name, so it is not part of what the two sets are compared over.
+         */
+        const val RES_DIR = "res/"
     }
 }

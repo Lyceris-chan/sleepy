@@ -36,10 +36,16 @@ data class Permission(
  * @property kept whether the app keeps this permission. The switch reads as "kept" rather than
  *   "removed" because that is the state the build starts in: an app declares the permissions it
  *   wants, so every row starts switched on and switching one off is the change being made.
- * @property lockedReason why this row cannot be switched off, or null when it can be. Two claims
- *   share this field and both are the model's own sentence: the permission is one the app cannot
- *   work without ([Permission.lockReason]), or it is the only one left and a build with no
- *   permissions at all is not a state this offers ([PermissionCoverage.LAST_PERMISSION_REASON]).
+ * @property lockedReason why this row cannot be switched off, or null when it can be. Three claims
+ *   share this field and each is the model's own sentence: the permission is one the app cannot
+ *   work without ([Permission.lockReason]), it is the only one left and a build with no
+ *   permissions at all is not a state this offers ([PermissionCoverage.LAST_PERMISSION_REASON]), or
+ *   the build removes the declaration whatever the choice says
+ *   ([PermissionCoverage.ALWAYS_REMOVED_REASON]).
+ *
+ *   [kept] says which of the three it is, and it is the field a reader should use rather than the
+ *   reason's text: a lock the user cannot argue with still *keeps* the declaration, while a
+ *   declaration this build strips is on its way out and reads as removed.
  */
 data class PermissionRow(
     val permission: Permission,
@@ -175,9 +181,12 @@ sealed interface PermissionScan {
  * step. Unlocking happens by itself — the last permission starts refusing once it is the last, and
  * stops refusing the moment another one is switched back on.
  *
- * The two reasons a row can be locked are different claims and stay distinguishable: an
- * [Permission.lockReason] is about the app, and [LAST_PERMISSION_REASON] is about the state of the
- * list.
+ * The three reasons a row can be fixed are different claims and stay distinguishable: an
+ * [Permission.lockReason] is about the app, [LAST_PERMISSION_REASON] is about the state of the
+ * list, and [ALWAYS_REMOVED_REASON] is about the build being patched rather than about anything the
+ * user did — a declaration sleepy removes from every build of that app. The third is why a fixed
+ * row does not always mean a kept one: the other two fix the declaration *in* the manifest, and it
+ * fixes it *out*.
  */
 object PermissionCoverage {
 
@@ -194,11 +203,32 @@ object PermissionCoverage {
             "ask for any of them later, so removing this one would leave a build with no way back."
 
     /**
-     * [permissions] as rows, each locked when it cannot be removed.
+     * Why a declaration the patch removes on its own has no switch to move either.
      *
-     * A permission is locked when the table says the app cannot work without it, or when it is the
-     * last one that would survive. The second rule is computed from the same [isKept] the list
-     * renders from, so it follows the user's choices rather than being a fixed property of a
+     * The other two fixed rows refuse a removal; this one refuses the *choice*, because there is
+     * nothing left to decide: the declaration is not in the app the patch builds, whatever the
+     * switch says. A row that showed this as kept would be a control lying about the build it
+     * describes, which is exactly what a user would act on — they would read the app as keeping a
+     * permission it does not have.
+     *
+     * It says *sleepy* rather than naming the reason per permission, because the reason that a
+     * given name is dead is a fact about the app's code, several sentences long, and it is written
+     * where that fact lives: the entry for the permission says what it does, and the run's step log
+     * reports the group it was removed in.
+     */
+    const val ALWAYS_REMOVED_REASON: String =
+        "Removed: sleepy deletes this declaration from every build of this app, whether or not the " +
+            "switch is on, because nothing in the patched app still refers to it. The switch is " +
+            "fixed on that answer rather than offering a change that would not reach the build."
+
+    /**
+     * [permissions] as rows, each fixed when the user's choice cannot change what the build
+     * declares.
+     *
+     * A permission is fixed when the table says the app cannot work without it, when this build
+     * removes the declaration anyway ([removedRegardless] — see [ALWAYS_REMOVED_REASON]), or when
+     * it is the last one that would survive. The last rule is computed from the same [isKept] the
+     * list renders from, so it follows the user's choices rather than being a fixed property of a
      * permission: the last one standing starts refusing, and stops the moment another is switched
      * back on.
      *
@@ -206,24 +236,38 @@ object PermissionCoverage {
      * declaration always survives" holds for every input and not just the ones a user can reach by
      * tapping. A selection that names none of these permissions at all — a stale selection, or one
      * made against a different build — would otherwise leave every row switched off and every
-     * declaration removable.
+     * declaration removable. A row this build removes regardless is not a survivor either, so it
+     * takes no part in that rule: it is not a declaration the user is choosing to keep.
      *
      * It only has anything to say when the table locks nothing by itself: a locked permission is
      * kept whatever the selection says, so a build that has one always declares at least one
      * permission, and an app that declares `INTERNET` keeps declaring it however many of the rest
      * are removed.
      */
-    fun rows(permissions: List<Permission>, isKept: (Permission) -> Boolean): List<PermissionRow> {
+    fun rows(
+        permissions: List<Permission>,
+        isKept: (Permission) -> Boolean,
+        removedRegardless: Set<String> = emptySet()
+    ): List<PermissionRow> {
+        // A row whose state is not the user's to decide: locked by the table, or removed by the
+        // build. Both are excluded from the survivor rule, for different reasons — one keeps the
+        // declaration, the other does not have it to keep.
+        fun fixed(permission: Permission): Boolean =
+            permission.lockReason != null || permission.identity in removedRegardless
+
         val hasLocked = permissions.any { it.lockReason != null }
-        val keptCount = permissions.count { it.lockReason == null && isKept(it) }
+        val keptCount = permissions.count { !fixed(it) && isKept(it) }
         // Identity, not equality: two entries that happen to read the same are still two rows, and
         // only the one standing last is the survivor.
-        val survivor = permissions.lastOrNull { it.lockReason == null && isKept(it) }
-            ?: permissions.firstOrNull { it.lockReason == null }
+        val survivor = permissions.lastOrNull { !fixed(it) && isKept(it) }
+            ?: permissions.firstOrNull { !fixed(it) }
 
         return permissions.map { permission ->
+            val alwaysRemoved = permission.lockReason == null && permission.identity in removedRegardless
             val lockedReason = permission.lockReason
-                ?: if (!hasLocked && keptCount <= 1 && permission === survivor) {
+                ?: if (alwaysRemoved) {
+                    ALWAYS_REMOVED_REASON
+                } else if (!hasLocked && keptCount <= 1 && permission === survivor) {
                     LAST_PERMISSION_REASON
                 } else {
                     null
@@ -231,8 +275,14 @@ object PermissionCoverage {
             PermissionRow(
                 permission = permission,
                 // A locked row reads as kept: it is not a permission the user is being asked
-                // about, and showing it as switched off would say the opposite of what it is.
-                kept = lockedReason != null || isKept(permission),
+                // about, and showing it as switched off would say the opposite of what it is. A row
+                // removed regardless reads as removed for the same reason turned around — that is
+                // what the build does with it, and the switch says what the build does.
+                kept = when {
+                    alwaysRemoved -> false
+                    lockedReason != null -> true
+                    else -> isKept(permission)
+                },
                 lockedReason = lockedReason
             )
         }

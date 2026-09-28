@@ -11,6 +11,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 
 /**
  * Applies a *subset* of the JavaScript patch table to the real Discord 348.5 bundle and checks
@@ -21,13 +22,31 @@ import java.security.MessageDigest
  * index, or a table whose order does not line up with the content table's, quietly patching the
  * wrong function.
  *
- * The bundles live outside the repository (55 MB each), so the test skips when they are absent —
- * the same fixtures [HermesBundleParityTest] uses.
+ * The two bundles this compares are not in the repository (55 MB each), so they are read out of
+ * the Discord 348.5 APKs at test time — the base split and the desktop build's patched reference
+ * — the same fixtures [HermesBundleParityTest] uses, taken from the same archives. Reading them
+ * out of the APKs rather than from a hand-extracted copy under `/tmp` is what keeps them: the
+ * scratch copy did not survive a reboot, and a fixture that is gone for good leaves this test
+ * skipping forever, which covers nothing while still looking green.
+ *
+ * A machine that has neither APK — CI on a clean runner — reports the test as skipped rather than
+ * failing on something it never had.
  */
 class HermesSubsetPatchTest {
 
-    private val baseBundle = File("/tmp/dgt/x/assets/index.android.bundle")
-    private val referenceBundle = File("/tmp/ref/x/assets/index.android.bundle")
+    private companion object {
+        /** The shipped build the patch set was extracted from, and the patched reference build. */
+        const val BASE_APK =
+            "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted/base.apk"
+        const val REFERENCE_APK =
+            "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/out/discord-alpha-348.5-patched-unsigned.apk"
+
+        /** The entry both APKs carry the bundle in. */
+        const val BUNDLE_ENTRY = "assets/index.android.bundle"
+    }
+
+    private val baseApk = File(BASE_APK)
+    private val referenceApk = File(REFERENCE_APK)
 
     private val fileLengthOffset = 32
     private val sha1FooterSize = 20
@@ -43,8 +62,8 @@ class HermesSubsetPatchTest {
     @Test
     fun testASubsetChangesTheChosenFunctionsAndNothingElse() {
         assumeTrue(
-            "the Discord 348.5 bundles are not on this machine (${baseBundle.path}, ${referenceBundle.path})",
-            baseBundle.isFile && referenceBundle.isFile
+            "the Discord 348.5 APKs are not on this machine (${baseApk.path}, ${referenceApk.path})",
+            baseApk.isFile && referenceApk.isFile
         )
 
         val selection = PatchSelection.ofKeys(
@@ -68,16 +87,16 @@ class HermesSubsetPatchTest {
             DiscordHermesFunctionCatalog.selectPatches(PatchSelection()).map { it.functionId }
         )
 
-        val base = baseBundle.readBytes()
+        val base = bundleOf(baseApk)
         assertEquals(
             "the base bundle is not the build the patch set was extracted from",
             DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong(),
-            baseBundle.length()
+            base.size.toLong()
         )
 
         val result = HermesBundlePatcher.apply(base, patches)
         val patched = result.bundleBytes
-        val reference = referenceBundle.readBytes()
+        val reference = bundleOf(referenceApk)
 
         assertEquals(
             "every patch must land: a skip leaves a function holding the old body",
@@ -158,6 +177,21 @@ class HermesSubsetPatchTest {
             "the patcher modified the input bundle it was given",
             baseDigest.digest().contentEquals(base.copyOfRange(base.size - sha1FooterSize, base.size))
         )
+    }
+
+    /**
+     * [apk]'s `assets/index.android.bundle` entry, read out of the archive rather than from a
+     * copy of it placed beside the APK. The archive is opened as a `ZipFile` and only the one
+     * entry is read, so the 96 MB the APK weighs is never held in memory.
+     *
+     * A missing entry throws rather than skips: the APK being absent is the machine saying it
+     * never had the fixture, but an APK that is here and holds no bundle is one that is not the
+     * build this test is about, and that has to fail loudly.
+     */
+    private fun bundleOf(apk: File): ByteArray = ZipFile(apk).use { zip ->
+        val entry = zip.getEntry(BUNDLE_ENTRY)
+            ?: throw AssertionError("${apk.path} carries no $BUNDLE_ENTRY entry")
+        zip.getInputStream(entry).use { it.readBytes() }
     }
 
     private fun regionsEqual(a: ByteArray, aOffset: Int, b: ByteArray, bOffset: Int, length: Int): Boolean {

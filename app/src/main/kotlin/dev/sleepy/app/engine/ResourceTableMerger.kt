@@ -41,7 +41,9 @@ import java.io.ByteArrayOutputStream
  * per-table:
  *
  * - `ResTable_entry.key` indexes the package's `keyStrings` pool, where the entry's name lives.
- * - A `Res_value` of type `TYPE_STRING` holds an index into the table's global string pool.
+ * - A `Res_value` of type `TYPE_STRING` holds an index into the table's global string pool. An
+ *   entry holds one of those after its header, or — when it is a bag — one inside each of its
+ *   maps, and both places are the same field with the same index in it.
  *
  * Both pools are merged by **appending**, never by rebuilding: every string keeps its position,
  * so every index that already referred to one still does. A split's index is therefore rewritten
@@ -60,7 +62,8 @@ import java.io.ByteArrayOutputStream
  * Refusing is the general answer to anything this merge cannot show to be sound, and the caller
  * responds by keeping the base's own table: a resource table naming files the APK does not have
  * is worse than one naming none of them. So [merge] checks the structures it relies on, and then
- * reads back what it built, before returning anything.
+ * reads back what it built — every entry against the entry it came from, field by field — before
+ * returning anything.
  */
 object ResourceTableMerger {
 
@@ -128,6 +131,9 @@ object ResourceTableMerger {
     /** `ResTable_map`: a name reference and a `Res_value`. */
     private const val MAP_SIZE = 12
 
+    /** Where a `ResTable_map`'s `Res_value` sits inside it, behind the map's `name`. */
+    private const val MAP_VALUE_OFFSET = 4
+
     /** `ResTable_typeSpec`'s fixed header; its flags follow it. */
     private const val SPEC_HEADER_SIZE = 16
 
@@ -157,7 +163,16 @@ object ResourceTableMerger {
             val table: ByteArray,
             val sourceCount: Int,
             val resourceCount: Int,
-            val typeCount: Int
+            val typeCount: Int,
+            /**
+             * The requested paths whose entries were left out.
+             *
+             * This is what the merge actually did rather than what it was asked for: a path the
+             * base's table does not name has no entry to leave out, so it is not here. A caller
+             * holding the files the table names — the archive builder above all — drops exactly
+             * this set, and by construction it is the set the table stopped naming.
+             */
+            val droppedPaths: Set<String> = emptySet()
         ) : Result() {
             // A data class holding a ByteArray needs these spelled out, or two equal tables would
             // compare unequal and hash differently.
@@ -166,10 +181,12 @@ object ResourceTableMerger {
                     sourceCount == other.sourceCount &&
                     resourceCount == other.resourceCount &&
                     typeCount == other.typeCount &&
+                    droppedPaths == other.droppedPaths &&
                     table.contentEquals(other.table)
 
             override fun hashCode(): Int =
-                ((sourceCount * 31 + resourceCount) * 31 + typeCount) * 31 + table.contentHashCode()
+                (((sourceCount * 31 + resourceCount) * 31 + typeCount) * 31 + droppedPaths.hashCode()) * 31 +
+                    table.contentHashCode()
         }
 
         /** The merge was not attempted, or what it built did not read back. */
@@ -179,16 +196,25 @@ object ResourceTableMerger {
     /**
      * Merges [base] with every table in [splits], or refuses with the reason it could not.
      *
-     * With no splits there is nothing to merge and the base's own table comes back unchanged: a
-     * caller that fetched no split should not end up with a different table than it started with.
+     * With no splits and nothing to drop there is nothing to merge and the base's own table comes
+     * back unchanged: a caller that fetched no split should not end up with a different table than
+     * it started with.
+     *
+     * [droppedPaths] are `res/` file paths whose entries are left out of the result, because the
+     * archive this table is being built for is not going to hold those files. A compiled file
+     * resource's value *is* the path of the file it resolves to, so an entry naming an absent file
+     * is a resource that resolves to nothing — which is what the caller is building the table to
+     * avoid, not something it can be left holding. The paths the base's table did not name are
+     * reported back in [Result.Merged.droppedPaths] as not dropped, so a caller can tell what was
+     * asked for from what happened.
      */
-    fun merge(base: ByteArray, splits: List<ByteArray>): Result {
+    fun merge(base: ByteArray, splits: List<ByteArray>, droppedPaths: Set<String> = emptySet()): Result {
         val baseSource = try {
             parse(base)
         } catch (e: TableFormatException) {
             return Result.Refused("the base's resources.arsc could not be read: ${e.message}")
         }
-        if (splits.isEmpty()) {
+        if (splits.isEmpty() && droppedPaths.isEmpty()) {
             return Result.Merged(
                 table = base,
                 sourceCount = 1,
@@ -234,12 +260,28 @@ object ResourceTableMerger {
             stringCount += source.globalPool.count
         }
 
-        val entries = LinkedHashMap<TypeConfig, MutableMap<Int, ByteArray>>()
+        // Which entries name a file the archive is not going to hold. The pools are read for this
+        // and nothing else in the merge reads them at all: what an entry's value says is otherwise
+        // just bytes to be moved, and a merge that drops nothing never looks inside one.
+        val omissionSlots = ArrayList<Map<TypeConfig, Set<Int>>>(sources.size)
+        val droppedFound = LinkedHashSet<String>()
+        if (droppedPaths.isNotEmpty()) {
+            for (source in sources) {
+                val omission = entriesNaming(source, droppedPaths) ?: return Result.Refused(
+                    "a string pool could not be read, so the entries naming the files to leave out could not be found"
+                )
+                omissionSlots.add(omission.slots)
+                droppedFound.addAll(omission.paths)
+            }
+        }
+
+        val entries = LinkedHashMap<TypeConfig, MutableMap<Int, Placed>>()
         val specs = LinkedHashMap<Int, IntArray>()
-        for (source in sources) {
+        for ((sourceIndex, source) in sources.withIndex()) {
             for ((key, byIndex) in source.entries) {
                 val merged = entries.getOrPut(key) { LinkedHashMap() }
                 for ((index, entryBytes) in byIndex) {
+                    if (index in omissionSlots.getOrNull(sourceIndex)?.get(key).orEmpty()) continue
                     if (merged.containsKey(index)) {
                         return Result.Refused(
                             "the tables disagree about resource 0x%08x: two of them carry an entry ".format(
@@ -247,8 +289,17 @@ object ResourceTableMerger {
                             ) + "at the same index in type 0x%02x under the same configuration".format(key.typeId)
                         )
                     }
-                    merged[index] = rewrite(entryBytes, source.keyDelta, source.stringDelta)
+                    merged[index] = Placed(
+                        bytes = rewrite(entryBytes, source.keyDelta, source.stringDelta),
+                        source = entryBytes,
+                        keyDelta = source.keyDelta,
+                        stringDelta = source.stringDelta
+                    )
                 }
+                // A type and configuration whose every entry was left out carries nothing, and an
+                // empty map is not a shape the writer below can lay out: it is dropped here rather
+                // than written as a type chunk with no entries in it.
+                if (merged.isEmpty()) entries.remove(key)
             }
             for ((typeId, flags) in source.specFlags) {
                 val merged = specs[typeId]
@@ -262,17 +313,63 @@ object ResourceTableMerger {
             }
         }
 
+        val resourceCount = entries.values.sumOf { it.size }
         val table = build(sources, entries, specs)
-        val problem = validate(table, expectedStrings = stringCount, expectedKeys = keyCount)
+        val problem = validate(
+            table,
+            entries,
+            expectedStrings = stringCount,
+            expectedKeys = keyCount,
+            expectedEntries = resourceCount
+        )
         if (problem != null) {
             return Result.Refused("the merged resources.arsc did not read back: $problem")
         }
         return Result.Merged(
             table = table,
             sourceCount = sources.size,
-            resourceCount = entries.values.sumOf { it.size },
-            typeCount = entries.keys.map { it.typeId }.toSet().size
+            resourceCount = resourceCount,
+            typeCount = entries.keys.map { it.typeId }.toSet().size,
+            droppedPaths = droppedFound
         )
+    }
+
+    /**
+     * What a drop took out of one source's table: the indexes of the entries left out, by the type
+     * and configuration they sit under, and which of the requested paths those entries named.
+     *
+     * The second is not the request. A path the table does not name has no entry to leave out, so
+     * it is not reported as dropped — the caller drops files from an archive on the strength of
+     * this, and a claim about a path neither table mentioned would be a claim about nothing.
+     */
+    private class Omission(val slots: Map<TypeConfig, Set<Int>>, val paths: Set<String>)
+
+    /**
+     * The entries of [source] that name one of [paths], or null when its string pool cannot be read.
+     *
+     * This is [namedPaths] asked one entry at a time rather than of a whole table: a caller dropping
+     * files from the archive needs to know which entries to leave out, not which paths exist
+     * somewhere in the table.
+     */
+    private fun entriesNaming(source: TableSource, paths: Set<String>): Omission? {
+        val strings = try {
+            readPool(source.globalPool.chunk)
+        } catch (e: TableFormatException) {
+            return null
+        }
+        val slots = LinkedHashMap<TypeConfig, MutableSet<Int>>()
+        val named = LinkedHashSet<String>()
+        for ((key, byIndex) in source.entries) {
+            for ((index, entry) in byIndex) {
+                for (stringIndex in stringIndexes(entry)) {
+                    val value = strings.getOrNull(stringIndex) ?: continue
+                    if (value !in paths) continue
+                    named.add(value)
+                    slots.getOrPut(key) { LinkedHashSet() }.add(index)
+                }
+            }
+        }
+        return Omission(slots, named)
     }
 
     /**
@@ -369,6 +466,22 @@ object ResourceTableMerger {
         var keyDelta: Int = 0
         var stringDelta: Int = 0
     }
+
+    /**
+     * One entry as it goes into the merged table, kept beside the entry it was made from.
+     *
+     * [bytes] is what the writer lays down and [source] is what went in, and keeping both is what
+     * lets [validate] ask whether the rewrite actually did what it claims — by comparing the two
+     * rather than by asking the arithmetic that produced them whether it agrees with itself. The
+     * two deltas are kept with them so the comparison does not have to find the table each entry
+     * came from again.
+     */
+    private class Placed(
+        val bytes: ByteArray,
+        val source: ByteArray,
+        val keyDelta: Int,
+        val stringDelta: Int
+    )
 
     /**
      * Reads [table] into the pieces the merge needs, or throws [TableFormatException] naming the
@@ -645,7 +758,9 @@ object ResourceTableMerger {
      *
      * Nothing else is touched. The entry keeps its size, its flags and its key's position within
      * its own table — offset by where that table starts — and every value that is not a string,
-     * because a reference is a resource id and those are already global.
+     * because a reference is a resource id and those are already global. A bag's values are
+     * rewritten through the same [valueOffsets] a simple entry's is, which is what puts the write
+     * at the `Res_value` inside each map rather than at the map's name.
      */
     private fun rewrite(entry: ByteArray, keyDelta: Int, stringDelta: Int): ByteArray {
         val out = entry.copyOf()
@@ -660,11 +775,26 @@ object ResourceTableMerger {
         return out
     }
 
-    /** Where each `Res_value` in an entry starts, relative to the entry. */
+    /**
+     * Where each `Res_value` in an entry starts, relative to the entry: the field that
+     * [VALUE_TYPE_OFFSET] and [VALUE_DATA_OFFSET] are then read and written at.
+     *
+     * A simple entry is one `ResTable_entry` followed by its value, so that value starts at the
+     * entry header's own size. A complex entry is a `ResTable_map_entry` followed by its maps,
+     * and each map is a `name` *followed by* the value it names — so a map's value is
+     * [MAP_VALUE_OFFSET] bytes into the map, not at its start. Returning the map's start instead
+     * points every caller at the name: this merge used to do exactly that, and rewrote nothing for
+     * a bag while reporting success, leaving the split-local pool index it should have rebased in
+     * place.
+     *
+     * Both shapes are the same thing to every caller — the position of a `Res_value` — which is why
+     * they share one function and why the difference between them has to be *here* rather than
+     * duplicated, or one of the two paths drifts.
+     */
     private fun valueOffsets(entry: ByteArray): List<Int> {
         if (u16(entry, 2) and ENTRY_COMPLEX == 0) return listOf(ENTRY_HEADER_SIZE)
         val count = u32(entry, 12)
-        return (0 until count).map { MAP_ENTRY_HEADER_SIZE + it * MAP_SIZE }
+        return (0 until count).map { MAP_ENTRY_HEADER_SIZE + it * MAP_SIZE + MAP_VALUE_OFFSET }
     }
 
     /** The global-pool indexes an entry's string-valued fields hold. */
@@ -681,7 +811,7 @@ object ResourceTableMerger {
     /** Writes the merged table: the base's names, the appended pools, then the rebuilt types. */
     private fun build(
         sources: List<TableSource>,
-        entries: Map<TypeConfig, Map<Int, ByteArray>>,
+        entries: Map<TypeConfig, Map<Int, Placed>>,
         specs: Map<Int, IntArray>
     ): ByteArray {
         val base = sources.first()
@@ -727,7 +857,7 @@ object ResourceTableMerger {
      * Type ids and configurations are both written in order, so the same inputs always produce
      * the same bytes — a table that differed run to run would be one no two builds could compare.
      */
-    private fun packageBody(entries: Map<TypeConfig, Map<Int, ByteArray>>, specs: Map<Int, IntArray>): ByteArray {
+    private fun packageBody(entries: Map<TypeConfig, Map<Int, Placed>>, specs: Map<Int, IntArray>): ByteArray {
         val out = ByteArrayOutputStream()
         val byType = entries.keys.groupBy { it.typeId }
         for (typeId in byType.keys.sorted()) {
@@ -750,7 +880,7 @@ object ResourceTableMerger {
      * copying a decision made for one table's contents onto another's. Dense is valid for any
      * contents, so dense is what a merge produces.
      */
-    private fun typeChunk(typeId: Int, config: ByteArray, entries: Map<Int, ByteArray>): ByteArray {
+    private fun typeChunk(typeId: Int, config: ByteArray, entries: Map<Int, Placed>): ByteArray {
         val entryCount = entries.keys.max() + 1
         val headerSize = align4(TYPE_FIXED_HEADER_SIZE + config.size)
         val offsets = ByteArray(entryCount * 4)
@@ -761,7 +891,7 @@ object ResourceTableMerger {
                 putU32(offsets, i * 4, NO_ENTRY)
             } else {
                 putU32(offsets, i * 4, body.size())
-                body.write(entry)
+                body.write(entry.bytes)
             }
         }
         val written = body.toByteArray()
@@ -890,11 +1020,33 @@ object ResourceTableMerger {
      *
      * This re-reads the bytes that were produced rather than trusting the writer: the chunk tree
      * has to tile, every entry's name index has to land inside the key pool, and every
-     * string-valued field has to land inside the global pool. A writer and a reader that shared a
-     * mistake would agree with each other, which is why the read-back goes through [parse] and
-     * [readPool] rather than through anything the writer kept.
+     * string-valued field has to land inside the global pool.
+     *
+     * Those are the checks the table can answer about itself, and on their own they are not
+     * enough. A rebase that was never applied leaves a *valid* index — one that is in range in the
+     * merged pool because the split's segment sits above it — pointing at the wrong string, and no
+     * amount of reading the merged table alone can tell that apart from the right one. So each
+     * entry is also compared against the entry it was made from ([difference]), which is what a
+     * rewrite that skipped a field, or wrote at the wrong offset, cannot survive.
+     *
+     * The comparison is deliberately not made through the arithmetic that produced the entry: it
+     * is [valueOffsets] that decides where a value sits, and a validator that asked the same
+     * function where to look would be blind in exactly the place a mistake in it would be — which
+     * is how the bag-map defect this merge shipped got past it. The offsets the comparison uses
+     * are checked against the bytes that are actually there first ([checkValue]), against the
+     * source entry rather than anything this merge wrote, so an offset that named some other field
+     * fails the build instead of being believed by the writer and the reader alike.
+     *
+     * Last, the entries are counted: the number the caller is handed back as how many came out has
+     * to be the number the table holds.
      */
-    private fun validate(table: ByteArray, expectedStrings: Int, expectedKeys: Int): String? {
+    private fun validate(
+        table: ByteArray,
+        entries: Map<TypeConfig, Map<Int, Placed>>,
+        expectedStrings: Int,
+        expectedKeys: Int,
+        expectedEntries: Int
+    ): String? {
         val source = try {
             parse(table)
         } catch (e: TableFormatException) {
@@ -913,22 +1065,121 @@ object ResourceTableMerger {
         } catch (e: TableFormatException) {
             return e.message
         }
+        var counted = 0
         for ((key, byIndex) in source.entries) {
-            for (entry in byIndex.values) {
+            val placed = entries[key]
+                ?: return "type 0x%02x carries a configuration no entry was placed under".format(key.typeId)
+            for ((index, entry) in byIndex) {
+                val origin = placed[index]
+                    ?: return "type 0x%02x holds an entry at index %d that no source carried".format(
+                        key.typeId, index
+                    )
                 val nameIndex = u32(entry, 4)
                 if (nameIndex < 0 || nameIndex >= source.keyStrings.count) {
                     return "type 0x%02x has an entry naming key %d of %d".format(
                         key.typeId, nameIndex, source.keyStrings.count
                     )
                 }
-                for (index in stringIndexes(entry)) {
-                    if (index < 0 || index >= strings.size) {
+                for (string in stringIndexes(entry)) {
+                    if (string < 0 || string >= strings.size) {
                         return "type 0x%02x has an entry pointing at string %d of %d".format(
-                            key.typeId, index, strings.size
+                            key.typeId, string, strings.size
                         )
                     }
                 }
+                val difference = difference(entry, origin)
+                if (difference != null) {
+                    return "type 0x%02x index %d is not its source entry with the pool indexes moved: $difference".format(
+                        key.typeId, index
+                    )
+                }
+                counted++
             }
+        }
+        // The count the caller is handed is [Result.Merged.resourceCount], so it has to be the
+        // count the table actually holds rather than the count the merge meant to place.
+        if (counted != expectedEntries) {
+            return "it holds $counted entries where the merge placed $expectedEntries"
+        }
+        return null
+    }
+
+    /**
+     * What [written] says where the entry it was made from says something else, or null if it is
+     * that entry with its two pool indexes moved and nothing else.
+     *
+     * The rule is the merge's whole contract, checked against the bytes rather than against the
+     * intent: the key must hold its source's key plus the delta that table's key pool was placed
+     * at, every string-valued field must hold its source's index plus that table's string delta,
+     * and no other byte of the entry may differ from the source's at all.
+     *
+     * Nothing here consults the offsets the writer used. [valueOffsets] says where a value sits,
+     * [checkValue] requires the source's bytes at each of those places to *be* a `Res_value`, and
+     * then every remaining byte is compared one for one — so a rewrite that wrote where it should
+     * not have, or failed to write where it should, is a difference this returns rather than a
+     * difference nobody looks for.
+     */
+    private fun difference(written: ByteArray, origin: Placed): String? {
+        val source = origin.source
+        if (written.size != source.size) {
+            return "it is ${written.size} bytes where its source's entry is ${source.size}"
+        }
+        if (u32(written, 4) != u32(source, 4) + origin.keyDelta) {
+            return "its key index is %d where its source's %d moved by %d is %d".format(
+                u32(written, 4), u32(source, 4), origin.keyDelta, u32(source, 4) + origin.keyDelta
+            )
+        }
+
+        // The key field is the first four bytes after the entry header; a value's data is its last
+        // four. Every other byte of the entry has to come through untouched.
+        val rewritten = HashSet<Int>()
+        for (at in 4 until ENTRY_HEADER_SIZE) rewritten.add(at)
+        for (at in valueOffsets(source)) {
+            val shape = checkValue(source, at)
+            if (shape != null) return shape
+            if (source[at + VALUE_TYPE_OFFSET].toInt() and 0xFF != TYPE_STRING) continue
+            if (written[at + VALUE_TYPE_OFFSET].toInt() and 0xFF != TYPE_STRING) {
+                return "the value at +$at came out typed ${
+                    written[at + VALUE_TYPE_OFFSET].toInt() and 0xFF
+                } where its source's is a string"
+            }
+            val stored = u32(written, at + VALUE_DATA_OFFSET)
+            val expected = u32(source, at + VALUE_DATA_OFFSET) + origin.stringDelta
+            if (stored != expected) {
+                return "the string value at +$at holds pool index %d where its source's %d moved by %d is %d".format(
+                    stored, u32(source, at + VALUE_DATA_OFFSET), origin.stringDelta, expected
+                )
+            }
+            for (i in VALUE_DATA_OFFSET until VALUE_SIZE) rewritten.add(at + i)
+        }
+        for (i in written.indices) {
+            if (written[i] != source[i] && i !in rewritten) {
+                return "its byte $i was written where its source holds ${source[i].toInt() and 0xFF}"
+            }
+        }
+        return null
+    }
+
+    /**
+     * Requires the field at [at] in [entry] to be a `Res_value`: eight bytes long, with the
+     * reserved byte the format requires to be zero.
+     *
+     * This is what keeps [valueOffsets] from being the only word on where a value is. A bag's
+     * value sits four bytes into its `ResTable_map`, behind the map's `name`, and an offset that
+     * landed on that name instead reads a length from the low half of a resource id — `0x01000001`
+     * reads as a one-byte value, never the eight a `Res_value` declares — so the mistake is
+     * refused here rather than written into a table.
+     */
+    private fun checkValue(entry: ByteArray, at: Int): String? {
+        if (at < 0 || at + VALUE_SIZE > entry.size) {
+            return "a value at +$at runs past the entry's ${entry.size} bytes"
+        }
+        val size = u16(entry, at)
+        if (size != VALUE_SIZE) {
+            return "the field at +$at declares $size bytes and a Res_value declares $VALUE_SIZE"
+        }
+        if (entry[at + 2].toInt() != 0) {
+            return "the field at +$at has a reserved byte where a Res_value's is zero"
         }
         return null
     }

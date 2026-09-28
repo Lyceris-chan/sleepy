@@ -117,10 +117,13 @@ fun PatchSelectScreen(
     val permissionScan by viewModel.permissions.collectAsState()
 
     // Recomputed from the selection like the patch rows, so the last permission standing starts
-    // refusing as soon as it is the last and stops as soon as another is switched back on.
-    val permissionRows = remember(permissionScan, selection) {
+    // refusing as soon as it is the last and stops as soon as another is switched back on. The
+    // source's package is part of the inputs because it is what decides which declarations the
+    // build removes itself, whatever the selection says — the same question the manifest pass asks
+    // with the same name.
+    val permissionRows = remember(permissionScan, selection, source?.packageName) {
         (permissionScan as? PermissionScan.Read)
-            ?.let { PatchRows.permissionRows(it.declared, selection) }
+            ?.let { PatchRows.permissionRows(it.declared, selection, source?.packageName) }
             .orEmpty()
     }
     val permissionRemovalCount = permissionRows.count { it.switchable && !it.enabled }
@@ -599,12 +602,16 @@ private fun PermissionCheckReport(check: PermissionCheck, onRead: () -> Unit) {
 }
 
 /**
- * What the read list currently means: how many declarations are kept, how many are locked, and what
- * removing the rest will do.
+ * What the read list currently means: how many declarations are kept, how many are not the user's
+ * to move, and what removing the rest will do.
  *
  * The effect is stated rather than implied, because it is the one thing in this screen that cannot
  * be undone on the installed app: a declaration that is deleted cannot be re-declared by the app
  * later, so the permission is not "off" — it is gone.
+ *
+ * A row the build removes on its own is counted and described as itself rather than folded into
+ * either end. It is not a removal the user is making, so it must not appear as one; it is not kept
+ * either, so a summary that counted it as kept would be the same lie the row was fixed to avoid.
  */
 @Composable
 private fun PermissionSummary(rows: List<PatchRow>) {
@@ -618,8 +625,10 @@ private fun PermissionSummary(rows: List<PatchRow>) {
     }
 
     val kept = rows.count { it.enabled }
-    val locked = rows.count { !it.switchable }
+    val alwaysRemoved = rows.count { !it.switchable && !it.enabled }
+    val locked = rows.count { !it.switchable && it.enabled }
     val removals = rows.count { it.switchable && !it.enabled }
+    val removedNoun = if (alwaysRemoved == 1) "declaration" else "declarations"
 
     Text(
         text = "$kept of ${rows.size} kept" +
@@ -630,14 +639,20 @@ private fun PermissionSummary(rows: List<PatchRow>) {
     )
     Spacer(modifier = Modifier.height(6.dp))
     Text(
-        text = if (removals > 0) {
-            "$removals declaration${if (removals == 1) "" else "s"} will be deleted from the " +
-                "manifest of the APK this run produces. That is permanent: Android gives an app " +
-                "only the permissions its manifest declares, and an installed app has no way to " +
-                "declare more later, so whatever depends on ${if (removals == 1) "it" else "them"} " +
-                "stops working for good."
-        } else {
-            "Nothing is switched off, so every declaration this build ships stays in the manifest."
+        text = when {
+            removals > 0 ->
+                "$removals declaration${if (removals == 1) "" else "s"} will be deleted from the " +
+                    "manifest of the APK this run produces. That is permanent: Android gives an app " +
+                    "only the permissions its manifest declares, and an installed app has no way to " +
+                    "declare more later, so whatever depends on ${if (removals == 1) "it" else "them"} " +
+                    "stops working for good."
+            alwaysRemoved > 0 ->
+                "Nothing is switched off. $alwaysRemoved $removedNoun will still not be declared " +
+                    "in the APK this run produces: sleepy deletes " +
+                    "${if (alwaysRemoved == 1) "this one" else "these"} from every build of this " +
+                    "app, which is why ${if (alwaysRemoved == 1) "its" else "their"} row has no " +
+                    "switch to move."
+            else -> "Nothing is switched off, so every declaration this build ships stays in the manifest."
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -646,6 +661,15 @@ private fun PermissionSummary(rows: List<PatchRow>) {
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = "$locked of them cannot be removed and each says why on its own row.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    if (alwaysRemoved > 0) {
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "$alwaysRemoved of them are removed by every build this patch makes, and each " +
+                "says why on its own row.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

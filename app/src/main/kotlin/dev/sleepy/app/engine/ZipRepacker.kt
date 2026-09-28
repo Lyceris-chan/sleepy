@@ -100,6 +100,17 @@ object ZipRepacker {
     private val DROPPED_ENTRIES = setOf("assets/index.android.bundle.patch")
 
     /**
+     * Files that describe the archive this one was rebuilt from rather than anything it holds.
+     *
+     * `stamp-cert-sha256` is the Play source stamp: it records which signed build an APK was
+     * derived from. A rebuilt APK is signed with a key of our own, so carrying the stamp forward
+     * states a provenance this file does not have. The desktop reference has no such entry for the
+     * same reason — apktool's decoder groups it with `AndroidManifest.xml` and the META-INF
+     * signature files in `ApkInfo.ORIGINAL_FILES_PATTERN` and never writes it back.
+     */
+    private val STAMP_ENTRIES = setOf("stamp-cert-sha256")
+
+    /**
      * Rebuilds [inputApk] into [output], reading the source a single entry at a time and never
      * holding the result: the archive being produced is written straight through to whatever
      * [output] is, so it exists once rather than as a buffer plus a copy of that buffer.
@@ -112,6 +123,12 @@ object ZipRepacker {
      * @param droppedEntries extra names to leave out, on top of the built-in set. The calling
      *   pipeline supplies these from whichever patch set is active, so dropping a crash
      *   reporter's own artefacts happens only when that reporter is being disabled.
+     *
+     *   A dropped name is dropped however the rebuild would have written it — from the source
+     *   archive, from [replacements], or as one of [additionalEntries]. That is the whole point of
+     *   taking the set here rather than filtering the source: a merged split contributes entries
+     *   the source APK never held, and a caller cannot filter those for itself without walking the
+     *   splits' contents a second time.
      */
     fun repackTo(
         inputApk: File,
@@ -147,7 +164,10 @@ object ZipRepacker {
         additionalEntries: Map<String, AdditionalEntry>,
         droppedEntries: Set<String>
     ): RepackReport {
-        val dropped = mutableListOf<String>()
+        // Insertion-ordered and a set, because more than one of the walks below can reach the same
+        // name — a name can be in the source archive and in the replacements at once — and the
+        // report names each entry once.
+        val dropped = mutableSetOf<String>()
         val sourceMethods = mutableMapOf<String, Int>()
         // One buffer for the whole rebuild: every entry is copied through it in turn, so no
         // entry's contents are ever held in full.
@@ -209,6 +229,13 @@ object ZipRepacker {
             }
 
             for ((name, data) in replacements) {
+                // A name that is also being dropped is left out here too. The walk above already
+                // passed over the source's copy of it, so writing the replacement would put the
+                // entry back and make the drop report a claim about something that is still there.
+                if (isDropped(name, droppedEntries)) {
+                    dropped.add(name)
+                    continue
+                }
                 val method = sourceMethods[name] ?: ZipEntry.DEFLATED
                 val newEntry = ZipEntry(name).apply {
                     this.method = method
@@ -221,6 +248,14 @@ object ZipRepacker {
             }
 
             for ((name, additional) in additionalEntries) {
+                // The merged-in case, and the one the drop above used to miss: an ABI split's
+                // libraries are entries the base APK never held, so a drop list checked against
+                // the source archive alone left a crash reporter's own shared objects in the
+                // output of a build that documents them as removed.
+                if (isDropped(name, droppedEntries)) {
+                    dropped.add(name)
+                    continue
+                }
                 val newEntry = ZipEntry(name).apply {
                     method = additional.method
                     time = DETERMINISTIC_TIME
@@ -240,7 +275,7 @@ object ZipRepacker {
         return RepackReport(
             replacedEntries = replacements.keys.toList(),
             addedEntries = additionalEntries.keys.toList(),
-            droppedEntries = dropped
+            droppedEntries = dropped.toList()
         )
     }
 
@@ -250,10 +285,22 @@ object ZipRepacker {
         additionalEntries: Map<String, AdditionalEntry>,
         droppedEntries: Set<String>
     ): Boolean {
-        if (name in SIGNATURE_ENTRIES || name in DROPPED_ENTRIES || name in droppedEntries) return true
-        if (name in replacements || name in additionalEntries) return true
-        if (name.startsWith("META-INF/") && (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA"))) return true
-        return false
+        if (isDropped(name, droppedEntries)) return true
+        return name in replacements || name in additionalEntries
+    }
+
+    /**
+     * Whether [name] must be left out however it arrives, which is the question every entry the
+     * rebuild writes has to answer — the source's own entries, the replacements, and the entries a
+     * merged split contributed.
+     *
+     * The two built-in sets are entries no rebuilt archive may carry: the signature files of the
+     * APK this one replaces, and the source stamp that names which build it was signed off. A
+     * caller's [droppedEntries] says the same about the artefacts of whatever it is disabling.
+     */
+    private fun isDropped(name: String, droppedEntries: Set<String>): Boolean {
+        if (name in SIGNATURE_ENTRIES || name in DROPPED_ENTRIES || name in STAMP_ENTRIES || name in droppedEntries) return true
+        return name.startsWith("META-INF/") && (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA"))
     }
 
     private fun setStoredMetadata(entry: ZipEntry, data: ByteArray) {

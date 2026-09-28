@@ -2,12 +2,15 @@ package dev.sleepy.app
 
 import dev.sleepy.app.model.BlocklistCoverage
 import dev.sleepy.app.model.PatchSelection
+import dev.sleepy.app.model.PermissionCoverage
 import dev.sleepy.app.model.groupedByFeature
+import dev.sleepy.app.patches.DeclaredPermissions
 import dev.sleepy.app.patches.DiscordBlocklistPatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.patches.PatchRegistry
+import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.ui.state.InertKind
 import dev.sleepy.app.ui.state.PatchRow
 import dev.sleepy.app.ui.state.PatchRows
@@ -29,6 +32,10 @@ import org.junit.Test
  * case where the gift button is on and the rest of the JavaScript set is not — and a greyed row has
  * to say which of the two reasons it is greyed for, because they are different claims and one of
  * them stops being true the moment the rule covering it is switched off.
+ *
+ * The permission section is rendered out of the same rows, so it is tested here too: a declaration
+ * the build removes on its own is greyed like a gate, and a declaration the build leaves alone is a
+ * live switch that reads as kept.
  */
 class PatchRowStateTest {
 
@@ -328,6 +335,79 @@ class PatchRowStateTest {
         }
     }
 
+    /**
+     * Every permission row the section renders is the same shape as the blocklist's gates: a row
+     * with no item, a fixed switch, and the model's own reason for it. None of them is a live
+     * switch over a declaration the build has already decided about.
+     *
+     * The declarations Discord's own pass deletes are the case this exists for. They were rows with
+     * an ordinary switch, switched on, under a build that takes them out whatever the switch says —
+     * a control whose position is the opposite of what the run does. The fix is not a second kind of
+     * row: it is the same [InertKind.REQUIRED] grey-out the gates use, reached through the model's
+     * [PermissionCoverage.ALWAYS_REMOVED_REASON], and this asserts both halves — the switch is fixed
+     * and the row says which declaration it is and what happens to it.
+     */
+    @Test
+    fun thePermissionRowsABuildRemovesItselfAreFixedAndSaySo() {
+        val declared = requireNotNull(DeclaredPermissions.forPackage(DISCORD)) { "Discord's list is shipped" }
+        val dead = DiscordPatches.DEAD_PERMISSIONS
+        assertTrue("the list should still name every declaration this build strips", dead.all { it in declared })
+
+        val selection = PatchSelection().with(PermissionCatalog.itemsOf(declared))
+        val rows = PatchRows.permissionRows(declared, selection, DISCORD)
+        assertEquals(
+            "there is a row per declaration, in the manifest's order — a removed one is shown, not hidden",
+            declared.map { PermissionCatalog.itemKeyOf(it) },
+            rows.map { it.key }
+        )
+
+        for (name in dead) {
+            val deadRow = rows.first { it.key == PermissionCatalog.itemKeyOf(name) }
+            assertFalse("$name is not kept: the run takes it out", deadRow.enabled)
+            assertEquals("$name's switch is fixed, so it is inert", InertKind.REQUIRED, deadRow.inertKind)
+            assertNull("$name has no item: there is nothing a switch could select", deadRow.item)
+            assertFalse("$name's switch cannot be moved", deadRow.switchable)
+            assertEquals(
+                "$name must say why its switch is fixed",
+                PermissionCoverage.ALWAYS_REMOVED_REASON,
+                deadRow.inertReason
+            )
+            assertTrue("$name has no row text to read", deadRow.label.isNotBlank() && deadRow.description.isNotBlank())
+            val detail = requireNotNull(deadRow.detail) { "$name has no detail to open" }
+            assertTrue(
+                "$name's detail has to say the run removes it, got: $detail",
+                detail.contains("Removed from the manifest of every build")
+            )
+            assertFalse("$name's detail must not read as kept", detail.contains("Left declared"))
+        }
+
+        // The control: a declaration this build does not decide about is an ordinary live switch,
+        // switched on, so the greying above is about these names rather than about the section.
+        val camera = rows.first { it.key == PermissionCatalog.itemKeyOf("android.permission.CAMERA") }
+        assertTrue(camera.switchable)
+        assertTrue("nothing switched it off", camera.enabled)
+        assertNull(camera.inertKind)
+        assertNotNull("a live row still has its item", camera.item)
+        assertTrue(camera.detail!!.contains("Left declared"))
+
+        // And the gate is the package, not the name: the very same list offered for another app
+        // shows a live switch over every one of these, which is what the app has to keep doing for
+        // a build that still uses them.
+        val elsewhere = PatchRows.permissionRows(declared, selection, OCTOGRAM)
+        for (name in dead) {
+            val row = elsewhere.first { it.key == PermissionCatalog.itemKeyOf(name) }
+            assertTrue("$name is removable on a build sleepy does not strip it from", row.switchable)
+            assertTrue(row.enabled)
+            assertNull(row.inertKind)
+        }
+        assertNull(
+            "and with no build named at all, nothing is fixed on the build's behalf",
+            PatchRows.permissionRows(declared, selection)
+                .first { it.key == PermissionCatalog.itemKeyOf(dead.first()) }
+                .inertKind
+        )
+    }
+
     /** The row for [label] in a set's rows, as the screen would find it. */
     private fun row(rows: PatchSetRows, label: String): PatchRow =
         rows.groups.flatMap { it.rows }.first { it.label == label }
@@ -335,5 +415,9 @@ class PatchRowStateTest {
     private companion object {
         /** The catalog's label for the group the gift buttons are listed under. */
         const val GIFT_GROUP = "Gift buttons"
+
+        /** The package the dead declarations belong to, and one they do not. */
+        const val DISCORD = "com.discord"
+        const val OCTOGRAM = "it.octogram.android"
     }
 }
