@@ -670,7 +670,12 @@ class PatchingPipelineHarnessTest {
         // The clone rename. `execute` lines 764-778. A default build is not in clone mode
         // (`PatchViewModel.isCloneMode` starts false), so `customPackageName` is null and this
         // branch is skipped — held here as the same branch it is in `execute`, not a deletion.
-        val customPackageName: String? = null
+        //
+        // Overridable so the rename can be exercised on a real device without editing this file:
+        // `-Dsleepy.clonePackageName=com.discord.sleepy`. Unset means the default build.
+        val customPackageName: String? =
+            (System.getProperty("sleepy.clonePackageName") ?: System.getenv("SLEEPY_CLONE_PACKAGE"))
+                ?.takeIf { it.isNotBlank() }
         if (!customPackageName.isNullOrBlank() && customPackageName != ORIGINAL_PACKAGE && manifestBytes != null) {
             manifestBytes = BinaryXmlModifier.modifyPackageName(
                 manifestBytes = manifestBytes,

@@ -33,9 +33,12 @@ object BinaryXmlEditor {
     const val ATTR_NAME = 0x01010003
     const val ATTR_ENABLED = 0x0101000e
     const val ATTR_EXPORTED = 0x01010010
+    const val ATTR_TARGET_ACTIVITY = 0x01010202
+    const val ATTR_AUTHORITIES = 0x01010018
     const val ATTR_REQUIRED_SPLIT_TYPES = 0x0101064e
     const val ATTR_SPLIT_TYPES = 0x0101064f
     const val ATTR_EXTRACT_NATIVE_LIBS = 0x010104ea
+    const val ATTR_APP_COMPONENT_FACTORY = 0x0101057a
 
     /** The manifest element a declared permission lives in. */
     const val ELEMENT_USES_PERMISSION = "uses-permission"
@@ -616,8 +619,11 @@ object BinaryXmlEditor {
      * UTF-16), and an aapt2 build can be told to write either. Length prefixes are variable-width
      * in both, and out-of-range entries are left empty rather than throwing — this runs over a file
      * someone else produced, and a mis-sized pool must not take the patch run down with it.
+     *
+     * Shared with `BinaryXmlModifier`, which rewrites the package name: it reads the same pool this
+     * editor reads, and one decoder for it is one place for a mis-read to be fixed.
      */
-    private fun readStringPool(buf: ByteBuffer, xml: ByteArray): List<String> {
+    internal fun readStringPool(buf: ByteBuffer, xml: ByteArray): List<String> {
         var offset = buf.getShort(2).toInt() and 0xFFFF
         while (offset + CHUNK_HEADER_SIZE <= xml.size) {
             val type = buf.getShort(offset).toInt() and 0xFFFF
@@ -709,8 +715,12 @@ object BinaryXmlEditor {
         return resourceIds[nameIndex]
     }
 
-    /** Reads the `RES_XML_RESOURCE_MAP_TYPE` chunk, which maps string indices to resource IDs. */
-    private fun readResourceMap(buf: ByteBuffer, xml: ByteArray): IntArray {
+    /**
+     * Reads the `RES_XML_RESOURCE_MAP_TYPE` chunk, which maps string indices to resource IDs.
+     *
+     * Shared with `BinaryXmlModifier`, for the same reason the string pool is.
+     */
+    internal fun readResourceMap(buf: ByteBuffer, xml: ByteArray): IntArray {
         var offset = buf.getShort(2).toInt() and 0xFFFF
         while (offset + CHUNK_HEADER_SIZE <= xml.size) {
             val type = buf.getShort(offset).toInt() and 0xFFFF
