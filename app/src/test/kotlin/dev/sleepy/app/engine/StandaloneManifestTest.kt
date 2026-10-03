@@ -27,7 +27,7 @@ class StandaloneManifestTest {
             intAttribute(BinaryXmlEditor.ATTR_REQUIRED_SPLIT_TYPES, 1),
             intAttribute(BinaryXmlEditor.ATTR_SPLIT_TYPES, 1),
             booleanAttribute(BinaryXmlEditor.ATTR_EXTRACT_NATIVE_LIBS, false),
-            intAttribute(0x0101021b, 348205) // unrelated versionCode, must survive
+            intAttribute(0x0101021b, 349205) // unrelated versionCode, must survive
         )
 
         assertEquals(
@@ -54,7 +54,7 @@ class StandaloneManifestTest {
             )
         )
         assertEquals(
-            348205,
+            349205,
             BinaryXmlEditor.readIntAttribute(result.bytes, 0x0101021b)
         )
 
@@ -89,6 +89,10 @@ class StandaloneManifestTest {
             "precondition: requiredSplitTypes is present",
             BinaryXmlEditor.readAttributeValue(manifest, BinaryXmlEditor.ATTR_REQUIRED_SPLIT_TYPES)
         )
+        // Read the version code out of the fixture rather than repeating it here, so the next
+        // bump of the Discord source does not leave a stale expectation behind.
+        val versionCode = BinaryXmlEditor.readIntAttribute(manifest, 0x0101021b)
+        assertNotNull("precondition: the manifest declares a versionCode", versionCode)
 
         val result = BinaryXmlEditor.makeStandaloneManifest(manifest)
 
@@ -126,7 +130,7 @@ class StandaloneManifestTest {
         )
         assertEquals(
             "unrelated attributes must survive",
-            348205,
+            versionCode,
             BinaryXmlEditor.readIntAttribute(result.bytes, 0x0101021b)
         )
         assertEquals(

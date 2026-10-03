@@ -10,7 +10,7 @@ import java.io.File
  *
  * ```
  * discord/extracted/base.apk
- * discord/out/discord-alpha-348.5-patched-unsigned.apk
+ * discord/out/discord-alpha-349.5-patched-unsigned.apk
  * discord/decompiled/base
  * discord/tools/hermes-decomp
  * octogram/OctoGram_arm64.apk
@@ -28,26 +28,26 @@ object ReferenceApks {
     private fun external(relative: String, default: String): File =
         if (fixturesRoot != null) File(fixturesRoot, relative) else File(default)
 
-    /** The directory the Discord 348.5 base split and its splits were extracted into. */
+    /** The directory the Discord 349.5 base split and its splits were extracted into. */
     val discordExtracted: File = external(
         "discord/extracted",
-        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/apk/extracted"
+        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3495/apk/extracted"
     )
 
-    /** The Discord 348.5 base split. */
+    /** The Discord 349.5 base split. */
     val discordBaseApk: File = File(discordExtracted, "base.apk")
 
-    /** The desktop build's patched Discord 348.5 APK, the parity reference. */
+    /** The desktop build's patched Discord 349.5 APK, the parity reference. */
     val discordReferenceApk: File = external(
-        "discord/out/discord-alpha-348.5-patched-unsigned.apk",
-        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/out/" +
-            "discord-alpha-348.5-patched-unsigned.apk"
+        "discord/out/discord-alpha-349.5-patched-unsigned.apk",
+        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3495/out/" +
+            "discord-alpha-349.5-patched-unsigned.apk"
     )
 
-    /** The desktop build's decompiled tree for Discord 348.5. */
+    /** The desktop build's decompiled tree for Discord 349.5. */
     val discordDecompiledBase: File = external(
         "discord/decompiled/base",
-        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3482/decompiled/base"
+        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3495/decompiled/base"
     )
 
     /** The reference build's Hermes disassembler. */
@@ -56,7 +56,10 @@ object ReferenceApks {
         "/home/sleepy/Documents/antigravity/quirky-noether/discord/tools/hermes-decomp"
     )
 
-    /** The OctoGram 3.6.0 arm64 APK. */
+    /**
+     * The OctoGram 3.6.0 arm64 APK. No source offers this build, so the version gate must leave
+     * it unidentified and refuse every edit tagged for the registered build.
+     */
     val octoGramArm64: File = external(
         "octogram/OctoGram_arm64.apk",
         "/home/sleepy/Documents/antigravity/telegram/OctoGram_arm64.apk"

@@ -32,8 +32,8 @@ class PatchSelectionTest {
             source = PatchItemCatalog
         )
 
-        assertEquals("both sets in full", 145 + 81, selection.keys.size)
-        assertEquals(145, selection.selected(hermesItems).size)
+        assertEquals("both sets in full", 166 + 81, selection.keys.size)
+        assertEquals(166, selection.selected(hermesItems).size)
         assertEquals(81, selection.selected(blocklistItems).size)
 
         val untouched = PatchRegistry.all
@@ -52,8 +52,8 @@ class PatchSelectionTest {
     @Test
     fun anItemKeyRoundTripsAndAnUnknownIdIsKeptRatherThanCrashing() {
         assertEquals(
-            setOf("discord_hermes:fn73760"),
-            PatchSelection.fromSavedIds(listOf("discord_hermes:fn73760"), PatchItemCatalog).keys
+            setOf("discord_hermes:fn83581"),
+            PatchSelection.fromSavedIds(listOf("discord_hermes:fn83581"), PatchItemCatalog).keys
         )
         assertEquals(
             "an id whose set no longer exists has no items, so it is kept as it was written",
@@ -72,12 +72,12 @@ class PatchSelectionTest {
     fun aSetSwitchSelectsAndDeselectsEveryItemOfTheSet() {
         var selection = PatchSelection()
         selection = selection.setEnabled(hermesItems, true)
-        assertEquals(145, selection.selected(hermesItems).size)
+        assertEquals(166, selection.selected(hermesItems).size)
 
         selection = selection.toggle(hermesItems.first())
         assertEquals(
             "the set switch is not the last item state",
-            144,
+            165,
             selection.selected(hermesItems).size
         )
 
@@ -87,7 +87,7 @@ class PatchSelectionTest {
         selection = selection.setEnabled(hermesItems, true)
         assertEquals(
             "switching the set back on restores the whole set",
-            145,
+            166,
             selection.selected(hermesItems).size
         )
     }

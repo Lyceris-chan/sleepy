@@ -29,8 +29,8 @@ package dev.sleepy.app.engine
  * flags                   bits 88..95   ( 8)   overflowed = 0x20
  * ```
  *
- * `offset` and `bytecodeSizeInBytes` give the location for the 1,833 functions small enough
- * to store them directly. The other 126,636 are marked overflowed and store a pointer to a
+ * `offset` and `bytecodeSizeInBytes` give the location for the 1,839 functions small enough
+ * to store them directly. The other 153,590 are marked overflowed and store a pointer to a
  * second, wider header instead:
  * `largeOffset = (functionName shl 24) or (offset and 0x00FFFFFF)`, whose record holds
  * `offset` at `+0` and `bytecodeSizeInBytes` at `+12` as full 32-bit fields.
@@ -38,7 +38,7 @@ package dev.sleepy.app.engine
  * ## Verification
  *
  * The offsets returned by [locate] were compared with `hermes-decomp dump --kind functions`
- * for all 128,469 functions of the Discord 348.5 bundle, including the 14 targets that
+ * for all 155,429 functions of the Discord 349.5 bundle, including the 14 targets that
  * the patch set uses, and the two outputs matched byte for byte. That dump is the reference:
  * if this file changes, compare the result against a real bundle rather than against the
  * arithmetic alone.
@@ -46,13 +46,13 @@ package dev.sleepy.app.engine
  * Two properties of the format that this implementation accounts for:
  *
  * - The body offsets are **not** stored in the function header table as values that can be
- *   found by searching for them. Only 1,833 of them appear there directly; the rest are in the
+ *   found by searching for them. Only 1,839 of them appear there directly; the rest are in the
  *   large-header table near the end of the file. Finding an offset only in the large-header
  *   table does not mean that the function header table lacks an entry for it.
- * - Hermes bodies are **not** stored contiguously. Only 101,024 of 128,468 consecutive pairs
- *   satisfy `offset[i] + size[i] == offset[i + 1]`; 3,860 functions share a body with their
- *   neighbor and 11,508 partially overlap. A check that assumes contiguous bodies rejects
- *   this layout, so it does not validate one.
+ * - Hermes bodies are **not** stored contiguously. Only 115,954 of 155,428 consecutive pairs
+ *   satisfy `offset[i] + size[i] == offset[i + 1]`, and 6,598 consecutive pairs share a body
+ *   exactly. A check that assumes contiguous bodies rejects this layout, so it does not
+ *   validate one.
  */
 object HermesFunctionTable {
 

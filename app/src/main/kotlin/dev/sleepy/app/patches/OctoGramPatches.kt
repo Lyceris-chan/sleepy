@@ -15,7 +15,8 @@ import dev.sleepy.app.model.SmaliPatch
  * - work361/patch_premium_settings.py (The premium rows in the profile's settings list)
  *
  * patch_dex.py (OctoGram 3.6.0) is deliberately not transcribed: no source here offers a 3.6.0
- * build, so its entries cannot run, and a patch that cannot run is a row in the selection
+ * build, and the engine patches only a build identified as [REGISTERED_BUILD], so its entries
+ * cannot run on any build this app accepts. A patch that cannot run is a row in the selection
  * list that describes a change it does not make. The edits it describes are noted where they would
  * have gone, so adding a 3.6.0 source means porting them rather than rediscovering them.
  *
@@ -50,11 +51,12 @@ import dev.sleepy.app.model.SmaliPatch
 object OctoGramPatches {
 
     /**
-     * The build named by the manifest's OctoGram source—see `sources.json`.
+     * The build named by the manifest's OctoGram source, see `sources.json`.
      *
-     * Every entry here is tagged for this one build or left untagged, because an entry tagged for
-     * another build cannot run on any source this app offers. The reference scripts' 3.6.0
-     * entries are therefore not ported at all.
+     * Every entry here is tagged for this one build or left untagged. A tagged entry runs only on
+     * a build the engine identifies as this version: an APK whose classes identify no supported
+     * build is refused every tagged entry, with the reason in the step log. The reference
+     * scripts' 3.6.0 entries are therefore not ported at all.
      *
      * The entries spell their tags out rather than reading this constant, and this is the value the
      * content test holds every tag to: a tag mistyped in one entry then fails that test, instead of
@@ -565,8 +567,10 @@ object OctoGramPatches {
     /**
      * The one edit each Firebase set makes: its registrar's component list, emptied.
      *
-     * Untagged, because the registrar has shipped identically across the supported builds and needs no version to be
-     * found in. Only the obfuscated Telegram classes are renamed between builds.
+     * Untagged, because the registrar's name does not change between releases and no version is
+     * needed to find it. Only the obfuscated Telegram classes are renamed between builds. This is
+     * also the only edit an unidentified build may receive, because the gate resolves it by class
+     * name rather than by version.
      */
     private fun firebaseRegistrarEdit(
         smaliPath: String,

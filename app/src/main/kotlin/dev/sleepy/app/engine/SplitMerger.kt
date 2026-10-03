@@ -27,8 +27,8 @@ import java.util.zip.ZipInputStream
  *
  * What is deliberately *not* merged is the splits' `resources.arsc`, and that is the whole of
  * this object's limitation rather than a detail. Every split contains a partial table naming
- * only the files that split carries—this base's names its own 3,606, the density split's
- * names its 1,249, and the two sets share no path string at all—so the files merged in here
+ * only the files that split carries—this base's names its own 3,640, the density split's
+ * names its 1,246, and the two sets share no path string at all—so the files merged in here
  * are written at the right paths, but nothing in the merged APK refers to them. Making them
  * resolve means relinking the tables, which is aapt2's job and more than a repack; what this
  * produces is the file set and the size the desktop build has, and no more than that.

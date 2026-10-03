@@ -20,7 +20,7 @@ import org.junit.Test
  *
  * Per-item selection exists to apply a subset, so the functions the selection names must match
  * the reference build and the functions it does not name must keep their base bytes. The bundles
- * come from the same two Discord 348.5 APKs the full parity test uses.
+ * come from the same two Discord 349.5 APKs the full parity test uses.
  */
 class HermesSubsetParityTest {
 
@@ -32,17 +32,17 @@ class HermesSubsetParityTest {
     private val sha1FooterSize = 20
 
     /** Three functions the whole-table path patches in place: a gift button, a predicate, a log. */
-    private val chosen = listOf(57688, 62294, 69783)
+    private val chosen = listOf(62908, 68593, 79600)
 
     /** Patched by the whole-table path, and next to a chosen function in the table. */
-    private val leftAlone = 62298
+    private val leftAlone = 79601
 
     private fun bundleName(chosen: Boolean) = if (chosen) "reference" else "base"
 
     @Test
     fun aSubsetChangesTheChosenFunctionsAndNothingElse() {
         assumeTrue(
-            "the Discord 348.5 APKs are not on this machine (${baseApk.path}, " +
+            "the Discord 349.5 APKs are not on this machine (${baseApk.path}, " +
                 "${referenceApk.path})",
             baseApk.isFile && referenceApk.isFile
         )
@@ -148,7 +148,7 @@ class HermesSubsetParityTest {
         assertEquals(chosen.size, matchedChosen)
         assertEquals(DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT - chosen.size, matchedUntouched)
 
-        // Stated separately because the sweep above reports it as one of 128,466 lines: a subset
+        // Stated separately because the sweep above reports it as one of 155,426 lines: a subset
         // that widened back to the whole table without a report.
         val alone = requireNotNull(HermesFunctionTable.locate(patched, leftAlone))
         val aloneInBase = requireNotNull(HermesFunctionTable.locate(base, leftAlone))

@@ -2,6 +2,7 @@ package dev.sleepy.app.patches
 
 import dev.sleepy.app.engine.BinaryXmlModifier
 import dev.sleepy.app.engine.DexProcessor
+import dev.sleepy.app.engine.PatchVersionGate
 import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.SelectivePatchGenerator
 import dev.sleepy.app.model.SmaliPatch
@@ -20,11 +21,13 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The OctoGram patch payloads applied to the shipped 3.6.0 and 3.6.1 builds.
+ * The OctoGram patch payloads on the shipped 3.6.1 build, and their refusal on the older 3.6.0
+ * build.
  *
- * The same generated patches are resolved against both releases, whose obfuscated names differ,
- * and the package rename is applied to the 3.6.1 manifest. Every patch has to resolve to the
- * classes the build it targets actually carries.
+ * The 3.6.1 build receives every edit the sets generate, and the package rename is applied to its
+ * manifest. The 3.6.0 build is the local fixture for a release no source offers: it identifies no
+ * supported version, so the gate refuses every tagged edit and only the untagged Firebase
+ * registrars resolve by class name.
  */
 class OctoGramPayloadIntegrationTest {
 
@@ -58,7 +61,12 @@ class OctoGramPayloadIntegrationTest {
         // takes: a selection naming every item of every set, passed to each set's own generator.
         // A set resolves its own patches from the selection, so this also checks that the item
         // table and the edit groups line up for a build this app offers.
-        val isOctoGram361 = classToDex.containsKey("Lorg/telegram/ui/e6;")
+        val detected = PatchVersionGate.detectOctoGramVersion(classToDex)
+        assertEquals(
+            "the fixture must be the build the manifest's source registers",
+            OctoGramPatches.REGISTERED_BUILD,
+            detected
+        )
         val selection =
             PatchSelection.fromSavedIds(OctoGramPatches.ALL.map { it.id }, PatchItemCatalog)
         val target = TargetApk(classToDex, dexEntries)
@@ -68,8 +76,7 @@ class OctoGramPayloadIntegrationTest {
                 (patchSet.generator as SelectivePatchGenerator).generate(target, selection)
             assertNull("${patchSet.id} has nothing to apply", generated.skipReason)
             val matching = generated.patches.filter { patch ->
-                if (patch.versionTag == "3.6.1" && !isOctoGram361) return@filter false
-                if (patch.versionTag == "3.6.0" && isOctoGram361) return@filter false
+                if (!PatchVersionGate.admits(patch, detected)) return@filter false
                 val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val actualDex = patch.dexName ?: classToDex[desc]
                 actualDex != null && dexEntries.containsKey(actualDex)
@@ -129,7 +136,7 @@ class OctoGramPayloadIntegrationTest {
     }
 
     @Test
-    fun octoGram360DynamicResolutionAndSurgicalPatching() = runBlocking {
+    fun olderOctoGramBuildIsRefusedBecauseItsVersionIsNotIdentified() = runBlocking {
         val apkFile = ReferenceApks.octoGramArm64
         assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
@@ -148,25 +155,39 @@ class OctoGramPayloadIntegrationTest {
 
         println("3.6.0 Class-to-DEX index verified successfully!")
 
-        val isOctoGram361 = classToDex.containsKey("Lorg/telegram/ui/e6;")
-        assertEquals(false, isOctoGram361)
+        // 3. The build must stay unidentified. The classes asserted above are the ones an older
+        // detection matched, and no source offers that release now, so none of them may name a
+        // version.
+        val detected = PatchVersionGate.detectOctoGramVersion(classToDex)
+        assertNull(
+            "the 3.6.0 classes must not identify a build this app patches",
+            detected
+        )
 
-        // A build this old gets what is not pinned to a version, and nothing else: every tagged
-        // entry here names 3.6.1, and the 3.6.0-only entries the reference scripts carry are not
-        // ported at all, so no patch is offered for a build whose classes it cannot find.
-        // A generator with no selection to honor produces its whole set, which is what this asks
-        // for from each set before dropping what the version filter does not allow.
+        // 4. Every tagged set is refused with a reason, and the untagged Firebase registrars are
+        // the only edits whose classes resolve. A generator with no selection to honor produces
+        // its whole set, which is what this asks for from each set before applying the gate.
         val target = TargetApk(classToDex, dexEntries)
         val patchesToApply = mutableListOf<SmaliPatch>()
+        var refusedSets = 0
         for (patchSet in OctoGramPatches.ALL) {
             val generated = requireNotNull(patchSet.generator) { "${patchSet.id} has no generator" }
                 .generate(target)
             assertNull("${patchSet.id} has nothing to apply", generated.skipReason)
             val matching = generated.patches.filter { patch ->
-                if (patch.versionTag != null) return@filter false
+                if (!PatchVersionGate.admits(patch, detected)) return@filter false
                 val desc = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                 val actualDex = patch.dexName ?: classToDex[desc]
                 actualDex != null && dexEntries.containsKey(actualDex)
+            }
+            if (matching.isEmpty() && generated.patches.isNotEmpty()) {
+                val reason = PatchVersionGate.refusalReason(generated.patches, detected)
+                assertNotNull("${patchSet.id} was refused without a reason", reason)
+                assertTrue(
+                    "${patchSet.id} must say the version was not identified: $reason",
+                    reason!!.contains("could not be identified")
+                )
+                refusedSets++
             }
             assertEquals(
                 "only the one version-less registrar is left of ${patchSet.id} here",
@@ -179,6 +200,11 @@ class OctoGramPayloadIntegrationTest {
                 patchesToApply.add(patch.copy(dexName = actualDex))
             }
         }
+        assertEquals(
+            "the nine sets written for the registered build are refused on this one",
+            9,
+            refusedSets
+        )
         assertEquals(
             "the four version-less Firebase registrars are the whole of what a 3.6.0 build gets",
             4,

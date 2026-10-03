@@ -326,7 +326,7 @@ class PatchingPipeline(private val context: Context) {
                                 explanation = "An App Bundle deals its resource ids out across " +
                                     "the splits, and each split ships a table naming only what " +
                                     "it holds. The base's table names none of the density " +
-                                    "split's 1,249 files, so without this the merged files would " +
+                                    "split's 1,246 files, so without this the merged files would " +
                                     "be present and unresolvable. The tables are merged chunk by " +
                                     "chunk rather than relinked: the entries are copied across " +
                                     "byte for byte with the configuration and file path they " +
@@ -451,13 +451,10 @@ class PatchingPipeline(private val context: Context) {
         }
 
         val classToDexIndex = DexProcessor.buildClassToDexIndex(dexEntries)
-        val detectedOctoGramVersion = when {
-            classToDexIndex.containsKey("Lorg/telegram/ui/e6;") -> "3.6.1"
-            classToDexIndex.containsKey("Ly5l;") ||
-                classToDexIndex.containsKey("Lhxk;") ||
-                classToDexIndex.containsKey("Lorg/telegram/messenger/m0;") -> "3.6.0"
-            else -> null
-        }
+        // A patch tagged for a release runs only on a build identified as that release, and an
+        // unidentified build is refused every tagged patch rather than patched with names from a
+        // release it may not be. See [PatchVersionGate].
+        val detectedOctoGramVersion = PatchVersionGate.detectOctoGramVersion(classToDexIndex)
 
         val activePatchSets = selectedPatchIds
             .mapNotNull { PatchRegistry.get(it) }
@@ -499,10 +496,7 @@ class PatchingPipeline(private val context: Context) {
             val candidates = patchSet.smaliPatches + (generated?.patches ?: emptyList())
 
             val matchingPatches = candidates.filter { patch ->
-                if (patch.versionTag != null &&
-                    detectedOctoGramVersion != null &&
-                    patch.versionTag != detectedOctoGramVersion
-                ) {
+                if (!PatchVersionGate.admits(patch, detectedOctoGramVersion)) {
                     return@filter false
                 }
                 val descriptor = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
@@ -527,16 +521,9 @@ class PatchingPipeline(private val context: Context) {
                     )
                 )
             } else if (candidates.isNotEmpty()) {
-                val reason = if (detectedOctoGramVersion != null &&
-                    candidates.any {
-                        it.versionTag != null && it.versionTag != detectedOctoGramVersion
-                    }
-                ) {
-                    "Written for a different app version, so it was not attempted on this build."
-                } else {
-                    "The classes this patch edits are not present " +
+                val reason = PatchVersionGate.refusalReason(candidates, detectedOctoGramVersion)
+                    ?: "The classes this patch edits are not present " +
                         "in this APK, so it was not attempted."
-                }
                 log(
                     StepResult(
                         title = patchSet.label,
@@ -1225,8 +1212,6 @@ class PatchingPipeline(private val context: Context) {
                 v3SignatureValid = verification.v3SignatureValid,
                 zipalignPassed = verification.zipalignPassed,
                 sourceIntegrityVerified = sourceIntegrity.verified,
-                mergedNativeLibraries = mergedLibraries,
-                mergedResourceFiles = mergedResources,
                 outputBytes = outputFile.length(),
                 patchesApplied = applied,
                 patchesSkipped = skipped,

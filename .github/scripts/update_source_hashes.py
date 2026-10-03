@@ -11,7 +11,7 @@ Identity checks:
 
 - The package name and version code must equal the values the source configures.
 - The version name must match after case and punctuation are removed, because the
-  tracker spells one build as "348.5 - Alpha" where the source records "348.5 Alpha".
+  tracker spells one build as "349.5 - Alpha" where the source records "349.5 Alpha".
 - A split must declare the name its URL ends with and carry the content its
   configuration implies: an ABI split carries lib/, a density split carries res/,
   and any other resource split carries a resources.arsc.

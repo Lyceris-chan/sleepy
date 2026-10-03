@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-03
+
+### Changed
+
+- **Discord support moves to 349.5, and 348.5 is no longer patchable.** Discord adopted the React Compiler in this release, which renumbered every function in its JavaScript bundle and removed the names the previous mapping relied on. The patch set was therefore re-derived from the reference build for this release rather than re-pointed: 166 functions, up from 145, each verified byte for byte against that build.
+
+  A run that has already downloaded 348.5 has to start again on 349.5. The manifest now names only the newer build.
+
+- A build whose app version cannot be identified is refused rather than patched. Version-tagged patches are written against obfuscated class names that do not survive a release, and a name that happens to resolve on a different build can edit an unrelated method. The refusal is reported as a skipped step with its reason, so it reaches the screen rather than only the log.
+
+### Added
+
+- A patch the reference makes that this build was missing: the EmojiCompat load runnable is stubbed so it does not run.
+
+### Removed
+
+- OctoGram 3.6.0 is no longer recognised. The reference scripts carry entries for it and no source here offers that build, so those entries could never run.
+
+### Fixed
+
+- **Two Discord 349.5 JavaScript patches no longer throw when their callers run.** The reference suite stubs function 49956, the `SHOW_CONFIRM_MODAL` handler that the vibegrations RPC interceptor registers, and function 58239, the uncompiled variant of the `useTypingUserIdsForDisplay` hook, to `undefined`. Neither id holds the upsell button it held in 348.5, and each function has one caller that reads a property off the return: 49954 reads `.result` off the handler's return and `hasTypingIndicatorContent` reads `.length` off the hook's. Reading a property of `undefined` throws a `TypeError`, so the reference's own stub threw wherever those callers ran, which is the confirmation an agent requests and the chat input of a channel with no slowmode rate limit. Both stubs now return a value of the shape the caller reads, an object carrying `{confirmed: false}` and an empty array.
+
+  This is a deliberate divergence from the desktop reference build, so those two function bodies no longer match it. The bundle comparison carries a named exception for exactly those two ids, which checks each body on both sides, and the manifest's known limitations record what the reference does and what this build does instead.
+
 ## [2.1.0] - 2026-10-03
 
 ### Added
@@ -211,7 +235,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript changes are checked against the app's code before they are written, so a change that does not match is not applied.
 - OctoGram changes that matched more than one place in the code are resolved, and each change now applies only to the app version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/Lyceris-chan/sleepy/compare/v2.1.0...v3.0.0
 [2.1.0]: https://github.com/Lyceris-chan/sleepy/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.7.0...v2.0.0
 [1.7.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.6.0...v1.7.0

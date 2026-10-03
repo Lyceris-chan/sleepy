@@ -10,7 +10,7 @@ import dev.sleepy.app.model.SmaliPatch
  * Bytecode and Hermes JavaScript modifications for Discord (Alpha/Release).
  *
  * Transcribed from the reference suite in `quirky-noether/discord/patches/core.py`
- * (Discord 348.5 Alpha). Every entry here corresponds to a symbol in that file.
+ * (Discord 349.5 Alpha). Every entry here corresponds to a symbol in that file.
  *
  * This object is the **core** subset, not the whole reference suite. The remaining smali
  * edits live in [DiscordNativePatches]. The manifest edits the reference makes by rewriting
@@ -18,7 +18,7 @@ import dev.sleepy.app.model.SmaliPatch
  * names—and are applied by `BinaryXmlEditor`, which edits the compiled document rather than
  * the text form, which is not available to an on-device patcher. The resource table is rebuilt
  * by `ResourceTableMerger` for the same reason. Hermes function ids are per-bundle and shift on
- * every Discord release, so the ids that follow are tied to the 348.5 build the pipeline is pointed
+ * every Discord release, so the ids that follow are tied to the 349.5 build the pipeline is pointed
  * at.
  *
  * Stubs telemetry and Sentry crash reporters, and locks the on-device Hermes JS bundle.
@@ -194,12 +194,12 @@ object DiscordPatches {
      * Each entry corresponds to one reference table membership and names the function and the
      * value its stub returns. The pipeline does **not** apply these entries directly: a Hermes
      * function id is only meaningful for the bundle it was taken from, and these ids are pinned to
-     * Discord 348.5. What runs is [DiscordHermesBundlePatch], whose 145 entries were extracted
+     * Discord 349.5. What runs is [DiscordHermesBundlePatch], whose 166 entries were extracted
      * from a paired base/patched bundle of that release and are applied only when the target
      * bundle's byte length matches the reference bundle's.
      *
      * This object is kept because it records why each function is stubbed, which the extracted
-     * bodies cannot, so the 145 entries can be checked against the reference tables.
+     * bodies cannot, so the 166 entries can be checked against the reference tables.
      */
     val HERMES = PatchSet(
         id = "discord_hermes",
@@ -210,7 +210,7 @@ object DiscordPatches {
                 title = "Silencing Central Analytics Event Emitter",
                 explanation = "Stubs AnalyticsUtils.track so all science event dispatches return immediately without CPU/memory sampling. " +
                     "Its callers await the result, so the stub must still resolve a promise rather than hand back undefined.",
-                functionId = "73760",
+                functionId = "83581",
                 stubShape = HermesStubShape.PROMISE,
                 functionName = "AnalyticsUtils.track (central event emitter)",
                 hasmStub = """
@@ -224,7 +224,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Neutralizing AnalyticsStore Tracking Closure",
                 explanation = "Silences secondary store event tracker to avoid CPU and memory sampling overhead",
-                functionId = "23080",
+                functionId = "23494",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "AnalyticsStore.track closure",
                 hasmStub = """
@@ -235,7 +235,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Disabling Sentry JS Breadcrumb Recording",
                 explanation = "Prevents every UI click, navigation, and Redux action from being saved into the Sentry breadcrumb trail",
-                functionId = "22947",
+                functionId = "23361",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "SentryJS.addBreadcrumb",
                 hasmStub = """
@@ -246,7 +246,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Dropping JS Exception Captures",
                 explanation = "Silences SentryJS.captureException to prevent uploading JS stack traces to Sentry backends",
-                functionId = "22943",
+                functionId = "23357",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "SentryJS.captureException",
                 hasmStub = """
@@ -257,7 +257,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Preventing Sentry JS SDK Initialization",
                 explanation = "Stubs initSentry() so no global JS error hooks or unhandled promise rejection monitors are attached",
-                functionId = "22958",
+                functionId = "23372",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "initSentry (Sentry JS SDK initializer)",
                 hasmStub = """
@@ -268,7 +268,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Disabling Device Fingerprint Tracking",
                 explanation = "Neutralizes handleFingerprint to prevent tracking device identifiers across user sessions",
-                functionId = "19432",
+                functionId = "19786",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "handleFingerprint (fingerprint telemetry)",
                 hasmStub = """
@@ -279,7 +279,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Dropping Science Action Telemetry",
                 explanation = "Stubs handleTrack action handler so background events are not buffered or sent to /science",
-                functionId = "60648",
+                functionId = "66426",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "handleTrack (science event action handler)",
                 hasmStub = """
@@ -290,7 +290,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Stopping Periodic Session Heartbeat Pings",
                 explanation = "Prevents recurring timer from sending ping telemetry and network pings",
-                functionId = "39965",
+                functionId = "40455",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "initSessionHeartbeatScheduler (heartbeat timer)",
                 hasmStub = """
@@ -301,7 +301,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Hiding Quests from Discord Settings",
                 explanation = "Forces Quest route predicate to false so the Quests tab is never constructed or displayed in Discord Settings",
-                functionId = "62294",
+                functionId = "68593",
                 stubShape = HermesStubShape.FALSE,
                 functionName = "QuestHomeSetting.usePredicate (settings route gate)",
                 hasmStub = """
@@ -312,7 +312,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Neutralizing Quest Home Screen Entry",
                 explanation = "Stubs the Quest Home screen component to prevent rendering dead promotional tasks",
-                functionId = "62298",
+                functionId = "68601",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "QuestHomeSetting (quest settings screen)",
                 hasmStub = """
@@ -323,7 +323,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Hiding Inline 'Get Nitro' Buttons",
                 explanation = "Stubs NitroUpsellButton so inline upsell banners and buttons are never built",
-                functionId = "49956",
+                functionId = "52476",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "NitroUpsellButton (inline Nitro upsell button)",
                 hasmStub = """
@@ -334,7 +334,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Suppressing Nitro Upsell Modal Dialogs",
                 explanation = "No-ops openPremiumModal so clicking premium features does not pop up nag screens",
-                functionId = "47719",
+                functionId = "49760",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "openPremiumModal (upsell modal launcher)",
                 hasmStub = """
@@ -345,7 +345,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Suppressing Nitro Upsell Action Sheets",
                 explanation = "No-ops openPremiumUpsellActionSheet to block bottom sheet promotion sheets",
-                functionId = "42692",
+                functionId = "43768",
                 stubShape = HermesStubShape.UNDEFINED,
                 functionName = "openPremiumUpsellActionSheet (action sheet upsell launcher)",
                 hasmStub = """
@@ -356,7 +356,7 @@ object DiscordPatches {
             HermesPatch(
                 title = "Removing Heavy Animated Profile Card Effects",
                 explanation = "Returns null for WrappedProfileEffect to eliminate battery-draining profile loop videos",
-                functionId = "45655",
+                functionId = "47308",
                 stubShape = HermesStubShape.NULL,
                 functionName = "WrappedProfileEffect (animated profile card decoration)",
                 hasmStub = """

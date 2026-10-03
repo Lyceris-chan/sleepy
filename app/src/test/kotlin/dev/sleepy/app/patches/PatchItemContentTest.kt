@@ -18,8 +18,8 @@ class PatchItemContentTest {
     fun everyPatchedFunctionHasAFeatureGroupAndADescription() {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
-            "the set is the 145 functions the reference build differs in",
-            145,
+            "the set is the 166 functions the reference build differs in",
+            166,
             patched.size
         )
         assertEquals(
@@ -42,8 +42,8 @@ class PatchItemContentTest {
             DiscordHermesFunctionCatalog.GROUPS.filter { it.isBlank() }
         )
 
-        // A hundred and forty-two rows in one list is the same problem as one switch, so the split
-        // has to be a substantive one rather than a formality.
+        // A hundred and sixty-four rows in one list is the same problem as one switch, so the
+        // split has to be a substantive one rather than a formality.
         assertTrue(
             "the functions must be split into feature groups, " +
                 "got ${DiscordHermesFunctionCatalog.GROUPS.size}",
@@ -79,7 +79,7 @@ class PatchItemContentTest {
     @Test
     fun everyItemHasAKeyThatDoesNotDependOnItsPosition() {
         val items = DiscordHermesFunctionCatalog.items()
-        assertEquals(145, items.size)
+        assertEquals(166, items.size)
         assertEquals(
             "two items that share a key are one item as far as a saved selection is concerned",
             items.size,
@@ -97,8 +97,9 @@ class PatchItemContentTest {
         )
 
         // The scheme, stated: the set id, then an identity that is the function id—because the
-        // names are neither unique nor stable. Ten functions here have no name and three share one.
-        assertEquals("discord_hermes:fn62294", DiscordHermesFunctionCatalog.itemKeyOf(62294))
+        // names are neither unique nor stable. Fifty-seven functions here have no name, and seven
+        // names each cover more than one function.
+        assertEquals("discord_hermes:fn68593", DiscordHermesFunctionCatalog.itemKeyOf(68593))
         val typing = DiscordBlocklistRules.API_RULES.first { it.pattern == "/typing" }
         assertEquals(
             "discord_native_blocklist:api:/typing",

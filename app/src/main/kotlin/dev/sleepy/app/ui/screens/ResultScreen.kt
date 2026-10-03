@@ -23,9 +23,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.SaveAlt
@@ -438,31 +436,6 @@ private fun OutputCard(report: VerificationReport) {
                 status = formatByteSize(report.outputBytes)
             )
 
-            if (report.mergedNativeLibraries > 0) {
-                AuditRow(
-                    icon = Icons.Default.Layers,
-                    tint = MaterialTheme.colorScheme.primary,
-                    label = "Native libraries merged",
-                    status = "${report.mergedNativeLibraries} added",
-                    detail = "These are the native libraries this build was missing. " +
-                        "The app was published as a split bundle, so its native code had to be " +
-                        "put back before it could run."
-                )
-            }
-
-            if (report.mergedResourceFiles > 0) {
-                AuditRow(
-                    icon = Icons.Default.Image,
-                    tint = MaterialTheme.colorScheme.primary,
-                    label = "Resources merged",
-                    status = "${report.mergedResourceFiles} added",
-                    detail = "Images and other resource files the app's density split holds " +
-                        "and the base split does not, put back at the paths the desktop build " +
-                        "uses. The resource table that points at them ships in pieces across " +
-                        "the splits and is not rebuilt here, so the files are in the archive " +
-                        "without anything in it referring to them."
-                )
-            }
         }
     }
 }

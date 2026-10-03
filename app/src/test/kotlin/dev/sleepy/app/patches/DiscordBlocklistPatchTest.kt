@@ -10,6 +10,7 @@ import dev.sleepy.app.testing.dexEntries
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -42,15 +43,30 @@ class DiscordBlocklistPatchTest {
         )
         val names = (resolution as OkHttpResolution.Resolved).names
 
-        // What the reference resolved for 348.5, read out of its own generated method.
+        // The expected names come out of the reference build's own generated method rather than
+        // a fixed spelling: R8 renames them on every release, and a hardcoded pair turns the next
+        // bump into an edit of this test instead of a check of the resolver.
+        val reference = referenceMethodBody()
+        val ctorLine = Regex("Lokhttp3/Response;-><init>(\\([^\\n]*)").find(reference)
+        assertNotNull("the reference method must construct a Response", ctorLine)
+        val protocolLine = Regex("sget-object \\w+, L([^;]+);->(\\w+):L[^;]+;").find(reference)
+        assertNotNull("the reference method must read the Protocol HTTP/1.1 constant", protocolLine)
+
         assertEquals(
-            "(Lokhttp3/Request;Lps/s;Ljava/lang/String;ILps/q;Lokhttp3/Headers;" +
-                "Lokhttp3/ResponseBody;Lokhttp3/Response;Lokhttp3/Response;Lokhttp3/Response;" +
-                "JJLhc/k;)V",
+            "the resolved constructor must be the one the reference build calls",
+            ctorLine!!.groupValues[1],
             names.responseConstructorDescriptor
         )
-        assertEquals("ps/s", names.protocolClass)
-        assertEquals("i", names.protocolHttp11Field)
+        assertEquals(
+            "the resolved Protocol class must be the one the reference build names",
+            protocolLine!!.groupValues[1],
+            names.protocolClass
+        )
+        assertEquals(
+            "the resolved HTTP/1.1 field must be the one the reference build names",
+            protocolLine.groupValues[2],
+            names.protocolHttp11Field
+        )
 
         val generated = DiscordBlocklistPatch.interceptorBody(
             ctorDescriptor = names.responseConstructorDescriptor,
@@ -58,7 +74,6 @@ class DiscordBlocklistPatchTest {
             protocolField = names.protocolHttp11Field
         )
 
-        val reference = referenceMethodBody()
         val referenceLines = reference.lines()
         val generatedLines = generated.lines()
 
@@ -181,7 +196,7 @@ class DiscordBlocklistPatchTest {
     }
 
     private companion object {
-        /** The Discord 348.5 base split, which lives outside the repository. */
+        /** The Discord 349.5 base split, which lives outside the repository. */
         val BASE_APK = ReferenceApks.discordBaseApk
 
         /** The reference build's decompiled tree—the patched one, which is what shipped. */

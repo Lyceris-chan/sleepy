@@ -53,7 +53,7 @@ The patch screen lists a set for each part of the app. Expand a set to see the i
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-The 145 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
+The 166 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
 
 ## Install and use sleepy
 
@@ -84,18 +84,18 @@ sleepy patches one exact build of each app. The following table lists the builds
 
 | App | Version | Version code | Downloaded from |
 | :--- | :--- | :--- | :--- |
-| Discord | 348.5 Alpha | 348205 | [Vendetta tracker](https://tracker.vendetta.rocks/tracker/download/348205/base), plus its ARM64, density and language splits |
+| Discord | 349.5 Alpha | 349205 | [Vendetta tracker](https://tracker.vendetta.rocks/tracker/download/349205/base), plus its ARM64, density and language splits |
 | OctoGram | 3.6.1 Beta 2 | 38275 | [OctoGram releases on GitHub](https://github.com/OctoGramApp/OctoGram/releases/download/v3.6.0_3827/OctoGram_arm64.apk) |
 
 The Discord source is a base APK plus four separate files: the ARM64 native libraries, the images for one screen density, and the German and English strings. sleepy downloads all five and merges them into one APK, so the patched build runs on ARM64 phones and carries the resources the desktop build has. The resource table is rebuilt around them at patch time: every split ships a partial table with entries for only its own files, and the base's table has no entries for the others. The merged files then resolve instead of remaining in the archive unreferenced.
 
 Every download URL, version number and hash is declared in [the `sources.json` manifest](https://github.com/Lyceris-chan/sleepy/blob/main/sources.json). sleepy downloads the original APK from the source named there and patches it on your device. sleepy does not host or redistribute Discord or OctoGram.
 
-Where the publisher provides a SHA-256 hash, as OctoGram does, sleepy checks the download against it and stops the build if the file does not match. For Discord, the tracker publishes no hash, and the app reports that no check is made rather than a check it cannot make. The Settings screen lists the hosts every supported target is downloaded from, and marks the one you opened last, so sleepy contacts no host that you have not seen named.
+Where the source provides a SHA-256 hash, sleepy checks the download against it and stops the build if the file does not match. OctoGram's release publishes its own hash; for Discord, where the tracker publishes none, the manifest records the hash of the copy the tracker serves. The Settings screen lists the hosts every supported target is downloaded from, and marks the one you opened last, so sleepy contacts no host that you have not seen named.
 
 ## Comparison with the desktop patch suites
 
-sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, every one of the 145 JavaScript changes the suite makes is made to the same bytes, and each is checked against the code the suite's build ships, so the patched app matches it change for change.
+sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, 164 of the 166 JavaScript changes the suite makes are made to the same bytes, and each is checked against the code the suite's build ships. The other two are a deliberate divergence, recorded in the manifest: the reference stubs both functions to `undefined`, and the one caller of each function reads a property off that return, so the reference's own stub throws a `TypeError` on the path the caller runs. sleepy returns a value of the shape the caller reads instead, so those two paths work.
 
 In two places sleepy does more than the suite. The network blocklist is worked out from the APK you selected instead of being written down as fixed names that the next release can invalidate. And the permissions an app asks for are listed with a switch each, so what it can ask for is your decision rather than a fixed set.
 
@@ -107,7 +107,7 @@ The builds this version supports have the limitations listed in the following se
 
 **Discord**
 
-- JavaScript changes are written for one exact Discord release, 348.5. A different release's code is not patched, because the identifiers these changes use are numbered per release and point at unrelated code in another build.
+- JavaScript changes are written for one exact Discord release, 349.5. A different release's code is not patched, because the identifiers these changes use are numbered per release and point at unrelated code in another build.
 - The blocklist is built from the APK you selected rather than shipped as fixed text, because three of the names it needs are renamed by the app's own obfuscation on every release. A build where these cannot be found is skipped, with the reason shown, instead of being patched with names from another release.
 - Every manifest edit the desktop suite makes is applied. The split declarations, the native library setting, any permission you switch off, the six declarations sleepy removes on its own, the crash reporter's two providers, the three Play split metadata entries, the AppsFlyer link query and the three Google Analytics components are all edited into the compiled manifest. The RPC service is closed to other apps on every build, because it is exported with no permission on it and no check on its caller. The Analytics components are marked `android:enabled="false"` rather than deleted, which is the edit the suite makes: their classes are still in the app's code, and the platform does not start a component declared that way.
 - New entries cannot be added to the app's resource table, only carried across from a split. The desktop build adds some video player image aliases that sleepy cannot add. Discord's own APK ships without them and runs, so this matches what Discord itself ships.
@@ -116,7 +116,7 @@ The builds this version supports have the limitations listed in the following se
 
 **OctoGram**
 
-- Only 3.6.1 builds can be patched. The reference scripts also carry changes for 3.6.0, and sleepy does not ship them: with no 3.6.0 download registered they cannot run, so the patch list does not include them.
+- Only the 3.6.1 build listed above can be patched. The reference scripts also carry changes for 3.6.0, and sleepy does not ship them: with no 3.6.0 download registered they cannot run, so the patch list does not include them. A build that cannot be identified as 3.6.1 does not receive the changes written for that release; the step log says the build's version could not be identified. The version-independent Firebase registrar changes still apply by class name where those classes exist.
 - The update check is switched off, the logger is silenced and the crash reporter is stubbed out, but the rewritten methods use a register count that differs from the reference build's, so the assembled text is not identical; the operations are the same.
 - Premium paywall removal is partial: 53 of the 61 places the app can present the paywall are blocked, and the remaining eight still open it as a sheet. The premium feature cells and the limit preview screens still appear, and a subscriber loses the screen where they manage their subscription. The premium rows in a profile's own settings list are hidden by the earlier switch rather than by this one.
 - Hiding the premium rows is one switch rather than three, and applying part of it is a state this app does not let you reach. The rows share one list and their conditions overlap: hiding only the Telegram Premium row makes the combined premium-sections row appear in its place, which is a different premium row on screen rather than none.

@@ -19,22 +19,23 @@ import java.security.MessageDigest
  * ## Bodies are declared at the reference's size, not at the bundle's
  *
  * A replacement is usually shorter than the body it replaces, and the reference build declares
- * the shorter extent: function 13894's body is 143 bytes in the base bundle and 7 in the
+ * the shorter extent: function 13894's body is 186 bytes in the base bundle and 6 in the
  * reference. The declaration is therefore narrowed to the replacement's length, in the 96-bit
  * entry's `bytecodeSizeInBytes` bits or in the large header's `+12` slot, as the reference
  * does. Padding without narrowing the declaration also runs identically, because the padding is
- * unreachable, but it leaves 134 of the patched functions declaring a body longer than the one
+ * unreachable, but it leaves 153 of the patched functions declaring a body longer than the one
  * the reference declares for them, and the two bundles cannot then be compared function for
- * function—the comparison this patcher is designed to produce. Applied to the Discord 348.5
- * bundle, the patcher produces 128,469 function bodies that are byte-identical to the
- * reference's.
+ * function—the comparison this patcher is designed to produce. Applied to the Discord 349.5
+ * bundle, the patcher produces 155,427 function bodies that are byte-identical to the
+ * reference's; [dev.sleepy.app.patches.DiscordHermesBundlePatch] records why the other two
+ * differ on purpose.
  *
  * ## One body, two functions
  *
- * Functions 57119 and 57120 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
- * share a single 51-byte body in this bundle but have different replacements, 51 and 23 bytes.
+ * Functions 62045 and 62046 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
+ * share a single 47-byte body in this bundle but have different replacements, 47 and 19 bytes.
  * One write cannot serve both, so the longer replacement keeps the shared region and the other
- * function is relocated: its own 23 bytes are written at the end of the file, where its large
+ * function is relocated: its own 19 bytes are written at the end of the file, where its large
  * header declares that size. Nothing is overwritten and both bodies are identical to the
  * reference's; writing both into the shared region overwrites one of them with
  * `AsyncBreakCheck`.
@@ -422,8 +423,8 @@ object HermesBundlePatcher {
 
     /**
      * Index ranges of plans whose bodies overlap, so that at most one of each range can be
-     * written where it is. Overlap is common in this bundle: 3,860 of its functions share a
-     * body with a neighbor and 11,508 partially overlap one.
+     * written where it is. Overlap is common in this bundle: 6,598 consecutive pairs of its
+     * functions share a body exactly, and the Discord patch set carries one such pair.
      */
     private fun overlappingGroups(plans: List<Plan>): List<List<Int>> {
         val order = plans.indices.sortedBy { plans[it].bodyOffset }

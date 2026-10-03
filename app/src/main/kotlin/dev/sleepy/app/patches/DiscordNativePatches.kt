@@ -5,7 +5,7 @@ import dev.sleepy.app.model.SmaliPatch
 
 /**
  * Native (smali/DEX) modifications for Discord, transcribed from the reference suite in
- * `quirky-noether/discord/patches/core.py` (Discord 348.5 Alpha).
+ * `quirky-noether/discord/patches/core.py` (Discord 349.5 Alpha).
  *
  * This object carries the part of that suite that [DiscordPatches] does not: the edits that
  * are neither the Hermes JavaScript bundle nor a whole-method stub of the handful of
@@ -171,7 +171,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Disabling the Sentry breadcrumb facade directly",
                 explanation = "Stubs the SDK method that every breadcrumb goes through, which also covers the three view call sites that reach the SDK without consulting the app's own crash-reporting switch.",
-                smaliPath = "io/sentry/c4.smali",
+                smaliPath = "io/sentry/d4.smali",
                 methodSignature = ".method public static a(Lio/sentry/Breadcrumb;)V",
                 replacementBody = """.method public static a(Lio/sentry/Breadcrumb;)V
     .locals 0
@@ -562,11 +562,11 @@ object DiscordNativePatches {
     new-instance v1, Ljava/io/File;""",
                 replacement = """    :cond_c
     # Patch: reuse one disk cache instead of opening three over the same dir.
-    sget-object v1, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Lps/g;
+    sget-object v1, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Los/g;
 
     if-eqz v1, :new_cache
 
-    iput-object v1, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lps/g;
+    iput-object v1, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Los/g;
 
     return-object v0
 
@@ -577,13 +577,13 @@ object DiscordNativePatches {
                 title = "Remembering the disk cache for reuse",
                 explanation = "Stores the newly created disk cache so later clients reuse it instead of opening the directory again.",
                 smaliPath = "com/facebook/react/modules/network/OkHttpClientProvider.smali",
-                anchor = """    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lps/g;
+                anchor = """    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Los/g;
 
     return-object v0
 .end method""",
-                replacement = """    sput-object p0, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Lps/g;
+                replacement = """    sput-object p0, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Los/g;
 
-    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lps/g;
+    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Los/g;
 
     return-object v0
 .end method"""
@@ -595,7 +595,7 @@ object DiscordNativePatches {
                 anchor = ".field private static client:Lokhttp3/OkHttpClient;",
                 replacement = """.field private static client:Lokhttp3/OkHttpClient;
 
-.field private static httpCache:Lps/g;"""
+.field private static httpCache:Los/g;"""
             )
         )
     )
@@ -867,7 +867,7 @@ object DiscordNativePatches {
                 explanation = "Returns immediately from the routine that writes the last crash to disk, so nothing is serialized or stored.",
                 smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
                 anchor = """    :try_start_0
-    iget-object v0, p2, Lio/sentry/f4;->d:Lio/sentry/protocol/v;""",
+    iget-object v0, p2, Lio/sentry/g4;->d:Lio/sentry/protocol/v;""",
                 replacement = """    # Patch: crash reporting is disabled - do not log or build events.
     invoke-direct/range {p0 .. p0}, Lcom/discord/crash_reporting/CrashReporting;->isDisabled()Z
 
@@ -880,7 +880,7 @@ object DiscordNativePatches {
     :cond_gate_skip
 
     :try_start_0
-    iget-object v0, p2, Lio/sentry/f4;->d:Lio/sentry/protocol/v;"""
+    iget-object v0, p2, Lio/sentry/g4;->d:Lio/sentry/protocol/v;"""
             ),
             SmaliPatch(
                 title = "Skipping native breadcrumb batches when reporting is off",
@@ -1030,6 +1030,17 @@ object DiscordNativePatches {
                 smaliPath = "com/discord/jank_stats/JankStatsAggregator.smali",
                 methodSignature = ".method public final enableTracking()V",
                 replacementBody = """.method public final enableTracking()V
+    .locals 0
+    # Patch: no-op.
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Skipping the emoji font load",
+                explanation = "Skips the font load AndroidX Startup posts half a second after the first activity resumes, which asks the Google Fonts provider for a font this build never draws with. The initializer still runs, so the singleton stays built and callers that read it keep working.",
+                smaliPath = "k2/l.smali",
+                methodSignature = ".method public final run()V",
+                replacementBody = """.method public final run()V
     .locals 0
     # Patch: no-op.
     return-void
@@ -1256,17 +1267,17 @@ object DiscordNativePatches {
                 title = "Keeping the media engine alive after one failure",
                 explanation = "Builds the media engine's coroutine scope on a supervisor job, so one failed operation no longer cancels the scope and turns every later media call into a no-op.",
                 smaliPath = "com/discord/media/engine/MediaEngineModule.smali",
-                anchor = """    invoke-direct {v2, v1}, Lnr/q0;-><init>(Ljava/util/concurrent/Executor;)V
+                anchor = """    invoke-direct {v2, v1}, Lmr/r0;-><init>(Ljava/util/concurrent/Executor;)V
 """,
-                replacement = """    invoke-direct {v2, v1}, Lnr/q0;-><init>(Ljava/util/concurrent/Executor;)V
+                replacement = """    invoke-direct {v2, v1}, Lmr/r0;-><init>(Ljava/util/concurrent/Executor;)V
 
     # Patch: supervisor scope - a plain Job cancels itself and every
     # child on the first throw, turning all ~66 appScope.launch sites
     # into no-ops for the rest of the process. Copied from Discord's own
     # MainImmediateScopeKt.MainImmediateScope().
-    new-instance v1, Lnr/m1;
+    new-instance v1, Lmr/n1;
 
-    invoke-direct {v1}, Lnr/x0;-><init>()V
+    invoke-direct {v1}, Lmr/y0;-><init>()V
 
     invoke-static {v1, v2}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
 

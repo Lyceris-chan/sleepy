@@ -14,7 +14,7 @@ import org.junit.Test
 /**
  * The archive rebuilt from the real Discord base and its splits verifies as an APK.
  *
- * The merge and repack are the last steps before signing, and they run over the shipped 348.5
+ * The merge and repack are the last steps before signing, and they run over the shipped 349.5
  * build: the result has to carry the density split's resources, align every stored entry the way
  * the platform's loader requires, and pass an independent alignment check.
  */
@@ -77,8 +77,8 @@ class MergedDiscordApkTest {
      * carry, and merging the density split puts them back—at the paths the desktop build uses.
      *
      * What does not come back with them is the table that names them. Every split ships a
-     * partial table naming only the files it carries: this base's names its own 3,606, the
-     * density split's names its 1,249, and the two sets share not one path. So the merged
+     * partial table naming only the files it carries: this base's names its own 3,640, the
+     * density split's names its 1,246, and the two sets share not one path. So the merged
      * archive's entries and size come to match the desktop build's while those resources stay
      * unreachable—the desktop relinks the tables with aapt2, and this repack copies files. The
      * test below pins the file set and says nothing about resolution, because that is all the

@@ -19,7 +19,7 @@ import org.junit.Test
  *
  * Every function of the patched bundle is located and compared against the same function in the
  * reference bundle, one byte at a time, and a disassembler is asked to read every relocated
- * function. The bundles are extracted from the two Discord 348.5 APKs at test time; a machine
+ * function. The bundles are extracted from the two Discord 349.5 APKs at test time; a machine
  * without those fixtures reports the tests as skipped.
  */
 class HermesBundleParityTest {
@@ -35,10 +35,58 @@ class HermesBundleParityTest {
     private val fileLengthOffset = 32
     private val sha1FooterSize = 20
 
+    /**
+     * One function this build stubs differently from the reference build on purpose.
+     *
+     * @param functionId The bundle's identifier for the function.
+     * @param reason Why the two bodies differ, in the terms of the caller that reads the return.
+     * @param referenceBodyHex The body the reference bundle holds, which this build rejects.
+     */
+    private data class DeliberateDivergence(
+        val functionId: Int,
+        val reason: String,
+        val referenceBodyHex: String
+    )
+
+    /**
+     * The two functions whose bodies are not the reference build's, and why.
+     *
+     * In 349.5 both ids name functions unrelated to the upsell buttons they held in 348.5, and
+     * the reference's table still stubs them to `undefined`. The one caller of each function
+     * dereferences the return, so the reference's own value throws a TypeError wherever that
+     * caller runs: 58216 hands 58239's return to `hasTypingIndicatorContent`, which reads
+     * `.length`, and 49954 reads `.result` off 49956's return. The replacements in
+     * [DiscordHermesBundlePatch.PATCHES] carry a value of the shape each caller reads.
+     *
+     * The exception is per function id and checks both sides, so it cannot hide any other
+     * difference: the comparison below requires our body to be exactly the table's replacement
+     * and the reference's body to be exactly the stub named here, and it still compares every
+     * other function byte for byte.
+     */
+    private val deliberateDivergences = listOf(
+        DeliberateDivergence(
+            49956,
+            "the RPC interceptor reads .result off the handler's return, so this build returns " +
+                "{result: {confirmed: false}} where the reference returns undefined",
+            "93007e7600"
+        ),
+        DeliberateDivergence(
+            58239,
+            "hasTypingIndicatorContent reads .length off the hook's return, so this build " +
+                "returns an empty array where the reference returns undefined",
+            "93007e7600"
+        )
+    )
+
+    private fun hexOf(text: String): ByteArray =
+        ByteArray(text.length / 2) { index ->
+            text.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+
     @Test
     fun patchedBundleMatchesReferenceFunctionForFunction() {
         assumeTrue(
-            "the Discord 348.5 APKs are not on this machine (${baseApk.path}, " +
+            "the Discord 349.5 APKs are not on this machine (${baseApk.path}, " +
                 "${referenceApk.path})",
             baseApk.isFile && referenceApk.isFile
         )
@@ -70,11 +118,11 @@ class HermesBundleParityTest {
         )
         assertEquals(DiscordHermesBundlePatch.PATCHES.size, result.appliedCount)
 
-        // 138 replacements fit in place, but 57120's fits only by writing AsyncBreakCheck over
-        // 57119, which shares its body, so the four grown bodies and that one are relocated.
+        // 161 replacements fit in place, but 62046 shares its body with 62045; the shared region
+        // holds one replacement, so 62046 is relocated along with the four grown bodies.
         assertEquals(
             "in-place: " + result.writtenInPlace.joinToString { it.functionId.toString() },
-            140,
+            161,
             result.writtenInPlace.size
         )
         assertEquals(
@@ -83,7 +131,7 @@ class HermesBundleParityTest {
             result.relocated.size
         )
         assertEquals(
-            listOf(14518, 14522, 14529, 15420, 57120),
+            listOf(14786, 14790, 14797, 15698, 62046),
             result.relocated.map { it.functionId }
         )
 
@@ -108,6 +156,8 @@ class HermesBundleParityTest {
         }
 
         val mismatches = ArrayList<String>()
+        val divergences = deliberateDivergences.associateBy { it.functionId }
+        val seenDivergences = HashSet<Int>()
         var identical = 0
         for (functionId in 0 until DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT) {
             val ours = HermesFunctionTable.locate(patched, functionId)
@@ -115,6 +165,12 @@ class HermesBundleParityTest {
             if (ours == null || theirs == null) {
                 mismatches += "fn $functionId: ours=${ours ?: "unlocatable"}, " +
                     "reference=${theirs ?: "unlocatable"}"
+                continue
+            }
+            val divergence = divergences[functionId]
+            if (divergence != null) {
+                seenDivergences += functionId
+                mismatches += checkDivergence(patched, ours, reference, theirs, divergence)
                 continue
             }
             if (ours.bytecodeSize != theirs.bytecodeSize) {
@@ -140,16 +196,25 @@ class HermesBundleParityTest {
             identical++
         }
 
+        val undeclared = divergences.keys.filterNot { seenDivergences.contains(it) }
+        assertEquals(
+            "every named divergence must be a patched function in both bundles",
+            emptyList<Int>(),
+            undeclared
+        )
+
+        val compared = DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT - divergences.size
         println(
-            "HermesBundleParityTest: $identical/" +
-                "${DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT} function bodies " +
+            "HermesBundleParityTest: $identical/$compared function bodies " +
                 "byte-identical to the reference " +
                 "(${DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT - result.appliedCount} " +
                 "untouched, ${result.writtenInPlace.size} written in place, " +
-                "${result.relocated.size} relocated)"
+                "${result.relocated.size} relocated), plus ${divergences.size} deliberate " +
+                "divergences: " +
+                deliberateDivergences.joinToString { "${it.functionId} (${it.reason})" }
         )
         assertEquals(mismatches.take(10), emptyList<String>())
-        assertEquals(DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT, identical)
+        assertEquals(compared, identical)
 
         // The bundle has to stay loadable, which means a footer matching the file as it now is.
         val fileLength = readU32Le(patched, fileLengthOffset)
@@ -211,6 +276,40 @@ class HermesBundleParityTest {
         } finally {
             temp.delete()
         }
+    }
+
+    /**
+     * Checks one named divergence in both directions, and returns a mismatch description when
+     * either side fails: our bundle must carry exactly the patch table's replacement for the id,
+     * and the reference bundle must carry exactly [DeliberateDivergence.referenceBodyHex]. A
+     * difference anywhere else in the two bodies is a drift this test still reports.
+     */
+    private fun checkDivergence(
+        patched: ByteArray,
+        ours: HermesFunctionTable.FunctionLocation,
+        reference: ByteArray,
+        theirs: HermesFunctionTable.FunctionLocation,
+        divergence: DeliberateDivergence
+    ): List<String> {
+        val failures = ArrayList<String>()
+        val replacement = DiscordHermesBundlePatch.PATCHES
+            .first { it.functionId == divergence.functionId }
+            .replacement
+        if (ours.bytecodeSize != replacement.size ||
+            !regionsEqual(patched, ours.bodyOffset, replacement, 0, replacement.size)
+        ) {
+            failures += "fn ${divergence.functionId}: this build's body is not the table's " +
+                "${replacement.size}-byte replacement (declared ${ours.bytecodeSize} bytes)"
+        }
+        val referenceStub = hexOf(divergence.referenceBodyHex)
+        if (theirs.bytecodeSize != referenceStub.size ||
+            !regionsEqual(reference, theirs.bodyOffset, referenceStub, 0, referenceStub.size)
+        ) {
+            failures += "fn ${divergence.functionId}: the reference does not hold " +
+                "${divergence.referenceBodyHex} (declared ${theirs.bytecodeSize} bytes), so " +
+                "the recorded divergence no longer matches it"
+        }
+        return failures
     }
 
     private fun decompile(bundle: File, functionId: Int): Pair<Int, String> {

@@ -11,8 +11,8 @@ import java.io.ByteArrayOutputStream
  * An App Bundle assigns resource ids once, at bundle build time, and then distributes them: the
  * base split carries the entries whose configurations stayed with the base, a density split
  * carries the ones that did not, and a language split carries one locale's strings. Each split
- * therefore ships a `resources.arsc` naming only what it carries—this base names 11,024
- * entries and the density split names 1,249, and the two sets of file paths do not intersect at
+ * therefore ships a `resources.arsc` naming only what it carries—this base names 11,802
+ * entries and the density split names 1,247, and the two sets of file paths do not intersect at
  * all. Merging a split's *files* into the base, which [SplitMerger] does, leaves those files at
  * the right paths with nothing in the merged APK referring to them: present but unreachable.
  *
@@ -25,7 +25,7 @@ import java.io.ByteArrayOutputStream
  * `res/drawable-xhdpi/icon.png` and is written back under that spelling. The desktop build's
  * table matches the APK it was built into, because both came out of the same decode; the base
  * APK's own entries use the original spelling, and so do the files [SplitMerger] copies. A
- * desktop-generated table dropped into this repack names 4,854 files that do not exist in the
+ * desktop-generated table dropped into this repack names 1,925 files that do not exist in the
  * archive being written, which is worse than the unreachable files it replaces.
  *
  * A chunk merge avoids that problem, because it re-derives nothing. The tables of a base and its

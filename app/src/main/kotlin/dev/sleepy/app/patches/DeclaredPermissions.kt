@@ -46,8 +46,8 @@ object DeclaredPermissions {
     // them against those builds permission for permission and in order. A list edited to a value
     // those builds do not declare fails that test rather than the user's device.
 
-    /** Discord Alpha 348.5 (`com.discord`), 33 declarations. */
-    private val DISCORD_ALPHA_348_5 = listOf(
+    /** Discord Alpha 349.5 (`com.discord`), 33 declarations. */
+    private val DISCORD_ALPHA_349_5 = listOf(
         "android.permission.ACCESS_NETWORK_STATE", "android.permission.BROADCAST_STICKY",
         "android.permission.INTERNET", "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
@@ -128,7 +128,7 @@ object DeclaredPermissions {
     // After the lists rather than before them: an object's properties initialize in the order they
     // are written, so a map declared before its lists reads them as nulls.
     private val BY_PACKAGE: Map<String, List<String>> = mapOf(
-        "com.discord" to DISCORD_ALPHA_348_5,
+        "com.discord" to DISCORD_ALPHA_349_5,
         "it.octogram.android" to OCTOGRAM_3_6_1
     )
 }

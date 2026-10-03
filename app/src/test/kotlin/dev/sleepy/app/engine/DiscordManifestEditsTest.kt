@@ -76,7 +76,7 @@ class DiscordManifestEditsTest {
     /**
      * The two groups that are facts about one build are asked for on that build and on no other.
      *
-     * Both are lists of names read off Discord 348.5, and names do not travel: OctoGram declares
+     * Both are lists of names read off Discord 349.5, and names do not travel: OctoGram declares
      * `READ_CONTACTS` and syncs the address book through it, so a dead-permission removal that
      * travels takes away a permission that the app is using. What a job against another app asks
      * for is therefore the groups that are decided by the run itself—its switches, its merge and

@@ -7,6 +7,7 @@ import dev.sleepy.app.engine.DexProcessor
 import dev.sleepy.app.engine.DiscordManifestEdits
 import dev.sleepy.app.engine.HermesBundlePatcher
 import dev.sleepy.app.engine.HermesPatcher
+import dev.sleepy.app.engine.PatchVersionGate
 import dev.sleepy.app.engine.ResourceTableMerger
 import dev.sleepy.app.engine.SplitMerger
 import dev.sleepy.app.engine.ZipRepacker
@@ -41,7 +42,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * Tooling: runs the pipeline's steps over the local Discord 348.5 fixtures and writes the
+ * Tooling: runs the pipeline's steps over the local Discord 349.5 fixtures and writes the
  * resulting APK to a file for comparison with the desktop reference build.
  *
  * This class is not a unit test. It reproduces `PatchingPipeline.execute` with the two steps that
@@ -53,7 +54,7 @@ class PatchingPipelineHarnessTest {
 
     private companion object {
         /**
-         * `sources.json` -> `sources[] -> discord_348205 -> patch_ids`, in the order it declares
+         * `sources.json` -> `sources[] -> discord_349205 -> patch_ids`, in the order it declares
          * them. The order is not what the pipeline runs them in—`PatchViewModel.startPatch`
          * passes the *catalog's* order ([PatchItemCatalog.all]), which is what this reproduces—
          * but the membership is this list and nothing else.
@@ -84,7 +85,7 @@ class PatchingPipelineHarnessTest {
         )
 
         /**
-         * `sources.json` -> `discord_348205 -> splits`, as the local files its URLs name: the
+         * `sources.json` -> `discord_349205 -> splits`, as the local files its URLs name: the
          * ABI split first, then the density and language splits, in the declared order. The
          * x86_64 and armeabi-v7a splits that sit beside them are *not* merged, because the source
          * does not list them.
@@ -98,7 +99,7 @@ class PatchingPipelineHarnessTest {
 
         const val ORIGINAL_PACKAGE = "com.discord"
 
-        /** `sources.json` publishes no hash for this source, so the pipeline checks none. */
+        /** The harness copies its fixture from disk, so it has no download to check. */
         val EXPECTED_SHA256: String? = null
 
         const val BUNDLE_ENTRY = "assets/index.android.bundle"
@@ -137,7 +138,7 @@ class PatchingPipelineHarnessTest {
     }
 
     @Test
-    fun buildsTheDiscordAlpha3485ApkTheWayPatchingPipelineDoes() = runBlocking {
+    fun buildsTheDiscordAlpha3495ApkTheWayPatchingPipelineDoes() = runBlocking {
         val extracted = ReferenceApks.discordExtracted
         val baseApk = File(extracted, "base.apk")
         val splits = SOURCE_SPLITS.map { File(extracted, it) }
@@ -416,12 +417,7 @@ class PatchingPipelineHarnessTest {
         )
 
         val classToDexIndex = DexProcessor.buildClassToDexIndex(dexEntries)
-        val detectedOctoGramVersion = when {
-            classToDexIndex.containsKey("Lorg/telegram/ui/e6;") -> "3.6.1"
-            classToDexIndex.containsKey("Ly5l;") || classToDexIndex.containsKey("Lhxk;") ||
-                classToDexIndex.containsKey("Lorg/telegram/messenger/m0;") -> "3.6.0"
-            else -> null
-        }
+        val detectedOctoGramVersion = PatchVersionGate.detectOctoGramVersion(classToDexIndex)
         println("Detected OctoGram version: $detectedOctoGramVersion (expect null on Discord)")
 
         // `PatchViewModel.startPatch` passes the pipeline the *catalog's* order of the selected
@@ -471,10 +467,7 @@ class PatchingPipelineHarnessTest {
             val candidates = patchSet.smaliPatches + (generated?.patches ?: emptyList())
 
             val matchingPatches = candidates.filter { patch ->
-                if (patch.versionTag != null &&
-                    detectedOctoGramVersion != null &&
-                    patch.versionTag != detectedOctoGramVersion
-                ) {
+                if (!PatchVersionGate.admits(patch, detectedOctoGramVersion)) {
                     return@filter false
                 }
                 val descriptor = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
@@ -499,18 +492,9 @@ class PatchingPipelineHarnessTest {
                     )
                 )
             } else if (candidates.isNotEmpty()) {
-                val reason =
-                    if (detectedOctoGramVersion != null &&
-                        candidates.any {
-                            it.versionTag != null && it.versionTag != detectedOctoGramVersion
-                        }
-                    ) {
-                        "Written for a different app version, so it was not attempted on this " +
-                            "build."
-                    } else {
-                        "The classes this patch edits are not present in this APK, so it was " +
-                            "not attempted."
-                    }
+                val reason = PatchVersionGate.refusalReason(candidates, detectedOctoGramVersion)
+                    ?: "The classes this patch edits are not present in this APK, so it was " +
+                        "not attempted."
                 log(
                     StepResult(
                         title = patchSet.label,

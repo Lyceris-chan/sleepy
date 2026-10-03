@@ -1,5 +1,6 @@
 package dev.sleepy.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -19,9 +21,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
@@ -419,10 +420,33 @@ private fun PermissionCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp)
+                // The header row carries a 48dp touch band of its own, so the side padding applied
+                // to the top as well leaves a wider gap above the title than below it.
+                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 20.dp)
         ) {
+            // The whole row is the control rather than the glyph alone. A glyph in the corner is a
+            // weak target and reads as decoration, and the row gives the 48dp minimum touch size
+            // without an IconButton, whose own 48dp band is taller than the title and leaves a gap
+            // above it. The label states the action, so the affordance does not rest on a chevron
+            // being read as expandable.
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .then(
+                        if (rows.isEmpty()) {
+                            Modifier
+                        } else {
+                            Modifier.clickable(
+                                onClickLabel = if (expanded) {
+                                    "Hide the permissions"
+                                } else {
+                                    "Edit the permissions"
+                                },
+                                onClick = onExpandedChange
+                            )
+                        }
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -441,21 +465,19 @@ private fun PermissionCard(
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (rows.isNotEmpty()) {
-                    IconButton(onClick = onExpandedChange) {
-                        Icon(
-                            imageVector = if (expanded) {
-                                Icons.Default.ExpandLess
-                            } else {
-                                Icons.Default.ExpandMore
-                            },
-                            contentDescription = if (expanded) {
-                                "Hide the permissions"
-                            } else {
-                                "Show the permissions"
-                            },
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = if (expanded) "Done" else "Edit",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    // The label names the action, so a description here repeats it in a second
+                    // announcement.
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(2.dp))

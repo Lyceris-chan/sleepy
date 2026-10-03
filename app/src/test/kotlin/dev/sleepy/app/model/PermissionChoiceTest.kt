@@ -190,7 +190,7 @@ class PermissionChoiceTest {
         assertTrue(PermissionCatalog.removals(declared, empty).isEmpty())
 
         val patchItemsOnly =
-            PatchSelection.ofKeys("discord_hermes:fn73760", "discord_blocklist:api:/typing")
+            PatchSelection.ofKeys("discord_hermes:fn83581", "discord_blocklist:api:/typing")
         assertFalse(
             "a patch selection names no permission",
             PermissionCatalog.isEngaged(patchItemsOnly)
@@ -221,7 +221,7 @@ class PermissionChoiceTest {
             listOf("android.permission.CAMERA", "android.permission.RECORD_AUDIO")
         )) {
             val rows =
-                PermissionCatalog.rows(declared, PatchSelection.ofKeys("discord_hermes:fn73760"))
+                PermissionCatalog.rows(declared, PatchSelection.ofKeys("discord_hermes:fn83581"))
 
             assertEquals(declared, rows.map { it.permission.name })
             assertTrue("nothing has been switched off", rows.all { it.kept })

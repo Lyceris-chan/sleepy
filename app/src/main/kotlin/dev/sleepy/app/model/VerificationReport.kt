@@ -37,10 +37,6 @@ data class VerificationReport(
      * hash.
      */
     val sourceIntegrityVerified: Boolean?,
-    /** The number of native libraries merged in from the configuration splits. */
-    val mergedNativeLibraries: Int,
-    /** Files merged in from the configuration splits' `res/` trees. */
-    val mergedResourceFiles: Int,
     /** The size of the finished APK in bytes. */
     val outputBytes: Long,
     /** The titles of the steps that reported OK. */
