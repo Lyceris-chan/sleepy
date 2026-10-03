@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-03
+
+### Added
+
+- Three Discord JavaScript bytecode patches, bringing the total from 142 to 145 and matching the reference patch suite: stubs for the voice call analytics functions `_trackStartSpeaking` (function 68080) and `_trackStartListening` (68081), and for the 60-second voice state interval callback (121591). These stop recurring metadata allocations and speaking-state transition work that fed an analytics consumer that is already stubbed, which caused call stalls and unresponsive periods during voice calls.
+- Four Discord patches that complete the set against the reference suite:
+  - Frame metrics aggregator setup is skipped and jank session recording does not start, so per-frame statistics are no longer collected for a screen that is not being looked at.
+  - Blocking OTA recovery after a crash is disabled, removing a wait on the main thread that could hold the app up while it restarts.
+  - EGL setup returns early once the renderer has been released. Without it, a teardown that jumps the render queue can create a graphics context after cleanup has already run, and nothing frees it — the reference records 242 leaked contexts before `eglCreateContext` failed and took the render thread down with it.
+
+### Fixed
+
+- A build with a changed package name no longer fails to start. Renaming the package left the second copy of that name — the one inside the resource table — pointing at the original, and the platform matches name-based resource lookups against that field. Every `getIdentifier(name, type, getPackageName())` call returned 0 as a result, and the app stalled on its splash screen instead of opening. The table's copy of the name now moves with the manifest's.
+
 ## [1.6.0] - 2026-09-28
 
 ### Changed
@@ -147,7 +161,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript changes are checked against the app's code before they are written, so a change aimed at the wrong place cannot corrupt it.
 - OctoGram changes that matched more than one place in the code are resolved, and each change now applies only to the app version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.3.0...v1.4.0

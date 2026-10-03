@@ -49,7 +49,7 @@ The patch screen lists a set for each part of the app. Expand a set to see the i
 - **Permissions** are listed above the patch sets, one switch per permission the app asks for. Switching one off deletes that permission from the patched app's manifest, and that is permanent: Android gives an app only the permissions its manifest declares, and an installed app cannot ask for another one later. A declaration the patch removes from every build it makes is listed as well, but its row reads as removed and gives the reason instead of offering a switch, because there is nothing left for a switch to decide. The list comes with sleepy, for the exact builds listed below, and you can check it against the build — sleepy downloads it and shows any difference in full rather than passing over it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-The 142 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
+The 145 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
 
 ## Install and use sleepy
 
@@ -91,7 +91,7 @@ Where the publisher provides a SHA-256 hash, as OctoGram does, sleepy checks the
 
 ## How this compares to the desktop patch suites
 
-sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, every one of the 142 JavaScript changes the suite makes is made to the same bytes, verified against the code the suite's build ships, so the patched app matches it change for change.
+sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, every one of the 145 JavaScript changes the suite makes is made to the same bytes, verified against the code the suite's build ships, so the patched app matches it change for change.
 
 In two places sleepy goes past the suite. The network blocklist is worked out from the APK you selected instead of being written down as fixed names that the next release would invalidate. And the permissions an app asks for are listed with a switch each, so what it can ask for is your decision rather than a fixed set.
 

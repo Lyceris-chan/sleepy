@@ -232,7 +232,7 @@ private fun ThumbIcon(icon: ImageVector) {
     )
 }
 
-/** "3 of 142 items selected", and the same sentence a screen reader hears for the set switch. */
+/** "3 of 145 items selected", and the same sentence a screen reader hears for the set switch. */
 private fun selectionSummary(rows: PatchSetRows): String {
     val noun = if (rows.itemCount == 1) "item" else "items"
     return "${rows.selectedItemCount} of ${rows.itemCount} $noun selected"

@@ -393,7 +393,7 @@ class PatcherPipelineTest {
             "every native patch must target a class present in this build, missing: $notApplicable",
             notApplicable.isEmpty()
         )
-        assertEquals("the ported native set is 90 edits", 90, patchesToApply.size)
+        assertEquals("the ported native set is 94 edits", 94, patchesToApply.size)
         println("Resolved ${patchesToApply.size} Discord native patches across ${patchesToApply.groupBy { it.dexName }.size} DEX files")
 
         val failures = mutableListOf<String>()

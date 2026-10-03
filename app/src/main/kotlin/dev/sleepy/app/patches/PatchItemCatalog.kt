@@ -19,7 +19,7 @@ import dev.sleepy.app.model.SmaliPatch
  * one item means selecting the set. It also answers what "all items of this set" means for a set
  * that has no items, which is what expanding a saved set id needs.
  *
- * A set is split where a per-item choice is worth having: the Hermes set's 142 functions, the
+ * A set is split where a per-item choice is worth having: the Hermes set's 145 functions, the
  * blocklist's 81 rules, and every OctoGram set, whose items are the named decisions behind its one
  * switch. A Discord static set whose patches are one edit has nothing to choose between, and keeps
  * the whole-set item it always had.

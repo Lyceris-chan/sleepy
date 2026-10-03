@@ -146,6 +146,21 @@ class PatchingPipelineHarnessTest {
 
         /** Matches `classes.dex`, `classes2.dex`, ... — the DEX files of a single APK. */
         val DEX_ENTRY_NAME = Regex("classes\\d*\\.dex")
+
+        /**
+         * The patch sets this run applies, when a bisection asks for a subset of them.
+         *
+         * `null` — the property and the variable both unset — is the default build, and it means
+         * [SOURCE_PATCH_IDS] exactly as before. A value is a comma-separated list of set ids, and
+         * an *empty* value is a build with no patch sets at all: the split merge, the resource
+         * table rebuild and the manifest pass still run, so "no patches" isolates the patch content
+         * from the packaging path. Read from `-Dsleepy.patchIds` first and `SLEEPY_PATCH_IDS`
+         * second, so a shell that already exports the variable does not have to be edited.
+         */
+        val PATCH_IDS_OVERRIDE: List<String>? = run {
+            val raw = System.getProperty("sleepy.patchIds") ?: System.getenv("SLEEPY_PATCH_IDS")
+            raw?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+        }
     }
 
     /** The step log `execute()` writes, held here instead of in a `StateFlow`. */
@@ -400,7 +415,11 @@ class PatchingPipelineHarnessTest {
         // The selection a default build makes. `PatchViewModel.selectSource` expands the source's
         // patch ids into items and seeds every permission it ships as *kept* — a run removes only
         // what the user switches off, and a default build switches nothing off.
-        val selection = PatchSelection.fromSavedIds(SOURCE_PATCH_IDS, PatchItemCatalog)
+        // A bisection build asks for a subset (or none) of the source's patch sets; a default
+        // build is the whole list. Everything downstream reads this, so the two cannot drift.
+        val patchIds = PATCH_IDS_OVERRIDE ?: SOURCE_PATCH_IDS
+        println("Patch sets for this run (${if (PATCH_IDS_OVERRIDE == null) "default" else "override"}): ${patchIds.ifEmpty { listOf("none") }}")
+        val selection = PatchSelection.fromSavedIds(patchIds, PatchItemCatalog)
             .with(PermissionCatalog.itemsOf(shippedPermissions.orEmpty()))
         val permissionRemovals = PermissionCatalog.removals(chosenPermissions, selection, ORIGINAL_PACKAGE)
         println("Permission removals for this selection: ${permissionRemovals.ifEmpty { listOf("none") }}")
@@ -436,8 +455,8 @@ class PatchingPipelineHarnessTest {
             .map { it.setId }
             .distinct()
         assertEquals(
-            "the sets a default build runs must be exactly the source's patch ids",
-            SOURCE_PATCH_IDS.toSet(),
+            "the sets this run applies must be exactly the ids it was handed",
+            patchIds.toSet(),
             selectedSetIds.toSet()
         )
         val activePatchSets = selectedSetIds
@@ -690,6 +709,44 @@ class PatchingPipelineHarnessTest {
                     status = StepStatus.OK
                 )
             )
+            // `execute` lines 786-813: the table's package chunk names the package too, and it is
+            // that copy a name-based resource lookup is resolved against. Renamed here in the same
+            // breath as the manifest, because the two are the same fact.
+            val shippingTable = mergedResourceTable ?: extractEntry(sourceApk, RESOURCE_TABLE_ENTRY)
+            val renamedTable = shippingTable?.let { ResourceTableMerger.renamePackage(it, customPackageName) }
+            when {
+                renamedTable == null -> log(
+                    StepResult(
+                        title = "Left the resource table's package as it was",
+                        explanation = "This APK's resource table has no package chunk that could be renamed, or the name is longer than " +
+                            "the 128 characters that field holds.",
+                        technicalTarget = RESOURCE_TABLE_ENTRY,
+                        status = StepStatus.FAIL
+                    )
+                )
+
+                ResourceTableMerger.packageName(renamedTable) != customPackageName -> log(
+                    StepResult(
+                        title = "Left the resource table's package as it was",
+                        explanation = "The rename was written and did not read back as the name it was given.",
+                        technicalTarget = "$RESOURCE_TABLE_ENTRY says ${ResourceTableMerger.packageName(renamedTable) ?: "nothing readable"}",
+                        status = StepStatus.FAIL
+                    )
+                )
+
+                else -> {
+                    replacements[RESOURCE_TABLE_ENTRY] = renamedTable
+                    log(
+                        StepResult(
+                            title = "Renamed the resource table's package to match the manifest",
+                            explanation = "The package name is spelled in the resource table as well as in the manifest, and the table's copy " +
+                                "is what the platform resolves a name-based lookup against.",
+                            technicalTarget = "$ORIGINAL_PACKAGE -> $customPackageName in $RESOURCE_TABLE_ENTRY",
+                            status = StepStatus.OK
+                        )
+                    )
+                }
+            }
         } else {
             println("Clone rename: not requested by a default build, so the package is unchanged")
         }
@@ -920,6 +977,22 @@ class PatchingPipelineHarnessTest {
         assertTrue(
             "the components must have been switched off, not left as they were",
             BinaryXmlEditor.ATTR_ENABLED in edit.attributesRewritten
+        )
+
+        // 6. The resource table the archive carries names the package the manifest declares. A
+        //    clone whose table says one name and whose getPackageName() says another answers 0 to
+        //    every name-based resource lookup, which is a fact about the shipped file rather than
+        //    about the merge, so it is asserted here off the archive. Without a clone rename the
+        //    two are the original name, which is the same invariant.
+        val shippedTable = requireNotNull(extractEntry(outputFile, RESOURCE_TABLE_ENTRY)) {
+            "the repacked archive has no $RESOURCE_TABLE_ENTRY"
+        }
+        assertEquals(
+            "the shipped resource table must name the package the manifest declares",
+            customPackageName ?: ORIGINAL_PACKAGE,
+            requireNotNull(ResourceTableMerger.packageName(shippedTable)) {
+                "the shipped resource table's package name does not read back"
+            }
         )
     }
 

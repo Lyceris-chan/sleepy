@@ -874,6 +874,59 @@ class PatchingPipeline(private val context: Context) {
                     status = StepStatus.OK
                 )
             )
+
+            // The manifest is not the only place the package name is spelled, and the other copy
+            // is not decoration: the resource table's package chunk declares it, and that is the
+            // name the platform matches a *name-based* lookup against. The app asks for its own
+            // sounds and files that way — `getIdentifier(name, type, getPackageName())` — so a
+            // table still declaring the original name answers 0 for every one of those lookups
+            // once the clone's `getPackageName()` is the new one, and the app then reads resource
+            // id 0. Both copies move together or neither is renamed.
+            val shippingTable = mergedResourceTable ?: extractEntry(sourceApk, RESOURCE_TABLE_ENTRY)
+            val renamedTable = shippingTable?.let { ResourceTableMerger.renamePackage(it, customPackageName) }
+            when {
+                renamedTable == null -> log(
+                    StepResult(
+                        title = "Left the resource table's package as it was",
+                        explanation = "This APK's resource table has no package chunk that could be renamed, or the name is longer than " +
+                            "the 128 characters that field holds. The table in the archive still declares the original package, so the app's " +
+                            "name-based resource lookups resolve to nothing.",
+                        technicalTarget = RESOURCE_TABLE_ENTRY,
+                        status = StepStatus.FAIL
+                    )
+                )
+
+                ResourceTableMerger.packageName(renamedTable) != customPackageName -> log(
+                    StepResult(
+                        title = "Left the resource table's package as it was",
+                        explanation = "The rename was written and did not read back as the name it was given, so the table in the archive is " +
+                            "the one that was built rather than a renamed copy of it. A table whose package name is not known is not one to " +
+                            "ship: name-based resource lookups are resolved against exactly that field.",
+                        technicalTarget = "$RESOURCE_TABLE_ENTRY says ${ResourceTableMerger.packageName(renamedTable) ?: "nothing readable"}",
+                        status = StepStatus.FAIL
+                    )
+                )
+
+                else -> {
+                    // This replaces the entry the merge put in, and it is the same table: a rename
+                    // moves no offsets and no other byte, so what the merge verified still holds of
+                    // what ships.
+                    replacements[RESOURCE_TABLE_ENTRY] = renamedTable
+                    log(
+                        StepResult(
+                            title = "Renamed the resource table's package to match the manifest",
+                            explanation = "The package name is spelled in the resource table as well as in the manifest, and the table's copy " +
+                                "is what the platform resolves a name-based lookup against: resources.getIdentifier(name, type, getPackageName()) " +
+                                "matches that argument against the names the loaded tables declare, so a table left declaring com.discord " +
+                                "answers nothing for a clone whose getPackageName() is the new name — every such lookup returns 0 and the app " +
+                                "reads resource id 0. The field is a fixed 128 characters, so the name is written over it in place and nothing " +
+                                "else in the table moves.",
+                            technicalTarget = "$originalPackageName -> $customPackageName in $RESOURCE_TABLE_ENTRY",
+                            status = StepStatus.OK
+                        )
+                    )
+                }
+            }
         }
 
         if (manifestBytes != null) {

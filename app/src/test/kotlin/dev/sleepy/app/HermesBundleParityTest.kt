@@ -95,7 +95,7 @@ class HermesBundleParityTest {
         // 57119, which shares its body, so the four grown bodies and that one are relocated.
         assertEquals(
             "in-place: " + result.writtenInPlace.joinToString { it.functionId.toString() },
-            137,
+            140,
             result.writtenInPlace.size
         )
         assertEquals(

@@ -39,7 +39,7 @@ object DiscordHermesFunctionCatalog {
     )
 
     // Feature groups. Declared here rather than inline so a group is named once and a typo
-    // in one of the 142 entries cannot quietly create a fifteenth group of one item.
+    // in one of the 145 entries cannot quietly create a fifteenth group of one item.
     private const val ANALYTICS = "Analytics event emitters"
     private const val FINGERPRINT = "Device fingerprint tracking"
     private const val SURVEYS = "App-rating survey pop-ups"
@@ -240,6 +240,8 @@ object DiscordHermesFunctionCatalog {
             "premium-profile-customization gate, which covers only one section of five."),
         entry(67890, ANALYTICS, "Stops the per-request tracker, which ran URL matching and appended to the telemetry ring for " +
             "every HTTP request."),
+        entry(68080, ANALYTICS, "Stops _trackStartSpeaking from computing game metadata and packet stats when someone starts speaking in a voice call."),
+        entry(68081, ANALYTICS, "Stops _trackStartListening from computing telemetry payloads when someone starts listening in a voice call."),
         entry(68460, STOREFRONT, "Stops PromotionsManager fetching /promotions on every launch, which ran without the user " +
             "opening anything."),
         entry(69656, SESSION_TELEMETRY, "Stops the app-state update handler the reference lists with the message-cache recorders, so " +
@@ -282,6 +284,7 @@ object DiscordHermesFunctionCatalog {
         entry(108532, QUESTS, "Stops QuestFetchManager installing the recurring interval that refetched quests forever, " +
             "which against already-blocked endpoints was pure timer and network churn."),
         entry(117345, SPOTIFY, "Rebuilds the profile activity list without friends' Spotify listened-session entries."),
+        entry(121591, ANALYTICS, "Stops the 60-second voice state interval callback that repeatedly dispatches speaking and listening telemetry during calls."),
     )
 
     /** The feature groups, in the order they first appear above. */

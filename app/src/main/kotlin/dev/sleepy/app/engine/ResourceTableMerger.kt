@@ -115,6 +115,17 @@ object ResourceTableMerger {
     private const val PACKAGE_TYPE_STRINGS_OFFSET = 268
     private const val PACKAGE_KEY_STRINGS_OFFSET = 276
 
+    /**
+     * `ResTable_package::name`: 128 UTF-16 code units at a fixed offset, NUL-padded, ending where
+     * `typeStrings` begins.
+     *
+     * It is a fixed field rather than an offset into a pool, which is what makes renaming a package
+     * a write in place: a name that fits leaves every other byte of the table where it was, so no
+     * offset in any chunk has to move.
+     */
+    private const val PACKAGE_NAME_OFFSET = 12
+    private const val PACKAGE_NAME_BYTES = PACKAGE_TYPE_STRINGS_OFFSET - PACKAGE_NAME_OFFSET
+
     /** The smallest package header that still holds the pool offsets this reads. */
     private const val PACKAGE_MIN_HEADER_SIZE = 288
 
@@ -423,6 +434,76 @@ object ResourceTableMerger {
             }
         }
         return paths
+    }
+
+    /**
+     * The package name [table]'s package chunk declares, or null if [table] is not a table this
+     * reader can walk.
+     *
+     * This is [renamePackage]'s read-back: the name a rename left in the table is the claim worth
+     * checking, and it is asked of the field the platform reads rather than of the string that went
+     * in.
+     */
+    fun packageName(table: ByteArray): String? {
+        val at = packageChunkAt(table) ?: return null
+        if (at + PACKAGE_TYPE_STRINGS_OFFSET > table.size) return null
+        val field = table.copyOfRange(at + PACKAGE_NAME_OFFSET, at + PACKAGE_TYPE_STRINGS_OFFSET)
+        var units = 0
+        while ((units + 1) * 2 <= field.size) {
+            if (field[units * 2].toInt() == 0 && field[units * 2 + 1].toInt() == 0) break
+            units++
+        }
+        return String(field, 0, units * 2, Charsets.UTF_16LE)
+    }
+
+    /**
+     * [table] with its package renamed to [name], or null when there is no package chunk to rename
+     * or the name does not fit the field it goes in.
+     *
+     * The name in the package chunk is what a *name-based* lookup is matched against. An app asks
+     * for its own sounds and files by name rather than by id —
+     * `Resources.getIdentifier(name, type, getPackageName())` — and that third argument is resolved
+     * against the package names the loaded tables declare. A build whose `getPackageName()` is
+     * `com.discord.sleepy` asking a table that declares `com.discord` gets 0 back for every one of
+     * those lookups, and then reads resource id 0. An installation of this app did exactly that 72
+     * times on a single startup, each one the platform's `Invalid resource ID 0x00000000.`; the
+     * manifest is not the only place a package renames, and this is the other one.
+     *
+     * Nothing else moves, which is what [slotsOf] and [namedPaths] can be asked to confirm: the
+     * name is a fixed field written in place, so the result is the same size and holds the same
+     * bytes everywhere else.
+     */
+    fun renamePackage(table: ByteArray, name: String): ByteArray? {
+        val at = packageChunkAt(table) ?: return null
+        if (at + PACKAGE_TYPE_STRINGS_OFFSET > table.size) return null
+        // The field is NUL-terminated, so a name that would leave no room for the terminator is
+        // refused rather than written over the end of the field.
+        val encoded = name.toByteArray(Charsets.UTF_16LE)
+        if (encoded.size + 2 > PACKAGE_NAME_BYTES) return null
+        val renamed = table.copyOf()
+        renamed.fill(0, at + PACKAGE_NAME_OFFSET, at + PACKAGE_TYPE_STRINGS_OFFSET)
+        encoded.copyInto(renamed, at + PACKAGE_NAME_OFFSET)
+        return renamed
+    }
+
+    /**
+     * Where [table]'s package chunk starts, or null if it is not a table this reader can walk.
+     *
+     * The walk stops at the first package chunk, which is the one [merge] would have carried over:
+     * a table with a second one is one this reader does not claim to understand.
+     */
+    private fun packageChunkAt(table: ByteArray): Int? {
+        if (table.size < TABLE_HEADER_SIZE) return null
+        if (u16(table, 0) != TYPE_TABLE) return null
+        var offset = u16(table, 2)
+        while (offset + CHUNK_HEADER_SIZE <= table.size) {
+            val type = u16(table, offset)
+            val size = u32(table, offset + 4)
+            if (size < CHUNK_HEADER_SIZE || offset + size > table.size) return null
+            if (type == TYPE_PACKAGE) return offset
+            offset += size
+        }
+        return null
     }
 
     /** One occupied entry slot: a type, a configuration, and an index within that type. */

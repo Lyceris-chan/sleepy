@@ -48,12 +48,12 @@ class PatchRowStateTest {
     fun theSetSwitchIsTriStateAndCountsItemsRatherThanSets() {
         val off = PatchRows.of(hermes, PatchSelection())
         assertEquals("nothing selected is off", TriState.NONE, off.triState)
-        assertEquals(142, off.itemCount)
+        assertEquals(145, off.itemCount)
         assertEquals(0, off.selectedItemCount)
 
         val everything = PatchSelection().setEnabled(hermesItems, true)
         assertEquals(TriState.ALL, PatchRows.of(hermes, everything).triState)
-        assertEquals(142, PatchRows.of(hermes, everything).selectedItemCount)
+        assertEquals(145, PatchRows.of(hermes, everything).selectedItemCount)
 
         // The case the whole per-item split exists for: the gift button on and everything else off
         // reads as partly on, not as on and not as off.
@@ -62,7 +62,7 @@ class PatchRowStateTest {
         assertTrue("the gift buttons have to be a real group of their own", giftOnly.keys.size >= 2)
         assertEquals(TriState.PARTIAL, partial.triState)
         assertEquals("the count is of items, not of sets", giftOnly.keys.size, partial.selectedItemCount)
-        assertEquals(142, partial.itemCount)
+        assertEquals(145, partial.itemCount)
 
         assertEquals(
             "an id that names nothing selects nothing rather than everything",
@@ -84,7 +84,7 @@ class PatchRowStateTest {
         )
         assertEquals(
             "a tap on a partly selected set selects everything in it",
-            142,
+            145,
             completed.selected(hermesItems).size
         )
         assertEquals(TriState.ALL, PatchRows.triState(hermesItems, completed))
@@ -100,7 +100,7 @@ class PatchRowStateTest {
             hermesItems,
             !PatchRows.headerChecked(PatchRows.triState(hermesItems, PatchSelection()))
         )
-        assertEquals("and a tap on an empty set selects everything in it", 142, emptied.selected(hermesItems).size)
+        assertEquals("and a tap on an empty set selects everything in it", 145, emptied.selected(hermesItems).size)
     }
 
     @Test
@@ -111,7 +111,7 @@ class PatchRowStateTest {
         // order — the catalog's own grouping, read through its own function.
         val expected = hermesItems.groupedByFeature().flatMap { it.items }
 
-        assertEquals(142, flat.size)
+        assertEquals(145, flat.size)
         assertEquals("the rows are the items, and nothing else", expected.map { it.key }, flat.map { it.key })
         assertEquals(expected.map { it.label }, flat.map { it.label })
         assertEquals(expected.map { it.description }, flat.map { it.description })
@@ -129,7 +129,7 @@ class PatchRowStateTest {
             DiscordHermesFunctionCatalog.GROUPS,
             rows.groups.map { it.label }
         )
-        assertEquals(142, rows.groups.sumOf { it.rows.size })
+        assertEquals(145, rows.groups.sumOf { it.rows.size })
         assertTrue("a set with more than one item has something to expand into", rows.expandable)
         assertTrue(
             "a group heading has to group: one row per group is a list with extra steps",

@@ -984,6 +984,28 @@ object DiscordNativePatches {
     # Patch: no-op.
     return-void
 .end method"""
+            ),
+            SmaliPatch(
+                title = "Skipping frame metrics aggregator setup",
+                explanation = "Stops the per-frame FrameMetrics listener from installing on the window.",
+                smaliPath = "com/discord/jank_stats/FrameMetricsAggregator.smali",
+                methodSignature = ".method public final initialize(Landroid/view/Window;)V",
+                replacementBody = """.method public final initialize(Landroid/view/Window;)V
+    .locals 0
+    # Patch: no-op.
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Preventing jank session recording",
+                explanation = "Stops jank session recording and SharedPreferences writes from starting at application startup.",
+                smaliPath = "com/discord/jank_stats/JankSessionRecorder.smali",
+                methodSignature = ".method public final init(Landroid/content/Context;)V",
+                replacementBody = """.method public final init(Landroid/content/Context;)V
+    .locals 0
+    # Patch: no-op.
+    return-void
+.end method"""
             )
         )
     )
@@ -1050,6 +1072,18 @@ object DiscordNativePatches {
     # Patch: no-op.
     return-void
 .end method"""
+            ),
+            SmaliPatch(
+                title = "Disabling blocking OTA recovery after crashes",
+                explanation = "Stops ActivityDelegate from doing an unbounded Future.get() on the UI thread checking for OTA updates after a crash.",
+                smaliPath = "com/discord/react_activities/ActivityDelegate.smali",
+                methodSignature = ".method private final needsBlockingOtaRecovery()Z",
+                replacementBody = """.method private final needsBlockingOtaRecovery()Z
+    .locals 1
+    # Patch: stub.
+    const/4 v0, 0x0
+    return v0
+.end method"""
             )
         )
     )
@@ -1068,6 +1102,27 @@ object DiscordNativePatches {
     # render-thread Looper is FIFO, so the surface-creation runnable
     # posted immediately after this still runs once eglBase is set.
     invoke-virtual {v4, v3}, Landroid/os/Handler;->post(Ljava/lang/Runnable;)Z"""
+            ),
+            SmaliPatch(
+                title = "Skipping EGL setup once the renderer is released",
+                explanation = "Makes the deferred graphics setup return early when the renderer has already been released, so a teardown that jumps the render thread's queue cannot leave a graphics context that nothing will free.",
+                smaliPath = "com/discord/media/engine/video/egl_renderer/EglRenderer.smali",
+                anchor = """.method private static final init${'$'}lambda${'$'}10${'$'}lambda${'$'}9(Lcom/discord/media/engine/video/egl_renderer/EglRenderer;J)V
+    .registers 3""",
+                replacement = """.method private static final init${'$'}lambda${'$'}10${'$'}lambda${'$'}9(Lcom/discord/media/engine/video/egl_renderer/EglRenderer;J)V
+    .registers 4
+
+    # Patch: released-guard. `release()` nulls renderThreadHandler and
+    # jumps its cleanup to the FRONT of this queue, so a create still
+    # pending further back would otherwise build an EGL context after
+    # cleanup already ran - and nothing would ever free it.
+    iget-object v0, p0, Lcom/discord/media/engine/video/egl_renderer/EglRenderer;->renderThreadHandler:Landroid/os/Handler;
+
+    if-nez v0, :egl_create
+
+    return-void
+
+    :egl_create"""
             ),
             SmaliPatch(
                 title = "Logging media callback failures (main path)",
