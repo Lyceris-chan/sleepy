@@ -7,11 +7,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Expressive type scale: a heavy display range for screen headers, a compact text range for
- * prose, and a monospace range for the machine-readable detail (paths, hashes, method
- * signatures) the audit surfaces print.
+ * The Material 3 Expressive type scale: a heavy display range for screen headers, a compact text
+ * range for prose, and a monospace range for the machine-readable detail (paths, hashes, method
+ * signatures) that the audit screens show.
  */
-val SleepyTypography = Typography(
+val SLEEPY_TYPOGRAPHY = Typography(
     displaySmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,

@@ -45,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.BuildConfig
@@ -56,14 +58,15 @@ import dev.sleepy.app.ui.components.downloadHosts
 /**
  * Settings and provenance.
  *
- * The screens above this one ask the reader to trust a build; this one is where that trust can
- * be checked — which hosts each target is downloaded from, which manifest drove the build, and
- * where the code that does the work lives.
+ * The other screens present a build to patch; this one lists what can be checked about it—which
+ * hosts each target is downloaded from, which manifest drove the build, and where the code that
+ * does the work is.
  *
- * @param sources every target this build can patch, each with the hosts it downloads from, so a
+ * @param sources The targets this build can patch, each with the hosts it downloads from, so a
  *   target other than the selected one is shown rather than left out.
- * @param selectedSourceId the target last opened on the home screen, which is marked in the list.
+ * @param selectedSourceId The target last opened on the home screen, which is marked in the list.
  *   It is null before anything has been opened.
+ * @param onBack Called when the user leaves the screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +85,8 @@ fun SettingsScreen(
                     Text(
                         text = "Settings & Transparency",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() }
                     )
                 },
                 navigationIcon = {
@@ -139,8 +143,8 @@ fun SettingsScreen(
 /**
  * Product identity: what this app is and what it does.
  *
- * The version is the one the build was made as — read from the generated `BuildConfig`, which the
- * build script derives from the changelog — so it cannot say something the release does not.
+ * The version is the one the build was made as—read from the generated `BuildConfig`, which the
+ * build script derives from the changelog—so it matches the release the build was made from.
  */
 @Composable
 private fun AppIdentityCard(versionName: String) {
@@ -183,7 +187,7 @@ private fun AppIdentityCard(versionName: String) {
  *
  * Every target is listed rather than only the selected one, because provenance a reader has to
  * select a target to see is provenance they cannot check before selecting it. The one they last
- * opened is marked, so the list says both what this app can fetch and what it is about to.
+ * opened is marked, so the list shows both what this app can fetch and what it is about to.
  */
 @Composable
 private fun ProvenanceCard(
@@ -335,7 +339,7 @@ private fun SourceCodeCard(
         ) {
             Text(
                 text = "sleepy is open source. The downloader, the DEX and Hermes patchers, the " +
-                    "signer and the checks on this screen are all in this project's repository — " +
+                    "signer and the checks on this screen are all in this project's repository—" +
                     "not the repository of any app it patches.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -367,7 +371,7 @@ private fun SourceCodeCard(
     }
 }
 
-/** The guarantees the patching engine makes about where data goes and how it is signed. */
+/** The patching engine's design properties: where data goes and how the result is signed. */
 @Composable
 private fun ArchitectureCard() {
     ElevatedCard(
@@ -394,29 +398,34 @@ private fun ArchitectureCard() {
             ArchitectureRow(
                 icon = Icons.Default.Key,
                 title = "On-device signing key (v1 + v2 + v3)",
-                body = "An RSA-2048 key generated on this device and kept as a PKCS12 file, used with Google's apksig engine"
+                body = "An EC P-256 key held in the Android keystore, where the device's secure " +
+                    "hardware protects it. The key is not written to disk, and signing uses " +
+                    "Google's apksig engine"
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             ArchitectureRow(
                 icon = Icons.Default.VpnLock,
-                title = "OWASP Mobile M5 strict TLS",
-                body = "Strict HTTPS only, cleartext traffic permanently blocked"
+                title = "HTTPS-only downloads",
+                body = "Every download URL must use HTTPS, the network policy blocks cleartext " +
+                    "traffic, and server certificates are checked against the system trust " +
+                    "anchors. The app does not pin certificates."
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             ArchitectureRow(
                 icon = Icons.Default.CheckCircleOutline,
-                title = "WCAG 2.2 AA accessibility",
-                body = "Screen reader semantics and predictive back support"
+                title = "Accessibility semantics",
+                body = "Controls expose labels, roles, headings and state to accessibility " +
+                    "services, and progress updates are announced."
             )
         }
     }
 }
 
-/** One architecture claim: icon, title, and the detail that backs it up. */
+/** One architecture row: an icon, a title, and the detail behind it. */
 @Composable
 private fun ArchitectureRow(
     icon: ImageVector,
@@ -454,7 +463,8 @@ private fun SettingsSectionTitle(text: String) {
         text = text,
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.semantics { heading() }
     )
 }
 

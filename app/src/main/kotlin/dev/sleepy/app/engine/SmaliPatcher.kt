@@ -4,22 +4,33 @@ import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.StepResult
 import dev.sleepy.app.model.StepStatus
 
+/**
+ * Applies smali patches to the disassembled DEX sources of a build.
+ *
+ * A patch targets one of three locations in a smali file: a packed-switch case body, an anchor
+ * block, or a whole method body identified by signature. Each call returns a [StepResult] that
+ * records whether the target was found and replaced, skipped, or failed.
+ */
 object SmaliPatcher {
 
     /**
-     * Applies a [SmaliPatch] to the memory-cached [smaliFiles] map.
-     * Supports:
-     * 1. Switch-case body replacement (e.g., :pswitch_160 in packed-switch dispatchers)
-     * 2. Exact anchor block replacement / insertion
-     * 3. Whole method body replacement by signature through .end method
+     * Applies [patch] to the in-memory [smaliFiles] map.
+     *
+     * Three patch targets are supported:
+     *
+     * 1. Switch-case body replacement, for example `:pswitch_160` in packed-switch dispatchers.
+     * 2. Exact anchor block replacement or insertion.
+     * 3. Whole method body replacement by signature, through `.end method`.
      */
     fun apply(
         smaliFiles: MutableMap<String, String>,
         patch: SmaliPatch
     ): StepResult {
-        val title = patch.title ?: (patch.methodSignature ?: patch.anchor ?: patch.switchCaseLabel ?: patch.smaliPath)
+        val title = patch.title ?:
+            (patch.methodSignature ?: patch.anchor ?: patch.switchCaseLabel ?: patch.smaliPath)
         val explanation = patch.explanation
-        val technicalTarget = "${patch.smaliPath} :: ${patch.methodSignature ?: patch.anchor ?: patch.switchCaseLabel ?: ""}"
+        val technicalTarget = "${patch.smaliPath} :: " +
+            "${patch.methodSignature ?: patch.anchor ?: patch.switchCaseLabel ?: ""}"
 
         val content = smaliFiles[patch.smaliPath]
             ?: return StepResult(
@@ -64,7 +75,10 @@ object SmaliPatcher {
                     explanation = explanation,
                     technicalTarget = technicalTarget,
                     status = StepStatus.FAIL,
-                    detail = "Closing switch case label not found after ${patch.switchCaseLabel}"
+                    detail = "Closing switch case label not found after ${patch.switchCaseLabel}",
+                    // The file keeps the bytes it had, so this patch can fail without
+                    // stopping the run.
+                    failureIsFatal = false
                 )
             }
 
@@ -124,7 +138,10 @@ object SmaliPatcher {
                     explanation = explanation,
                     technicalTarget = technicalTarget,
                     status = StepStatus.FAIL,
-                    detail = "Closing .end method not found after signature"
+                    detail = "Closing .end method not found after signature",
+                    // The file keeps the bytes it had, so this patch can fail without
+                    // stopping the run.
+                    failureIsFatal = false
                 )
             }
 
@@ -148,7 +165,10 @@ object SmaliPatcher {
             explanation = explanation,
             technicalTarget = technicalTarget,
             status = StepStatus.FAIL,
-            detail = "Invalid patch configuration: no methodSignature, anchor, or switchCase defined"
+            detail = "Invalid patch configuration: " +
+                "no methodSignature, anchor, or switchCase defined",
+            // The file keeps the bytes it had, so this patch can fail without stopping the run.
+            failureIsFatal = false
         )
     }
 }

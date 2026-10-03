@@ -11,37 +11,37 @@ import java.util.zip.ZipInputStream
  * Merges Android App Bundle configuration splits into the base APK.
  *
  * A `split_base` download is only the master split: it carries the DEX, the resources and
- * the JS bundle, but no native library entries at all — every shared object lives in the
+ * the JS bundle, but no native library entries at all—every shared object is in the
  * ABI configuration split. Installing the base alone gives an APK whose first
  * `System.loadLibrary` call throws `UnsatisfiedLinkError`, and whose manifest still
- * declares `android:requiredSplitTypes`, so the platform refuses it outright.
+ * declares `android:requiredSplitTypes`, so the platform rejects it outright.
  *
  * The base is not the whole app either. A density split holds the bitmaps that suit one
  * screen density and a language split the strings of one locale, and both are as absent
  * from the base as the libraries are: a base-only APK has none of the resources only those
- * splits carry. So a split contributes two things here — every
- * shared object under `lib/`, and every file under `res/` bar the split's own `values/`
- * directory. That last exception is the reference merge's rule and it is load-bearing: a
+ * splits carry. So a split contributes two things here—every
+ * shared object under `lib/`, and every file under `res/` except the split's own `values/`
+ * directory. That last exception comes from the reference merge and is required: a
  * configuration split's `values/` holds placeholder stubs for the values it replaces rather
- * than resources of its own, and copying those in would blank out what the base already has.
+ * than resources of its own, and copying those in replaces resources that the base already has.
  *
  * What is deliberately *not* merged is the splits' `resources.arsc`, and that is the whole of
- * this object's limitation rather than a detail. Every split ships a partial table naming only
- * the files that split carries — this base's names its own 3,606, the density split's names its
- * 1,249, and the two sets share no path string at all — so the files merged in here arrive at
- * the right paths with nothing in the merged APK referring to them. Making them resolve means
- * relinking the tables, which is aapt2's job and a different order of work from a repack; what
- * this buys is the file set and the size the desktop build has, and no more than that.
+ * this object's limitation rather than a detail. Every split contains a partial table naming
+ * only the files that split carries—this base's names its own 3,606, the density split's
+ * names its 1,249, and the two sets share no path string at all—so the files merged in here
+ * are written at the right paths, but nothing in the merged APK refers to them. Making them
+ * resolve means relinking the tables, which is aapt2's job and more than a repack; what this
+ * produces is the file set and the size the desktop build has, and no more than that.
  *
- * [mergeSplit] pulls those entries out in memory; [mergeSplitToDir] does the same with them
- * landing in files: a configuration split is tens of megabytes, which is more than a phone
- * heap can hold next to the base APK and the archive being rebuilt.
+ * [mergeSplit] reads those entries into memory; [mergeSplitToDir] writes them to files: a
+ * configuration split is tens of megabytes, which is more than a phone heap can hold next to
+ * the base APK and the archive being rebuilt.
  */
 object SplitMerger {
 
-    /** What a merged entry says about itself, whichever way its bytes are held. */
+    /** The information a merged entry provides about itself, whichever way its bytes are held. */
     interface MergedSplitEntry {
-        /** Entry name it is written into the merged APK under. */
+        /** The entry name that the entry is written under in the merged APK. */
         val name: String
 
         /** Bytes this entry contributes. */
@@ -51,7 +51,7 @@ object SplitMerger {
         val storedInSplit: Boolean
     }
 
-    /** A file lifted out of a split APK and held in memory. */
+    /** An entry read from a split APK into memory. */
     data class MergedEntry(
         override val name: String,
         val data: ByteArray,
@@ -61,9 +61,9 @@ object SplitMerger {
     }
 
     /**
-     * The same, materialised on disk. The split is walked once and each entry is written
+     * The same entry, materialized on disk. The split is walked once and each entry is written
      * out as it is read, so the largest thing in memory is one entry rather than all of
-     * them: a 74 MB ABI split does not fit in the heap twice over.
+     * them: a 74 MB ABI split does not fit in the heap twice.
      */
     data class MergedFileEntry(
         override val name: String,
@@ -89,10 +89,12 @@ object SplitMerger {
         val resourceCount: Int get() = entries.count { it.name.startsWith(RES_DIR) }
 
         /** What the shared objects add to the archive. */
-        val libraryBytes: Long get() = entries.filter { ABI_ENTRY.matches(it.name) }.sumOf { it.size }
+        val libraryBytes: Long
+            get() = entries.filter { ABI_ENTRY.matches(it.name) }.sumOf { it.size }
 
         /** What the resources add to the archive. */
-        val resourceBytes: Long get() = entries.filter { it.name.startsWith(RES_DIR) }.sumOf { it.size }
+        val resourceBytes: Long
+            get() = entries.filter { it.name.startsWith(RES_DIR) }.sumOf { it.size }
 
         /** What the split adds to the archive in total. */
         val totalBytes: Long get() = entries.sumOf { it.size }
@@ -108,23 +110,23 @@ object SplitMerger {
     const val RES_DIR = "res/"
 
     /**
-     * The split-install metadata a bundle's base split ships, and nothing else does.
+     * The split-install metadata that a bundle's base split ships, and no other split does.
      *
-     * It lists the configuration splits an installation has and the flags that go with them, and the
-     * platform's split installer is what reads it — Play's, on a bundle install. An APK with every
-     * one of its splits inside it is not a split of anything, so the file describes an installation
-     * that does not exist: it is the resource-side twin of the Play split markers removed from the
-     * manifest, and the reference merge removes it in the same step as them.
+     * It lists the configuration splits that an installation has and the flags that go with them,
+     * and the platform's split installer is what reads it—Play's, on a bundle install. An APK
+     * with every one of its splits inside it is not a split, so the file describes an installation
+     * that does not exist: it is the resource-side counterpart of the Play split markers removed
+     * from the manifest, and the reference merge removes it in the same step as them.
      *
      * It cannot be removed on its own. The row that names it is in the resource table, and a table
-     * resolving to a file the archive does not hold is worse than an archive holding a file nothing
-     * names — so the file goes only where the table that named it was rebuilt without it. See
-     * [ResourceTableMerger.merge]'s `droppedPaths`.
+     * resolving to a file the archive does not hold is worse than an archive holding a file that no
+     * entry refers to—so the file is removed only when the table that named it was rebuilt
+     * without it. See [ResourceTableMerger.merge]'s `droppedPaths`.
      */
     const val SPLIT_INSTALL_METADATA = "res/xml/splits0.xml"
 
     /**
-     * A split's own default resources, which it carries only to stand in for the base's.
+     * A split's own default resources, which it carries only as replacements for the base's.
      * The reference merge skips these and so does this one: they are placeholder stubs for
      * table-backed values, not files the base is missing.
      */
@@ -136,24 +138,26 @@ object SplitMerger {
     private const val BUFFER_SIZE = 64 * 1024
 
     /**
-     * Extracts everything [splitApkBytes] contributes — its shared objects and its resources
-     * — sorted by name so the merged result is deterministic.
+     * Extracts everything [splitApkBytes] contributes—its shared objects and its resources
+     * —sorted by name so the merged result is deterministic.
      */
     fun mergeSplit(splitApkBytes: ByteArray): MergeReport<MergedEntry> {
         val entries = mutableListOf<MergedEntry>()
         walkSplit(ByteArrayInputStream(splitApkBytes)) { name, stored, content ->
-            entries.add(MergedEntry(name = name, data = content.readBytes(), storedInSplit = stored))
+            entries.add(
+                MergedEntry(name = name, data = content.readBytes(), storedInSplit = stored)
+            )
         }
         entries.sortBy { it.name }
         return MergeReport(entries, abisOf(entries))
     }
 
     /**
-     * The same extraction, writing each entry into [into] and reporting it by file.
+     * Extracts the same entries, writing each one into [into] and reporting it by file.
      *
      * The file names are flattened repeats of the entry names (`split_lib_arm64-v8a_libfoo.so`,
      * `split_res_drawable-hdpi-v4_logo.png`): the name an entry is written into the APK under
-     * stays in [MergedFileEntry.name], and a flattened name cannot escape [into] however the
+     * stays in [MergedFileEntry.name], and a flattened name stays within [into] however the
      * split names its entries.
      */
     fun mergeSplitToDir(splitApk: File, into: File): MergeReport<MergedFileEntry> {
@@ -167,7 +171,7 @@ object SplitMerger {
             }
         }
         // Written in the order the split listed them, reported in name order so the archive
-        // this feeds is deterministic no matter how the split was laid out.
+        // built from the report is deterministic regardless of how the split was laid out.
         entries.sortBy { it.name }
         return MergeReport(entries, abisOf(entries))
     }
@@ -197,9 +201,9 @@ object SplitMerger {
 
     /**
      * Whether an entry of a configuration split belongs in the merged APK: a shared object,
-     * or a resource the base could be missing. Everything else a split carries — its
-     * manifest, its own `resources.arsc`, its default `values/` — belongs to the split, not
-     * to the app, and is left where it is.
+     * or a resource the base could be missing. Everything else a split carries—its
+     * manifest, its own `resources.arsc`, its default `values/`—belongs to the split, not
+     * to the app, and is not copied into the merged APK.
      */
     private fun isMerged(name: String): Boolean = when {
         name.endsWith(".so") && ABI_ENTRY.matches(name) -> true

@@ -35,8 +35,12 @@ import dev.sleepy.app.model.AppSource
 /**
  * One selectable target application.
  *
- * Besides the name and version, the card states which hosts the build will download from, so
- * the destination of the network traffic is visible before anything is fetched.
+ * Besides the name and version, the card states which hosts the build downloads from, so the
+ * destination of the network traffic is visible before anything is fetched.
+ *
+ * @param source The target this card represents.
+ * @param onClick The action to run when the card is selected.
+ * @param modifier The modifier applied to the card.
  */
 @Composable
 fun SourceCard(

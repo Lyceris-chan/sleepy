@@ -12,16 +12,22 @@ import com.android.tools.smali.smali.SmaliOptions
 import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.StepResult
 import dev.sleepy.app.model.StepStatus
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
+/**
+ * Patches DEX files without disassembling a whole file.
+ *
+ * The processor builds an index from each class to the DEX container that defines it, then
+ * reassembles only the classes a patch targets and splices them back into the original DEX.
+ */
 object DexProcessor {
 
     /**
-     * Builds an in-memory index mapping DEX type descriptors (e.g. "Lorg/telegram/ui/e6;")
-     * to the DEX container entry name (e.g. "classes3.dex") where they reside.
-     * Takes ~30ms for 30,000 classes across all DEX files.
+     * Builds an in-memory index mapping DEX type descriptors (for example,
+     * "Lorg/telegram/ui/e6;") to the DEX container entry name (for example, "classes3.dex")
+     * where they reside. Measured at roughly 30 ms for 30,000 classes on the development device.
      */
     fun buildClassToDexIndex(
         dexEntries: Map<String, ByteArray>,
@@ -49,10 +55,10 @@ object DexProcessor {
     }
 
     /**
-     * Surgically patches a DEX file by disassembling and reassembling ONLY the classes
-     * being modified, leaving all other classes untouched in binary form.
+     * Patches a DEX file by disassembling and reassembling only the classes being modified,
+     * leaving the other classes in their original binary form.
      *
-     * This avoids OutOfMemory errors and takes seconds instead of minutes.
+     * This keeps the memory the patch holds proportional to the classes it changes rather than to the size of the DEX file.
      */
     suspend fun patchDexSurgically(
         dexBytes: ByteArray,
@@ -90,7 +96,7 @@ object DexProcessor {
                 "L$clean;"
             }.distinct()
 
-            // 1. Disassemble ONLY targeted classes
+            // 1. Disassemble only the targeted classes
             val baksmaliOpts = BaksmaliOptions().apply {
                 this.apiLevel = apiLevel
             }
@@ -105,7 +111,14 @@ object DexProcessor {
 
             if (!disassembled) {
                 patches.forEach {
-                    results.add(StepResult(it.smaliPath, StepStatus.FAIL, "Class disassembly failed"))
+                    results.add(
+                        StepResult(
+                            it.smaliPath,
+                            StepStatus.FAIL,
+                            "Class disassembly failed",
+                            failureIsFatal = false
+                        )
+                    )
                 }
                 return@withContext dexBytes to results
             }
@@ -125,7 +138,13 @@ object DexProcessor {
                         file.writeText(smaliFilesMap[patch.smaliPath]!!, Charsets.UTF_8)
                     }
                 } else {
-                    results.add(StepResult(patch.smaliPath, StepStatus.SKIP, "Class not present in this DEX"))
+                    results.add(
+                        StepResult(
+                            patch.smaliPath,
+                            StepStatus.SKIP,
+                            "Class not present in this DEX"
+                        )
+                    )
                 }
             }
 
@@ -135,7 +154,7 @@ object DexProcessor {
                 return@withContext dexBytes to results
             }
 
-            // 3. Assemble ONLY the modified classes into a temporary single/multi-class DEX
+            // 3. Assemble only the modified classes into a temporary single/multi-class DEX
             val smaliOpts = SmaliOptions().apply {
                 this.apiLevel = apiLevel
                 outputDexFile = tempSingleDex.absolutePath
@@ -144,7 +163,14 @@ object DexProcessor {
 
             val assembled = Smali.assemble(smaliOpts, listOf(smaliDir.absolutePath))
             if (!assembled || !tempSingleDex.exists() || tempSingleDex.length() == 0L) {
-                results.add(StepResult("Smali reassembly", StepStatus.FAIL, "Failed to compile patched classes"))
+                results.add(
+                    StepResult(
+                        "Smali reassembly",
+                        StepStatus.FAIL,
+                        "Failed to compile patched classes",
+                        failureIsFatal = false
+                    )
+                )
                 return@withContext dexBytes to results
             }
 

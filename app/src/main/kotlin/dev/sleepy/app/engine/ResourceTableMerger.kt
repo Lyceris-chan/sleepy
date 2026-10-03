@@ -3,37 +3,37 @@ package dev.sleepy.app.engine
 import java.io.ByteArrayOutputStream
 
 /**
- * Builds one `resources.arsc` from the partial tables an App Bundle ships as a base and a set of
- * configuration splits.
+ * Builds one `resources.arsc` from the partial tables that an App Bundle ships as a base and a
+ * set of configuration splits.
  *
  * ## The problem this exists for
  *
- * An App Bundle assigns resource ids once, at bundle build time, and then *deals them out*: the
- * base split keeps the entries whose configurations stayed with the base, a density split keeps
- * the ones that did not, a language split keeps one locale's strings. Each split therefore ships
- * a `resources.arsc` naming only what it carries — this base's names 11,024 entries and the
- * density split's 1,249, and the two sets of file paths do not intersect at all. Merging a
- * split's *files* into the base, which [SplitMerger] does, leaves those files at the right paths
- * with nothing in the merged APK referring to them: present, but unreachable.
+ * An App Bundle assigns resource ids once, at bundle build time, and then distributes them: the
+ * base split carries the entries whose configurations stayed with the base, a density split
+ * carries the ones that did not, and a language split carries one locale's strings. Each split
+ * therefore ships a `resources.arsc` naming only what it carries—this base names 11,024
+ * entries and the density split names 1,249, and the two sets of file paths do not intersect at
+ * all. Merging a split's *files* into the base, which [SplitMerger] does, leaves those files at
+ * the right paths with nothing in the merged APK referring to them: present but unreachable.
  *
  * ## Why this is a chunk merge and not a relink
  *
  * The desktop reference relinks with apktool: decode every split, merge the trees, rebuild with
- * aapt2. That build's `resources.arsc` cannot be spliced into this APK, and the reason is
- * measurable rather than theoretical. apktool's *decode* drops resource-configuration qualifiers
- * that are redundant for the build's `minSdkVersion`, so `res/drawable-xhdpi-v4/icon.png` comes
- * out of the decoder as `res/drawable-xhdpi/icon.png` and is written back under that spelling.
- * The desktop build's table agrees with the APK it was built into, because both came out of the
- * same decode; the base APK's own entries use the original spelling, and so do the files
- * [SplitMerger] copies. A desktop-generated table dropped into this repack names 4,854 files of
- * which none exist in the archive being written — strictly worse than the unreachable files it
- * would replace.
+ * aapt2. That build's `resources.arsc` cannot be spliced into this APK, for a measurable reason.
+ * apktool's *decode* drops resource-configuration qualifiers that are redundant for the build's
+ * `minSdkVersion`, so `res/drawable-xhdpi-v4/icon.png` comes out of the decoder as
+ * `res/drawable-xhdpi/icon.png` and is written back under that spelling. The desktop build's
+ * table matches the APK it was built into, because both came out of the same decode; the base
+ * APK's own entries use the original spelling, and so do the files [SplitMerger] copies. A
+ * desktop-generated table dropped into this repack names 4,854 files that do not exist in the
+ * archive being written, which is worse than the unreachable files it replaces.
  *
- * A chunk merge has none of that, because nothing is re-derived. The tables of a base and its own
- * configuration splits already agree on package id, on type ids, on entry indexes and on the
- * bytes of every configuration: the bundle build fixed all of it before it split them apart. So
- * this walks the tables and copies each entry across verbatim, keeping the configuration it was
- * written with, which is what makes the paths it names the paths [SplitMerger] copies.
+ * A chunk merge avoids that problem, because it re-derives nothing. The tables of a base and its
+ * own configuration splits already agree on package id, on type ids, on entry indexes and on the
+ * bytes of every configuration: the bundle build fixed all of those before it split the tables
+ * apart. So [merge] walks the tables and copies each entry across verbatim, keeping the
+ * configuration it was written with, which is what makes the paths it names the paths
+ * [SplitMerger] copies.
  *
  * ## The two things that do have to move
  *
@@ -42,27 +42,27 @@ import java.io.ByteArrayOutputStream
  *
  * - `ResTable_entry.key` indexes the package's `keyStrings` pool, where the entry's name lives.
  * - A `Res_value` of type `TYPE_STRING` holds an index into the table's global string pool. An
- *   entry holds one of those after its header, or — when it is a bag — one inside each of its
+ *   entry holds one of those after its header, or—when it is a bag—one inside each of its
  *   maps, and both places are the same field with the same index in it.
  *
- * Both pools are merged by **appending**, never by rebuilding: every string keeps its position,
- * so every index that already referred to one still does. A split's index is therefore rewritten
- * by a single addition — the offset of its pool in the merged pool — and everything else in the
- * entry is copied untouched. That is the whole of the rewrite, which is why this can be trusted
- * with entry bytes it does not otherwise understand.
+ * Both pools are merged by **appending**, not by rebuilding: every string keeps its position, so
+ * every index that already referred to one still does. A split's index is therefore rewritten by
+ * a single addition—the offset of its pool in the merged pool—and the rest of the entry is
+ * copied untouched. That is the whole of the rewrite, which is why the merge can copy entry
+ * bytes it does not otherwise interpret.
  *
- * ## What it drops, and what it refuses
+ * ## What it drops, and what it does not merge
  *
- * A package's type and type-spec chunks are rebuilt from the merged entries; its two name pools
- * and the table's global pool are carried over; and the base's package header is carried over
- * whole, so whatever the base said about its own type-id offset and public-name counts still
- * holds. A table carrying anything else — an RRO overlayable block, a shared-library declaration,
- * a staged alias — is refused rather than merged with that part silently missing.
+ * [merge] rebuilds a package's type and type-spec chunks from the merged entries, carries over
+ * the package's two name pools and the table's global pool, and carries over the base's package
+ * header whole, so the base's type-id offset and public-name counts keep the values the base
+ * declares. A table carrying anything else—an RRO overlayable block, a shared-library
+ * declaration, a staged alias—is not merged, rather than merged with that part missing.
  *
- * Refusing is the general answer to anything this merge cannot show to be sound, and the caller
- * responds by keeping the base's own table: a resource table naming files the APK does not have
- * is worse than one naming none of them. So [merge] checks the structures it relies on, and then
- * reads back what it built — every entry against the entry it came from, field by field — before
+ * Where the merge cannot check a structure, it returns a refusal instead. The caller responds by
+ * keeping the base's own table: a resource table naming files the APK does not have is worse
+ * than one naming none of them. So [merge] checks the structures it relies on, and then reads
+ * back what it built—every entry against the entry it came from, field by field—before
  * returning anything.
  */
 object ResourceTableMerger {
@@ -97,7 +97,7 @@ object ResourceTableMerger {
     /** A `ResTable_type` entry offset meaning "this type has no entry at this index". */
     private const val NO_ENTRY = -1
 
-    /** A sparse type's index-array slot meaning the same. */
+    /** A sparse type's index-array slot for a missing entry. */
     private const val SPARSE_NONE = 0xFFFF
 
     /** `ResStringPool_header.flags`: strings are UTF-8 rather than UTF-16. */
@@ -119,12 +119,19 @@ object ResourceTableMerger {
      * `ResTable_package::name`: 128 UTF-16 code units at a fixed offset, NUL-padded, ending where
      * `typeStrings` begins.
      *
-     * It is a fixed field rather than an offset into a pool, which is what makes renaming a package
-     * a write in place: a name that fits leaves every other byte of the table where it was, so no
-     * offset in any chunk has to move.
+     * It is a fixed field rather than an offset into a pool, which is what makes renaming a
+     * package a write in place: a name that fits leaves every other byte of the table in place,
+     * so no offset in any chunk moves.
      */
     private const val PACKAGE_NAME_OFFSET = 12
     private const val PACKAGE_NAME_BYTES = PACKAGE_TYPE_STRINGS_OFFSET - PACKAGE_NAME_OFFSET
+
+    /**
+     * The longest name [renamePackage] accepts: the field's bytes, less the two bytes the
+     * terminator uses. A longer name leaves no room for the terminator, so [renamePackage]
+     * returns null instead of writing past the field.
+     */
+    const val PACKAGE_NAME_MAX_LENGTH = (PACKAGE_NAME_BYTES - 2) / 2
 
     /** The smallest package header that still holds the pool offsets this reads. */
     private const val PACKAGE_MIN_HEADER_SIZE = 288
@@ -156,19 +163,19 @@ object ResourceTableMerger {
     private const val PATH_PREFIX = "res/"
 
     /**
-     * What a merge produced, or why it declined to produce anything.
+     * What a merge produced, or why it produced nothing.
      *
-     * A refusal is not a failure of the run. The caller keeps the base's own table — which is what
-     * the APK already had — and reports the reason instead of shipping something it could not
-     * verify.
+     * A refusal is not a failure of the run. The caller keeps the base's own table—which is
+     * what the APK already holds—and reports the reason instead of shipping a table whose
+     * contents it has not read back.
      */
     sealed class Result {
         /**
          * The merged table.
          *
-         * [sourceCount] is how many tables went in, [resourceCount] how many entries came out
-         * counted across every configuration, and [typeCount] how many distinct type ids those
-         * entries use.
+         * [sourceCount] is the number of tables merged, [resourceCount] the number of entries
+         * produced across every configuration, and [typeCount] the number of distinct type ids
+         * those entries use.
          */
         data class Merged(
             val table: ByteArray,
@@ -178,14 +185,14 @@ object ResourceTableMerger {
             /**
              * The requested paths whose entries were left out.
              *
-             * This is what the merge actually did rather than what it was asked for: a path the
+             * This set records what the merge did rather than what it was asked for: a path the
              * base's table does not name has no entry to leave out, so it is not here. A caller
-             * holding the files the table names — the archive builder above all — drops exactly
-             * this set, and by construction it is the set the table stopped naming.
+             * holding the files the table names—the archive builder above all—drops this
+             * set, which is the set the table no longer names.
              */
             val droppedPaths: Set<String> = emptySet()
         ) : Result() {
-            // A data class holding a ByteArray needs these spelled out, or two equal tables would
+            // A data class holding a ByteArray needs these spelled out, or two equal tables
             // compare unequal and hash differently.
             override fun equals(other: Any?): Boolean =
                 other is Merged &&
@@ -196,7 +203,8 @@ object ResourceTableMerger {
                     table.contentEquals(other.table)
 
             override fun hashCode(): Int =
-                (((sourceCount * 31 + resourceCount) * 31 + typeCount) * 31 + droppedPaths.hashCode()) * 31 +
+                (((sourceCount * 31 + resourceCount) * 31 + typeCount) * 31 +
+                    droppedPaths.hashCode()) * 31 +
                     table.contentHashCode()
         }
 
@@ -205,21 +213,25 @@ object ResourceTableMerger {
     }
 
     /**
-     * Merges [base] with every table in [splits], or refuses with the reason it could not.
+     * Merges [base] with every table in [splits], or returns a refusal with the reason.
      *
-     * With no splits and nothing to drop there is nothing to merge and the base's own table comes
-     * back unchanged: a caller that fetched no split should not end up with a different table than
-     * it started with.
+     * With no splits and nothing to drop there is nothing to merge, and the base's own table is
+     * returned unchanged: a caller that fetched no split does not end up with a different table
+     * than it started with.
      *
-     * [droppedPaths] are `res/` file paths whose entries are left out of the result, because the
-     * archive this table is being built for is not going to hold those files. A compiled file
-     * resource's value *is* the path of the file it resolves to, so an entry naming an absent file
-     * is a resource that resolves to nothing — which is what the caller is building the table to
-     * avoid, not something it can be left holding. The paths the base's table did not name are
-     * reported back in [Result.Merged.droppedPaths] as not dropped, so a caller can tell what was
-     * asked for from what happened.
+     * Each of [droppedPaths] is a `res/` file path whose entries are left out of the result,
+     * because the archive this table is being built for does not hold that file. A compiled file
+     * resource's value *is* the path of the file it resolves to, so an entry naming an absent
+     * file is a resource that resolves to nothing, which is what the caller is building the table
+     * to avoid. The paths the base's table does not name are reported in
+     * [Result.Merged.droppedPaths] as not dropped, so a caller can distinguish what was asked for
+     * from what happened.
      */
-    fun merge(base: ByteArray, splits: List<ByteArray>, droppedPaths: Set<String> = emptySet()): Result {
+    fun merge(
+        base: ByteArray,
+        splits: List<ByteArray>,
+        droppedPaths: Set<String> = emptySet()
+    ): Result {
         val baseSource = try {
             parse(base)
         } catch (e: TableFormatException) {
@@ -245,22 +257,23 @@ object ResourceTableMerger {
             }
             if (source.packageId != baseSource.packageId) {
                 return Result.Refused(
-                    "$what declares package 0x%08x and the base declares 0x%08x, so the two do not ".format(
-                        source.packageId, baseSource.packageId
-                    ) + "share a resource-id space"
+                    ("$what declares package 0x%08x and the base declares 0x%08x, so the two " +
+                        "do not ").format(source.packageId, baseSource.packageId) +
+                        "share a resource-id space"
                 )
             }
             if (source.typeCount > baseSource.typeCount) {
                 return Result.Refused(
-                    "$what declares type id ${source.typeCount} and the base's type names stop at " +
-                        "${baseSource.typeCount}, so that type has no name in the merged table"
+                    "$what declares type id ${source.typeCount} and the base's type " +
+                        "names stop at ${baseSource.typeCount}, so that type has no name " +
+                        "in the merged table"
                 )
             }
             sources.add(source)
         }
 
         // Pools are placed in source order, so a source's shift is the running total of the pool
-        // counts before it. This has to be settled before any entry is rewritten.
+        // counts before it. Set each source's delta before rewriting any entry.
         var keyCount = baseSource.keyStrings.count
         var stringCount = baseSource.globalPool.count
         for (index in 1 until sources.size) {
@@ -271,15 +284,16 @@ object ResourceTableMerger {
             stringCount += source.globalPool.count
         }
 
-        // Which entries name a file the archive is not going to hold. The pools are read for this
-        // and nothing else in the merge reads them at all: what an entry's value says is otherwise
-        // just bytes to be moved, and a merge that drops nothing never looks inside one.
+        // Which entries name a file the archive does not hold. The pools are read for this and
+        // nothing else in the merge reads them: an entry's value is otherwise just bytes to be
+        // moved, and a merge that drops nothing does not look inside one.
         val omissionSlots = ArrayList<Map<TypeConfig, Set<Int>>>(sources.size)
         val droppedFound = LinkedHashSet<String>()
         if (droppedPaths.isNotEmpty()) {
             for (source in sources) {
                 val omission = entriesNaming(source, droppedPaths) ?: return Result.Refused(
-                    "a string pool could not be read, so the entries naming the files to leave out could not be found"
+                    "a string pool could not be read, so the entries naming the files to " +
+                        "leave out could not be found"
                 )
                 omissionSlots.add(omission.slots)
                 droppedFound.addAll(omission.paths)
@@ -295,9 +309,12 @@ object ResourceTableMerger {
                     if (index in omissionSlots.getOrNull(sourceIndex)?.get(key).orEmpty()) continue
                     if (merged.containsKey(index)) {
                         return Result.Refused(
-                            "the tables disagree about resource 0x%08x: two of them carry an entry ".format(
+                            ("the tables disagree about resource 0x%08x: two of them carry an " +
+                                "entry ").format(
                                 (baseSource.packageId shl 24) or (key.typeId shl 16) or index
-                            ) + "at the same index in type 0x%02x under the same configuration".format(key.typeId)
+                            ) +
+                                "at the same index in type 0x%02x under the same configuration"
+                                    .format(key.typeId)
                         )
                     }
                     merged[index] = Placed(
@@ -308,7 +325,7 @@ object ResourceTableMerger {
                     )
                 }
                 // A type and configuration whose every entry was left out carries nothing, and an
-                // empty map is not a shape the writer below can lay out: it is dropped here rather
+                // empty map is not a shape the writer that follows can lay out: it is dropped here rather
                 // than written as a type chunk with no entries in it.
                 if (merged.isEmpty()) entries.remove(key)
             }
@@ -318,7 +335,9 @@ object ResourceTableMerger {
                     specs[typeId] = flags.copyOf()
                 } else {
                     val target = if (merged.size < flags.size) merged.copyOf(flags.size) else merged
-                    for (i in flags.indices) target[i] = target[i] or flags[i]
+                    for (i in flags.indices) {
+                        target[i] = target[i] or flags[i]
+                    }
                     specs[typeId] = target
                 }
             }
@@ -346,21 +365,22 @@ object ResourceTableMerger {
     }
 
     /**
-     * What a drop took out of one source's table: the indexes of the entries left out, by the type
-     * and configuration they sit under, and which of the requested paths those entries named.
+     * What a drop removed from one source's table: the indexes of the entries left out, by the
+     * type and configuration they sit under, and which of the requested paths those entries named.
      *
-     * The second is not the request. A path the table does not name has no entry to leave out, so
-     * it is not reported as dropped — the caller drops files from an archive on the strength of
-     * this, and a claim about a path neither table mentioned would be a claim about nothing.
+     * The returned path set is not necessarily the requested set: a path the table does not name
+     * has no entry to leave out, so it is not reported as dropped. The caller drops files from an
+     * archive based on this set, so the set records only what an entry actually named.
      */
     private class Omission(val slots: Map<TypeConfig, Set<Int>>, val paths: Set<String>)
 
     /**
-     * The entries of [source] that name one of [paths], or null when its string pool cannot be read.
+     * The entries of [source] that name one of [paths], or null when its string pool cannot be
+     * read.
      *
-     * This is [namedPaths] asked one entry at a time rather than of a whole table: a caller dropping
-     * files from the archive needs to know which entries to leave out, not which paths exist
-     * somewhere in the table.
+     * This is [namedPaths] asked one entry at a time rather than of a whole table: a caller
+     * dropping files from the archive needs to identify which entries to leave out, not which
+     * paths exist somewhere in the table.
      */
     private fun entriesNaming(source: TableSource, paths: Set<String>): Omission? {
         val strings = try {
@@ -389,7 +409,7 @@ object ResourceTableMerger {
      *
      * This is a resource entry's identity without its name: two tables that agree on every one of
      * these carry the same entries in the same places under the same configurations. It is what
-     * lets a caller — or a test — check a merge without a resource compiler.
+     * lets a caller—or a test—check a merge without a resource compiler.
      */
     fun slotsOf(table: ByteArray): Set<Slot>? {
         val source = try {
@@ -399,7 +419,9 @@ object ResourceTableMerger {
         }
         val slots = LinkedHashSet<Slot>()
         for ((key, byIndex) in source.entries) {
-            for (index in byIndex.keys) slots.add(Slot(key.typeId, key.config, index))
+            for (index in byIndex.keys) {
+                slots.add(Slot(key.typeId, key.config, index))
+            }
         }
         return slots
     }
@@ -411,7 +433,7 @@ object ResourceTableMerger {
      * A compiled file resource's value *is* the path of the file it resolves to, so the set of
      * paths a table names is the set of files an app can ask it for. Comparing that set against
      * the files an APK actually holds is the check that a merged table and a merged file set
-     * agree — the difference between resources being present and resources resolving.
+     * agree—the difference between resources being present and resources resolving.
      */
     fun namedPaths(table: ByteArray): Set<String>? {
         val source = try {
@@ -440,9 +462,8 @@ object ResourceTableMerger {
      * The package name [table]'s package chunk declares, or null if [table] is not a table this
      * reader can walk.
      *
-     * This is [renamePackage]'s read-back: the name a rename left in the table is the claim worth
-     * checking, and it is asked of the field the platform reads rather than of the string that went
-     * in.
+     * This is [renamePackage]'s read-back: it reads the name from the field the platform reads
+     * rather than from the string that went in.
      */
     fun packageName(table: ByteArray): String? {
         val at = packageChunkAt(table) ?: return null
@@ -457,27 +478,28 @@ object ResourceTableMerger {
     }
 
     /**
-     * [table] with its package renamed to [name], or null when there is no package chunk to rename
-     * or the name does not fit the field it goes in.
+     * [table] with its package renamed to [name], or null when there is no package chunk to
+     * rename or the name does not fit the field it goes in.
      *
      * The name in the package chunk is what a *name-based* lookup is matched against. An app asks
-     * for its own sounds and files by name rather than by id —
-     * `Resources.getIdentifier(name, type, getPackageName())` — and that third argument is resolved
-     * against the package names the loaded tables declare. A build whose `getPackageName()` is
-     * `com.discord.sleepy` asking a table that declares `com.discord` gets 0 back for every one of
-     * those lookups, and then reads resource id 0. An installation of this app did exactly that 72
-     * times on a single startup, each one the platform's `Invalid resource ID 0x00000000.`; the
-     * manifest is not the only place a package renames, and this is the other one.
+     * for its own sounds and files by name rather than by id—
+     * `Resources.getIdentifier(name, type, getPackageName())`—and the platform resolves that
+     * third argument against the package names the loaded tables declare. A build whose
+     * `getPackageName()` is `com.discord.sleepy` asking a table that declares `com.discord` gets 0
+     * back for every one of those lookups, and then reads resource id 0. An installation of this
+     * app did this 72 times on a single startup, each one the platform's
+     * `Invalid resource ID 0x00000000.`; the manifest is not the only place a package renames,
+     * and this is the other one.
      *
-     * Nothing else moves, which is what [slotsOf] and [namedPaths] can be asked to confirm: the
-     * name is a fixed field written in place, so the result is the same size and holds the same
-     * bytes everywhere else.
+     * Nothing else moves, and [slotsOf] and [namedPaths] report the same slots and paths for the
+     * result as for the input: the name is a fixed field written in place, so the result is the
+     * same size and holds the same bytes everywhere else.
      */
     fun renamePackage(table: ByteArray, name: String): ByteArray? {
         val at = packageChunkAt(table) ?: return null
         if (at + PACKAGE_TYPE_STRINGS_OFFSET > table.size) return null
-        // The field is NUL-terminated, so a name that would leave no room for the terminator is
-        // refused rather than written over the end of the field.
+        // The field is NUL-terminated, so a name that leaves no room for the terminator is not
+        // written: the function returns null rather than writing over the end of the field.
         val encoded = name.toByteArray(Charsets.UTF_16LE)
         if (encoded.size + 2 > PACKAGE_NAME_BYTES) return null
         val renamed = table.copyOf()
@@ -489,8 +511,8 @@ object ResourceTableMerger {
     /**
      * Where [table]'s package chunk starts, or null if it is not a table this reader can walk.
      *
-     * The walk stops at the first package chunk, which is the one [merge] would have carried over:
-     * a table with a second one is one this reader does not claim to understand.
+     * The walk stops at the first package chunk, which is the one [merge] carries over: a table
+     * with a second one is outside what this reader supports.
      */
     private fun packageChunkAt(table: ByteArray): Int? {
         if (table.size < TABLE_HEADER_SIZE) return null
@@ -509,12 +531,18 @@ object ResourceTableMerger {
     /** One occupied entry slot: a type, a configuration, and an index within that type. */
     data class Slot(val typeId: Int, val config: ByteArray, val index: Int) {
         override fun equals(other: Any?): Boolean =
-            other is Slot && typeId == other.typeId && index == other.index && config.contentEquals(other.config)
+            other is Slot &&
+                typeId == other.typeId &&
+                index == other.index &&
+                config.contentEquals(other.config)
 
         override fun hashCode(): Int = (typeId * 31 + index) * 31 + config.contentHashCode()
     }
 
-    /** A type id and a configuration, compared by the configuration's bytes rather than identity. */
+    /**
+     * A type id and a configuration, compared by the configuration's bytes rather than by
+     * identity.
+     */
     private class TypeConfig(val typeId: Int, val config: ByteArray) {
         override fun equals(other: Any?): Boolean =
             other is TypeConfig && typeId == other.typeId && config.contentEquals(other.config)
@@ -522,17 +550,17 @@ object ResourceTableMerger {
         override fun hashCode(): Int = typeId * 31 + config.contentHashCode()
     }
 
-    /** A string pool this merger holds on to, with its count read once. */
+    /** A string pool carried by a [TableSource], with its count read once. */
     private class Pool(val chunk: ByteArray, val count: Int)
 
-    /** A table that could not be read, saying what was wrong with it. */
+    /** A table that could not be read, recording what was wrong with it. */
     private class TableFormatException(message: String) : Exception(message)
 
     /**
-     * One parsed table, plus where its two pools will sit in the merged one.
+     * One parsed table, plus where its two pools sit in the merged one.
      *
-     * [keyDelta] and [stringDelta] are filled in by [merge] rather than [parse], because a table
-     * cannot know its own offset until the tables before it are known.
+     * [keyDelta] and [stringDelta] are filled in by [merge] rather than [parse], because a
+     * table's pool offset depends on the tables before it.
      */
     private class TableSource(
         val packageId: Int,
@@ -551,11 +579,10 @@ object ResourceTableMerger {
     /**
      * One entry as it goes into the merged table, kept beside the entry it was made from.
      *
-     * [bytes] is what the writer lays down and [source] is what went in, and keeping both is what
-     * lets [validate] ask whether the rewrite actually did what it claims — by comparing the two
-     * rather than by asking the arithmetic that produced them whether it agrees with itself. The
-     * two deltas are kept with them so the comparison does not have to find the table each entry
-     * came from again.
+     * [bytes] is what the writer lays down and [source] is what went in. Keeping both lets
+     * [validate] compare the rewrite against its input rather than check the arithmetic that
+     * produced it. The two deltas are kept with them so the comparison does not have to find the
+     * table each entry came from again.
      */
     private class Placed(
         val bytes: ByteArray,
@@ -566,24 +593,30 @@ object ResourceTableMerger {
 
     /**
      * Reads [table] into the pieces the merge needs, or throws [TableFormatException] naming the
-     * part that did not make sense.
+     * part that could not be read.
      *
      * Only the pools, the package header and the entries themselves are kept. An entry's bytes
-     * are copied to the merged table verbatim apart from two indexes, so nothing here has to
-     * understand what they mean — and nothing here has to, which is what keeps the copy exact.
+     * are copied to the merged table verbatim apart from two indexes; this function does not
+     * interpret them, which keeps the copy unchanged outside those two fields.
      */
     private fun parse(table: ByteArray): TableSource {
-        if (table.size < TABLE_HEADER_SIZE) throw TableFormatException("it is ${table.size} bytes long")
+        if (table.size < TABLE_HEADER_SIZE) {
+            throw TableFormatException("it is ${table.size} bytes long")
+        }
         if (u16(table, 0) != TYPE_TABLE) {
-            throw TableFormatException("its first chunk is type 0x%04x, not a table".format(u16(table, 0)))
+            throw TableFormatException(
+                "its first chunk is type 0x%04x, not a table".format(u16(table, 0))
+            )
         }
         if (u32(table, 4) != table.size) {
-            throw TableFormatException("it declares ${u32(table, 4)} bytes and holds ${table.size}")
+            throw TableFormatException(
+                "it declares ${u32(table, 4)} bytes and holds ${table.size}"
+            )
         }
 
-        // The table-level chunks: the global string pool, the package, and nothing this merge can
-        // carry. A table-level chunk other than those two would be dropped by [build], so it is
-        // refused here rather than lost later.
+        // The table-level chunks: the global string pool, the package, and nothing else this
+        // merge can carry. [build] does not carry another table-level chunk, so this function
+        // throws here rather than dropping the chunk later.
         var offset = u16(table, 2)
         var globalPoolAt = -1
         var packageAt = -1
@@ -605,7 +638,9 @@ object ResourceTableMerger {
         if (globalPoolAt < 0) throw TableFormatException("it has no global string pool")
         if (packageAt < 0) throw TableFormatException("it has no package chunk")
         if (other != 0) {
-            throw TableFormatException("it carries a 0x%04x chunk, which a merge would drop".format(other))
+            throw TableFormatException(
+                "it carries a 0x%04x chunk, which a merge would drop".format(other)
+            )
         }
 
         val globalPool = chunkAt(table, globalPoolAt, table.size, "global string")
@@ -631,8 +666,7 @@ object ResourceTableMerger {
         checkPool(keyStrings, "entry name")
 
         // A package's two name pools are chunks inside it as well as being pointed at by its
-        // header, so the walk has to step over them rather than treat them as structure it does
-        // not understand.
+        // header, so the walk steps over them rather than reading them as unknown structure.
         val typeStringsAt = packageAt + typeStringsOffset
         val keyStringsAt = packageAt + keyStringsOffset
         val entries = LinkedHashMap<TypeConfig, MutableMap<Int, ByteArray>>()
@@ -648,15 +682,18 @@ object ResourceTableMerger {
                 cursor == typeStringsAt || cursor == keyStringsAt -> Unit
                 type == TYPE_TYPE -> readType(table, cursor, size, entries)
                 type == TYPE_TYPE_SPEC -> readSpec(table, cursor, size, specs)
-                else -> throw TableFormatException(
-                    "its package carries a 0x%04x chunk, which a merge would drop".format(type)
-                )
+                else -> {
+                    throw TableFormatException(
+                        "its package carries a 0x%04x chunk, which a merge would drop"
+                            .format(type)
+                    )
+                }
             }
             cursor += size
         }
 
         // A split's type-name pool holds placeholders for the types it does not carry, so its
-        // *length* is what says which type ids it could have named — not its non-empty entries.
+        // *length* indicates which type ids it could have named, not its non-empty entries.
         return TableSource(
             packageId = u32(table, packageAt + PACKAGE_ID_OFFSET),
             packageHeader = table.copyOfRange(packageAt, packageAt + packageHeaderSize),
@@ -682,14 +719,16 @@ object ResourceTableMerger {
     }
 
     /**
-     * Requires a pool whose strings can simply be appended to another's: no styles, and offsets
-     * that land inside the pool.
+     * Requires a pool whose strings can be appended to another's: no styles, and offsets that
+     * land inside the pool.
      *
-     * The encoding is checked when two pools are put together, because that is where a mismatch
-     * would corrupt something rather than merely surprise.
+     * The encoding is checked when the pools are concatenated, because a mix of UTF-8 and UTF-16
+     * pools cannot share one offset table.
      */
     private fun checkPool(pool: ByteArray, what: String) {
-        if (pool.size < POOL_HEADER_SIZE) throw TableFormatException("its $what pool is ${pool.size} bytes")
+        if (pool.size < POOL_HEADER_SIZE) {
+            throw TableFormatException("its $what pool is ${pool.size} bytes")
+        }
         if (u16(pool, 0) != TYPE_STRING_POOL) {
             throw TableFormatException("its $what pool is type 0x%04x".format(u16(pool, 0)))
         }
@@ -730,10 +769,14 @@ object ResourceTableMerger {
         val entriesStart = u32(table, offset + 16)
         val configSize = u32(table, offset + TYPE_FIXED_HEADER_SIZE)
         if (configSize <= 0 || TYPE_FIXED_HEADER_SIZE + configSize > chunkSize) {
-            throw TableFormatException("type 0x%02x has a $configSize-byte configuration".format(typeId))
+            throw TableFormatException(
+                "type 0x%02x has a $configSize-byte configuration".format(typeId)
+            )
         }
         if (entriesStart < 0 || entriesStart > chunkSize) {
-            throw TableFormatException("type 0x%02x puts its entries past its own chunk".format(typeId))
+            throw TableFormatException(
+                "type 0x%02x puts its entries past its own chunk".format(typeId)
+            )
         }
         val config = table.copyOfRange(
             offset + TYPE_FIXED_HEADER_SIZE,
@@ -785,35 +828,51 @@ object ResourceTableMerger {
      * `Res_value` or, when the entry is a bag, a map of them.
      *
      * The length comes from the entry's own header rather than from the next entry's offset,
-     * because that is the only way a bag's length is knowable — and a bag whose tail is read
-     * wrong is a table copied across wrong.
+     * because the header is the only place a bag's length is recorded; a wrong length copies the
+     * wrong bytes into the merged table.
      */
     private fun readEntry(table: ByteArray, offset: Int, limit: Int, typeId: Int): ByteArray {
-        if (offset < 0 || offset + ENTRY_HEADER_SIZE > limit || offset + ENTRY_HEADER_SIZE > table.size) {
-            throw TableFormatException("type 0x%02x has an entry past the end of its chunk".format(typeId))
+        if (offset < 0 || offset + ENTRY_HEADER_SIZE > limit ||
+            offset + ENTRY_HEADER_SIZE > table.size
+        ) {
+            throw TableFormatException(
+                "type 0x%02x has an entry past the end of its chunk".format(typeId)
+            )
         }
         val headerSize = u16(table, offset)
         val flags = u16(table, offset + 2)
         val length = if (flags and ENTRY_COMPLEX != 0) {
             if (headerSize < MAP_ENTRY_HEADER_SIZE) {
-                throw TableFormatException("type 0x%02x has a $headerSize-byte bag entry".format(typeId))
+                throw TableFormatException(
+                    "type 0x%02x has a $headerSize-byte bag entry".format(typeId)
+                )
             }
             val count = u32(table, offset + 12)
-            if (count < 0) throw TableFormatException("type 0x%02x has a bag of $count entries".format(typeId))
+            if (count < 0) {
+                throw TableFormatException(
+                    "type 0x%02x has a bag of $count entries".format(typeId)
+                )
+            }
             MAP_ENTRY_HEADER_SIZE + count * MAP_SIZE
         } else {
             headerSize + VALUE_SIZE
         }
         if (length <= 0 || offset + length > limit || offset + length > table.size) {
             throw TableFormatException(
-                "type 0x%02x has a $length-byte entry that runs past the end of its chunk".format(typeId)
+                "type 0x%02x has a $length-byte entry that runs past the end of its chunk"
+                    .format(typeId)
             )
         }
         return table.copyOfRange(offset, offset + length)
     }
 
     /** Reads one `ResTable_typeSpec` chunk's per-entry configuration flags. */
-    private fun readSpec(table: ByteArray, offset: Int, chunkSize: Int, specs: MutableMap<Int, IntArray>) {
+    private fun readSpec(
+        table: ByteArray,
+        offset: Int,
+        chunkSize: Int,
+        specs: MutableMap<Int, IntArray>
+    ) {
         val typeId = u16(table, offset + 8)
         val entryCount = u32(table, offset + 12)
         if (entryCount < 0 || SPEC_HEADER_SIZE + entryCount * 4 > chunkSize) {
@@ -826,19 +885,21 @@ object ResourceTableMerger {
             return
         }
         // Two specs for one type within one package should not happen; if it does, the entries
-        // they cover are still the same entries, so their flags combine rather than one silently
-        // winning.
+        // they cover are still the same entries, so their flags combine rather than one
+        // overwriting the other.
         val merged = if (existing.size < flags.size) existing.copyOf(flags.size) else existing
-        for (i in flags.indices) merged[i] = merged[i] or flags[i]
+        for (i in flags.indices) {
+            merged[i] = merged[i] or flags[i]
+        }
         specs[typeId] = merged
     }
 
     /**
-     * One entry's bytes with its two pool indexes moved to where its table's pools will sit in
-     * the merged one.
+     * One entry's bytes with its two pool indexes moved to where its table's pools sit in the
+     * merged one.
      *
      * Nothing else is touched. The entry keeps its size, its flags and its key's position within
-     * its own table — offset by where that table starts — and every value that is not a string,
+     * its own table—offset by where that table starts—and every value that is not a string,
      * because a reference is a resource id and those are already global. A bag's values are
      * rewritten through the same [valueOffsets] a simple entry's is, which is what puts the write
      * at the `Res_value` inside each map rather than at the map's name.
@@ -849,7 +910,11 @@ object ResourceTableMerger {
         if (stringDelta != 0) {
             for (at in valueOffsets(out)) {
                 if (out[at + VALUE_TYPE_OFFSET].toInt() and 0xFF == TYPE_STRING) {
-                    putU32(out, at + VALUE_DATA_OFFSET, u32(out, at + VALUE_DATA_OFFSET) + stringDelta)
+                    putU32(
+                        out,
+                        at + VALUE_DATA_OFFSET,
+                        u32(out, at + VALUE_DATA_OFFSET) + stringDelta
+                    )
                 }
             }
         }
@@ -862,15 +927,15 @@ object ResourceTableMerger {
      *
      * A simple entry is one `ResTable_entry` followed by its value, so that value starts at the
      * entry header's own size. A complex entry is a `ResTable_map_entry` followed by its maps,
-     * and each map is a `name` *followed by* the value it names — so a map's value is
+     * and each map is a `name` *followed by* the value it names—so a map's value is
      * [MAP_VALUE_OFFSET] bytes into the map, not at its start. Returning the map's start instead
-     * points every caller at the name: this merge used to do exactly that, and rewrote nothing for
-     * a bag while reporting success, leaving the split-local pool index it should have rebased in
+     * points every caller at the name: this merge used to do this, and rewrote nothing for a bag
+     * while reporting success, leaving the split-local pool index it should have rebased in
      * place.
      *
-     * Both shapes are the same thing to every caller — the position of a `Res_value` — which is why
-     * they share one function and why the difference between them has to be *here* rather than
-     * duplicated, or one of the two paths drifts.
+     * Both shapes are the same thing to every caller—the position of a `Res_value`—which is
+     * why they share one function: the difference between the two shapes belongs here rather than
+     * duplicated in each caller, or the two paths diverge.
      */
     private fun valueOffsets(entry: ByteArray): List<Int> {
         if (u16(entry, 2) and ENTRY_COMPLEX == 0) return listOf(ENTRY_HEADER_SIZE)
@@ -901,12 +966,12 @@ object ResourceTableMerger {
         val body = packageBody(entries, specs)
 
         // The base's package header is carried over whole, so its package id, its name, its
-        // type-id offset and its public-name counts are whatever the base said they were. Only
-        // the three fields describing this package's new contents are written.
+        // type-id offset and its public-name counts keep the values the base declares. Only the
+        // three fields describing this package's new contents are written.
         //
-        // The base's type-name pool is carried over whole too: a split cannot have introduced a
-        // type id the base could not already name — [merge] refuses that — so the base's pool
-        // already names every type the merged table uses, with the spelling the base gave it.
+        // The base's type-name pool is carried over whole too: a split cannot introduce a type id
+        // the base could not already name—[merge] returns a refusal for that—so the base's
+        // pool names every type the merged table uses, with the spelling the base gave it.
         val header = base.packageHeader
         val packageSize = header.size + base.typeStrings.size + keyStrings.size + body.size
         putU32(header, 4, packageSize)
@@ -935,10 +1000,13 @@ object ResourceTableMerger {
      * The package's type chunks: for each type id, its spec followed by one type chunk per
      * configuration.
      *
-     * Type ids and configurations are both written in order, so the same inputs always produce
-     * the same bytes — a table that differed run to run would be one no two builds could compare.
+     * Type ids and configurations are both written in order, so the same inputs produce the same
+     * bytes; a table that differed between runs could not be compared across builds.
      */
-    private fun packageBody(entries: Map<TypeConfig, Map<Int, Placed>>, specs: Map<Int, IntArray>): ByteArray {
+    private fun packageBody(
+        entries: Map<TypeConfig, Map<Int, Placed>>,
+        specs: Map<Int, IntArray>
+    ): ByteArray {
         val out = ByteArrayOutputStream()
         val byType = entries.keys.groupBy { it.typeId }
         for (typeId in byType.keys.sorted()) {
@@ -957,9 +1025,9 @@ object ResourceTableMerger {
      * One `ResTable_type` chunk, written dense: a 32-bit offset for every index up to the highest
      * one present, with `NO_ENTRY` for the gaps.
      *
-     * The source chunk may have been sparse or 16-bit, and copying that shape across would be
-     * copying a decision made for one table's contents onto another's. Dense is valid for any
-     * contents, so dense is what a merge produces.
+     * The source chunk can be sparse or 16-bit, but copying that shape across copies a decision
+     * made for one table's contents onto another's. Dense is valid for any contents, so a merge
+     * writes dense chunks.
      */
     private fun typeChunk(typeId: Int, config: ByteArray, entries: Map<Int, Placed>): ByteArray {
         val entryCount = entries.keys.max() + 1
@@ -981,7 +1049,7 @@ object ResourceTableMerger {
         putU16(chunk, 2, headerSize)
         putU32(chunk, 4, chunk.size)
         chunk[8] = typeId.toByte()
-        // chunk[9] is the flags byte, left zero: dense 32-bit offsets, as above.
+        // chunk[9] is the flags byte, left zero: dense 32-bit offsets, as described earlier.
         putU32(chunk, 12, entryCount)
         putU32(chunk, 16, headerSize + offsets.size)
         config.copyInto(chunk, TYPE_FIXED_HEADER_SIZE)
@@ -998,18 +1066,20 @@ object ResourceTableMerger {
         putU32(chunk, 4, chunk.size)
         chunk[8] = typeId.toByte()
         putU32(chunk, 12, flags.size)
-        for (i in flags.indices) putU32(chunk, SPEC_HEADER_SIZE + i * 4, flags[i])
+        for (i in flags.indices) {
+            putU32(chunk, SPEC_HEADER_SIZE + i * 4, flags[i])
+        }
         return chunk
     }
 
     /**
      * Every pool in [pools] as one pool, by appending.
      *
-     * This is the property the whole merge rests on: string *i* of the *k*th pool keeps index
+     * The whole merge depends on this property: string *i* of the *k*th pool keeps index
      * `(the counts of the pools before k) + i`, so every index that already pointed at a string
      * still points at the same string. Nothing is sorted, re-encoded or deduplicated, and the
-     * sorted flag is cleared, because an appended offset array is no longer sorted — claiming
-     * otherwise would send a reader that trusts the flag to the wrong string.
+     * sorted flag is cleared, because an appended offset array is not sorted and the flag states
+     * that it is.
      */
     private fun concatPools(pools: List<ByteArray>): ByteArray {
         val headerSize = pools.maxOf { u16(it, 2) }
@@ -1061,7 +1131,9 @@ object ResourceTableMerger {
         val strings = ArrayList<String>(count)
         for (i in 0 until count) {
             var at = stringsStart + u32(pool, headerSize + i * 4)
-            if (at < 0 || at >= pool.size) throw TableFormatException("a string starts past the pool")
+            if (at < 0 || at >= pool.size) {
+                throw TableFormatException("a string starts past the pool")
+            }
             if (utf8) {
                 // A UTF-8 pool gives each string's character count and then its byte count, each
                 // stored in one or two bytes depending on that length's high bit.
@@ -1079,7 +1151,9 @@ object ResourceTableMerger {
                 } else {
                     at += 1
                 }
-                if (at + bytes > pool.size) throw TableFormatException("a string runs past the pool")
+                if (at + bytes > pool.size) {
+                    throw TableFormatException("a string runs past the pool")
+                }
                 strings.add(String(pool, at, bytes, Charsets.UTF_8))
             } else {
                 var characters = u16(pool, at)
@@ -1089,7 +1163,9 @@ object ResourceTableMerger {
                 } else {
                     at += 2
                 }
-                if (at + characters * 2 > pool.size) throw TableFormatException("a string runs past the pool")
+                if (at + characters * 2 > pool.size) {
+                    throw TableFormatException("a string runs past the pool")
+                }
                 strings.add(String(pool, at, characters * 2, Charsets.UTF_16LE))
             }
         }
@@ -1099,27 +1175,27 @@ object ResourceTableMerger {
     /**
      * What is wrong with [table] as a merged result, or null if nothing is.
      *
-     * This re-reads the bytes that were produced rather than trusting the writer: the chunk tree
+     * This re-reads the bytes that were produced rather than relying on the writer: the chunk tree
      * has to tile, every entry's name index has to land inside the key pool, and every
      * string-valued field has to land inside the global pool.
      *
      * Those are the checks the table can answer about itself, and on their own they are not
-     * enough. A rebase that was never applied leaves a *valid* index — one that is in range in the
-     * merged pool because the split's segment sits above it — pointing at the wrong string, and no
-     * amount of reading the merged table alone can tell that apart from the right one. So each
-     * entry is also compared against the entry it was made from ([difference]), which is what a
-     * rewrite that skipped a field, or wrote at the wrong offset, cannot survive.
+     * enough. A rebase that was not applied leaves a *valid* index—one that is in range in the
+     * merged pool because the split's segment sits above it—pointing at the wrong string, and
+     * reading the merged table alone does not reveal the difference. So each entry is also
+     * compared against the entry it was made from ([difference]), which a rewrite that skipped a
+     * field, or wrote at the wrong offset, does not survive.
      *
-     * The comparison is deliberately not made through the arithmetic that produced the entry: it
-     * is [valueOffsets] that decides where a value sits, and a validator that asked the same
-     * function where to look would be blind in exactly the place a mistake in it would be — which
-     * is how the bag-map defect this merge shipped got past it. The offsets the comparison uses
-     * are checked against the bytes that are actually there first ([checkValue]), against the
-     * source entry rather than anything this merge wrote, so an offset that named some other field
-     * fails the build instead of being believed by the writer and the reader alike.
+     * The comparison deliberately does not go through the arithmetic that produced the entry:
+     * [valueOffsets] determines where a value sits, and a validator that asked the same function
+     * where to look misses the mistake that function makes—which is how the bag-map defect in
+     * an earlier version of this merge passed the check. The offsets the
+     * comparison uses are checked against the bytes that are actually there first ([checkValue]),
+     * against the source entry rather than anything this merge wrote, so an offset that names some
+     * other field fails the build instead of passing both the writer and the reader.
      *
-     * Last, the entries are counted: the number the caller is handed back as how many came out has
-     * to be the number the table holds.
+     * Last, the entries are counted: the number the caller receives as how many came out must
+     * match the number the table holds.
      */
     private fun validate(
         table: ByteArray,
@@ -1148,13 +1224,13 @@ object ResourceTableMerger {
         }
         var counted = 0
         for ((key, byIndex) in source.entries) {
-            val placed = entries[key]
-                ?: return "type 0x%02x carries a configuration no entry was placed under".format(key.typeId)
+            val placed = entries[key] ?:
+                return "type 0x%02x carries a configuration no entry was placed under"
+                    .format(key.typeId)
             for ((index, entry) in byIndex) {
-                val origin = placed[index]
-                    ?: return "type 0x%02x holds an entry at index %d that no source carried".format(
-                        key.typeId, index
-                    )
+                val origin = placed[index] ?:
+                    return "type 0x%02x holds an entry at index %d that no source carried"
+                        .format(key.typeId, index)
                 val nameIndex = u32(entry, 4)
                 if (nameIndex < 0 || nameIndex >= source.keyStrings.count) {
                     return "type 0x%02x has an entry naming key %d of %d".format(
@@ -1170,15 +1246,16 @@ object ResourceTableMerger {
                 }
                 val difference = difference(entry, origin)
                 if (difference != null) {
-                    return "type 0x%02x index %d is not its source entry with the pool indexes moved: $difference".format(
-                        key.typeId, index
-                    )
+                    return (
+                        "type 0x%02x index %d is not its source entry with the pool " +
+                            "indexes moved: $difference"
+                    ).format(key.typeId, index)
                 }
                 counted++
             }
         }
-        // The count the caller is handed is [Result.Merged.resourceCount], so it has to be the
-        // count the table actually holds rather than the count the merge meant to place.
+        // The caller receives this count as [Result.Merged.resourceCount], so it must be the
+        // count the table holds rather than the count the merge meant to place.
         if (counted != expectedEntries) {
             return "it holds $counted entries where the merge placed $expectedEntries"
         }
@@ -1186,19 +1263,19 @@ object ResourceTableMerger {
     }
 
     /**
-     * What [written] says where the entry it was made from says something else, or null if it is
+     * The difference between [written] and the entry it was made from, or null if [written] is
      * that entry with its two pool indexes moved and nothing else.
      *
      * The rule is the merge's whole contract, checked against the bytes rather than against the
      * intent: the key must hold its source's key plus the delta that table's key pool was placed
      * at, every string-valued field must hold its source's index plus that table's string delta,
-     * and no other byte of the entry may differ from the source's at all.
+     * and no other byte of the entry must not differ from the source's at all.
      *
-     * Nothing here consults the offsets the writer used. [valueOffsets] says where a value sits,
-     * [checkValue] requires the source's bytes at each of those places to *be* a `Res_value`, and
-     * then every remaining byte is compared one for one — so a rewrite that wrote where it should
-     * not have, or failed to write where it should, is a difference this returns rather than a
-     * difference nobody looks for.
+     * Nothing here consults the offsets the writer used. [valueOffsets] gives the position of a
+     * value, [checkValue] requires the source's bytes at each of those places to *be* a
+     * `Res_value`, and then every remaining byte is compared one for one—so a rewrite that wrote
+     * where it should not have, or failed to write where it should, is a difference this function
+     * returns rather than one that goes unreported.
      */
     private fun difference(written: ByteArray, origin: Placed): String? {
         val source = origin.source
@@ -1214,7 +1291,9 @@ object ResourceTableMerger {
         // The key field is the first four bytes after the entry header; a value's data is its last
         // four. Every other byte of the entry has to come through untouched.
         val rewritten = HashSet<Int>()
-        for (at in 4 until ENTRY_HEADER_SIZE) rewritten.add(at)
+        for (at in 4 until ENTRY_HEADER_SIZE) {
+            rewritten.add(at)
+        }
         for (at in valueOffsets(source)) {
             val shape = checkValue(source, at)
             if (shape != null) return shape
@@ -1227,15 +1306,24 @@ object ResourceTableMerger {
             val stored = u32(written, at + VALUE_DATA_OFFSET)
             val expected = u32(source, at + VALUE_DATA_OFFSET) + origin.stringDelta
             if (stored != expected) {
-                return "the string value at +$at holds pool index %d where its source's %d moved by %d is %d".format(
-                    stored, u32(source, at + VALUE_DATA_OFFSET), origin.stringDelta, expected
+                return (
+                    "the string value at +$at holds pool index %d where its source's %d " +
+                        "moved by %d is %d"
+                ).format(
+                    stored,
+                    u32(source, at + VALUE_DATA_OFFSET),
+                    origin.stringDelta,
+                    expected
                 )
             }
-            for (i in VALUE_DATA_OFFSET until VALUE_SIZE) rewritten.add(at + i)
+            for (i in VALUE_DATA_OFFSET until VALUE_SIZE) {
+                rewritten.add(at + i)
+            }
         }
         for (i in written.indices) {
             if (written[i] != source[i] && i !in rewritten) {
-                return "its byte $i was written where its source holds ${source[i].toInt() and 0xFF}"
+                return "its byte $i was written where its source holds " +
+                    "${source[i].toInt() and 0xFF}"
             }
         }
         return null
@@ -1245,11 +1333,11 @@ object ResourceTableMerger {
      * Requires the field at [at] in [entry] to be a `Res_value`: eight bytes long, with the
      * reserved byte the format requires to be zero.
      *
-     * This is what keeps [valueOffsets] from being the only word on where a value is. A bag's
-     * value sits four bytes into its `ResTable_map`, behind the map's `name`, and an offset that
-     * landed on that name instead reads a length from the low half of a resource id — `0x01000001`
-     * reads as a one-byte value, never the eight a `Res_value` declares — so the mistake is
-     * refused here rather than written into a table.
+     * This check does not rely on [valueOffsets] alone for the position of a value. A bag's value
+     * sits four bytes into its `ResTable_map`, behind the map's `name`, and an offset that lands
+     * on that name instead reads a length from the low half of a resource id—`0x01000001` reads
+     * as a one-byte value, not the eight bytes a `Res_value` declares—so the mistake fails the
+     * build here rather than being written into a table.
      */
     private fun checkValue(entry: ByteArray, at: Int): String? {
         if (at < 0 || at + VALUE_SIZE > entry.size) {

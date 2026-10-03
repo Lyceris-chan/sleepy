@@ -10,22 +10,25 @@ import dev.sleepy.app.model.SmaliPatch
  * Bytecode and Hermes JavaScript modifications for Discord (Alpha/Release).
  *
  * Transcribed from the reference suite in `quirky-noether/discord/patches/core.py`
- * (Discord 348.5 Alpha). Every entry here resolves to a real symbol in that file — no
- * patch in this object was invented.
+ * (Discord 348.5 Alpha). Every entry here corresponds to a symbol in that file.
  *
  * This object is the **core** subset, not the whole reference suite. The remaining smali
  * edits live in [DiscordNativePatches]. The manifest edits the reference makes by rewriting
- * text are here as the facts they match on — element names, attribute values, component
- * names — and are applied by `BinaryXmlEditor`, which edits the compiled document rather than
- * the text form an on-device patcher never has. The resource table is rebuilt by
- * `ResourceTableMerger` for the same reason. Hermes function ids are per-bundle and shift on
- * every Discord release, so the ids below are tied to the 348.5 build the pipeline is pointed
+ * text are here as the facts they match on—element names, attribute values, component
+ * names—and are applied by `BinaryXmlEditor`, which edits the compiled document rather than
+ * the text form, which is not available to an on-device patcher. The resource table is rebuilt
+ * by `ResourceTableMerger` for the same reason. Hermes function ids are per-bundle and shift on
+ * every Discord release, so the ids that follow are tied to the 348.5 build the pipeline is pointed
  * at.
  *
- * Stubs telemetry, Sentry crash reporters, and locks the on-device Hermes JS bundle.
+ * Stubs telemetry and Sentry crash reporters, and locks the on-device Hermes JS bundle.
  */
 object DiscordPatches {
 
+    /**
+     * The bundle-lock set: neutralizes the stored OTA bundle preference keys and points the OTA
+     * host at an invalid domain, so the app runs the bundle from the APK asset.
+     */
     val BUNDLE_LOCK = PatchSet(
         id = "discord_ota_bundle",
         label = "Lock APK Hermes JS Bundle",
@@ -55,6 +58,10 @@ object DiscordPatches {
         )
     )
 
+    /**
+     * The Sentry set: stubs the NDK loader, `CrashReporting.isDisabled()`, and the React Native
+     * SDK module, so crash dumps and error envelopes are not sent.
+     */
     val SENTRY = PatchSet(
         id = "discord_sentry",
         label = "Disable Sentry Crash Reporting (NDK & Java)",
@@ -117,6 +124,10 @@ object DiscordPatches {
         )
     )
 
+    /**
+     * The native telemetry set: stubs advertising-ID retrieval, the install-referrer module, the
+     * telemetry ring buffer, and WebRTC crash reporting.
+     */
     val TELEMETRY = PatchSet(
         id = "discord_telemetry",
         label = "Disable Native Telemetry & NetStats",
@@ -178,18 +189,17 @@ object DiscordPatches {
     )
 
     /**
-     * The JavaScript stub catalogue.
+     * The JavaScript stub catalog.
      *
-     * These are the auditable shapes — one entry per reference table membership, naming the
-     * function and the value its stub must return. The pipeline does **not** apply them
-     * directly: a Hermes function id is only meaningful for the bundle it was taken from, and
-     * these ids are pinned to Discord 348.5. What actually runs is
-     * [DiscordHermesBundlePatch], whose 145 entries were extracted from a paired
-     * base/patched bundle of that exact release and are applied only when the bundle matches
-     * it byte-length for byte-length.
+     * Each entry corresponds to one reference table membership and names the function and the
+     * value its stub returns. The pipeline does **not** apply these entries directly: a Hermes
+     * function id is only meaningful for the bundle it was taken from, and these ids are pinned to
+     * Discord 348.5. What runs is [DiscordHermesBundlePatch], whose 145 entries were extracted
+     * from a paired base/patched bundle of that release and are applied only when the target
+     * bundle's byte length matches the reference bundle's.
      *
-     * This object is kept because it is what makes the 145 auditable against the reference
-     * tables: it records *why* each function is stubbed, which the extracted bodies cannot.
+     * This object is kept because it records why each function is stubbed, which the extracted
+     * bodies cannot, so the 145 entries can be checked against the reference tables.
      */
     val HERMES = PatchSet(
         id = "discord_hermes",
@@ -249,7 +259,7 @@ object DiscordPatches {
                 explanation = "Stubs initSentry() so no global JS error hooks or unhandled promise rejection monitors are attached",
                 functionId = "22958",
                 stubShape = HermesStubShape.UNDEFINED,
-                functionName = "initSentry (Sentry JS SDK initialiser)",
+                functionName = "initSentry (Sentry JS SDK initializer)",
                 hasmStub = """
                     LoadConstUndefined r0
                     Ret r0
@@ -358,13 +368,13 @@ object DiscordPatches {
     )
 
     /**
-     * Files that carry the crash reporter rather than call it, and so cannot be neutralised by
+     * Files that carry the crash reporter rather than call it, which cannot be neutralized by
      * editing code.
      *
      * The reference build deletes these alongside stubbing the Sentry SDK. The native shared
-     * objects install the signal handlers and the `unknown/` paths are what the SDK writes a
-     * tombstone through, so leaving them in place leaves the mechanism intact even with every
-     * Java entry point stubbed.
+     * objects install the signal handlers, and the SDK writes its tombstone through the
+     * `unknown/` paths, so leaving them in place leaves the mechanism intact even when every Java
+     * entry point is stubbed.
      */
     val SENTRY_ARTEFACTS = setOf(
         "lib/arm64-v8a/libsentry.so",
@@ -376,7 +386,7 @@ object DiscordPatches {
         "lib/x86_64/libsentry.so",
         "lib/x86_64/libsentry-android.so",
         // Note the separator differs between these two entries in the real APK: this one is
-        // a path segment, the one below is a dot inside a filename. They cannot be unified.
+        // a path segment, the next one is a dot inside a filename. They cannot be unified.
         "META-INF/io/sentry/sentry-android-replay/verification.properties",
         "META-INF/native-image/io.sentry/sentry/native-image.properties",
         "META-INF/sentry-android-replay_release.kotlin_module",
@@ -388,8 +398,8 @@ object DiscordPatches {
      *
      * They are the reason stubbing the SDK's entry points is not enough on its own: the platform
      * instantiates every declared content provider while the process starts, before any Java the
-     * patches touch is entered, and the SDK's own provider is what starts the reporter. Removing
-     * the declaration is what actually keeps it from starting.
+     * patches touch is entered, and the SDK's own provider starts the reporter. Removing the
+     * declaration keeps it from starting.
      */
     val SENTRY_PROVIDERS = listOf(
         "io.sentry.android.core.SentryInitProvider",
@@ -400,9 +410,9 @@ object DiscordPatches {
      * The `<meta-data>` entries the Play Core split installer writes into a bundle's manifest.
      *
      * They describe an APK that is one split of a bundle. This patcher merges the splits into a
-     * single APK, so the markers describe an installation that no longer exists — and
-     * `com.android.vending.splits.required` is read by the Play Store as a claim that the app is
-     * missing the rest of its splits, which is the opposite of true once they are merged in.
+     * single APK, so the markers describe an installation that no longer exists—and the Play
+     * Store reads `com.android.vending.splits.required` as a claim that the app is missing the
+     * rest of its splits, which is not the case once they are merged in.
      */
     val PLAY_SPLIT_MARKERS = listOf(
         "com.android.vending.splits.required",
@@ -414,17 +424,18 @@ object DiscordPatches {
      * The permissions this build declares and has no live code behind, so the reference strips them
      * from every build it makes.
      *
-     * These are not a preference, which is why joining this list is a decision about the app and
-     * not a switch over it: each was checked against the patched tree before being written down,
-     * and a permission is only listed here when nothing reachable refers to it — stripping one that
-     * is still used turns a working call into a SecurityException.
+     * These are not a preference, so adding a permission to this list is a decision about the app
+     * rather than a switch over it: each was checked against the patched tree before being written
+     * down, and a permission is listed here only when nothing reachable refers to it—stripping
+     * one that is still used turns a working call into a SecurityException.
      *
      *   `READ_CONTACTS`                     - the only reference left is React Native's
-     *       permission-request module; contact sync is stubbed out, so the address book is never
-     *       read. Removing the declaration makes that structural rather than dependent on the stub
+     *       permission-request module; contact sync is stubbed out, so the patched build does not read
+     *       the address book. Removing the declaration makes that structural rather than dependent on the stub
      *       holding.
-     *   `AD_ID`                             - the advertising identifier. [TELEMETRY] resolves every
-     *       request for it with null, so nothing downstream can be attributed to this device.
+     *   `AD_ID`                             - the advertising identifier. [TELEMETRY] resolves
+     *       every request for it with null, so nothing downstream can be attributed to this
+     *       device.
      *   `ACCESS_ADSERVICES_ATTRIBUTION`     - Privacy Sandbox attribution, with no ad SDK left to
      *       report through it.
      *   `READ_APP_INFO` (Samsung)           - a dead declaration: no code in the dex names it.
@@ -447,8 +458,9 @@ object DiscordPatches {
      *
      * Most of the components this object matches on share an element, which is why
      * [SENTRY_PROVIDERS] and [PLAY_SPLIT_MARKERS] are lists of bare names. The Google Analytics set
-     * below is not uniform — a receiver and two services — so what element a component lives in is
-     * part of the fact rather than something the manifest pass should read back out of its name.
+     * that follows is not uniform—a receiver and two services—so the element a component is declared
+     * in is part of the fact rather than something the manifest pass should read back out of its
+     * name.
      */
     data class ManifestComponent(val element: String, val name: String)
 
@@ -456,16 +468,25 @@ object DiscordPatches {
      * The Google Analytics components the reference build switches off.
      *
      * Google Analytics is inert in this app: the SDK's classes ship in the dex and its components
-     * are declared, but every tracker initialisation site is on a code path the patches have
+     * are declared, but every tracker initialization site is on a code path the patches have
      * already cut. The reference sets `android:enabled="false"` on all three rather than deleting
-     * the declarations, and the difference matters — the platform never instantiates a disabled
-     * component, so the receiver never sees a broadcast and the JobService is never bound, while
-     * the manifest still describes the classes the dex actually holds.
+     * the declarations, and that is the reason for disabling rather than deleting: the platform
+     * does not instantiate a disabled component, so the broadcast is not delivered to the receiver and the
+     * JobService is not bound, while the manifest still describes the classes the dex holds.
      */
     val GOOGLE_ANALYTICS_COMPONENTS = listOf(
-        ManifestComponent(BinaryXmlEditor.ELEMENT_RECEIVER, "com.google.android.gms.analytics.AnalyticsReceiver"),
-        ManifestComponent(BinaryXmlEditor.ELEMENT_SERVICE, "com.google.android.gms.analytics.AnalyticsService"),
-        ManifestComponent(BinaryXmlEditor.ELEMENT_SERVICE, "com.google.android.gms.analytics.AnalyticsJobService")
+        ManifestComponent(
+            BinaryXmlEditor.ELEMENT_RECEIVER,
+            "com.google.android.gms.analytics.AnalyticsReceiver"
+        ),
+        ManifestComponent(
+            BinaryXmlEditor.ELEMENT_SERVICE,
+            "com.google.android.gms.analytics.AnalyticsService"
+        ),
+        ManifestComponent(
+            BinaryXmlEditor.ELEMENT_SERVICE,
+            "com.google.android.gms.analytics.AnalyticsJobService"
+        )
     )
 
     /** The `<action>` naming the AppsFlyer install-referrer query in the manifest's `<queries>`. */
@@ -480,6 +501,7 @@ object DiscordPatches {
      */
     const val RPC_SERVICE_NAME = "com.discord.socialrpc.DiscordRpcService"
 
+    /** Every set this object defines, in the order the UI lists them. */
     val ALL = listOf(
         BUNDLE_LOCK,
         SENTRY,

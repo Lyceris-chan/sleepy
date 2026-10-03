@@ -1,13 +1,20 @@
 package dev.sleepy.app.util
 
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import java.util.concurrent.TimeUnit
 
+/**
+ * Downloads a source APK into memory.
+ *
+ * A network URL is rejected unless it uses HTTPS, and the bytes read must start with the ZIP
+ * magic number. A size limit applies to both the declared content length and the bytes read from
+ * the stream.
+ */
 object Downloader {
 
     private val client = OkHttpClient.Builder()
@@ -20,7 +27,10 @@ object Downloader {
     private const val MAX_SIZE_BYTES = 512L * 1024 * 1024 // 512 MB guard
 
     /**
-     * Downloads an APK into RAM directly, verifying HTTPS and ZIP magic bytes.
+     * Downloads the APK at [url] into a byte array and reports progress through [onProgress].
+     *
+     * A `file://` URL is read from the local filesystem. Any other URL must use HTTPS. The bytes
+     * read must start with the ZIP magic number.
      */
     suspend fun download(
         url: String,
@@ -31,14 +41,18 @@ object Downloader {
             if (!file.exists()) throw IOException("Local file not found: ${file.absolutePath}")
             val bytes = file.readBytes()
             if (bytes.size < 4 || bytes[0] != 0x50.toByte() || bytes[1] != 0x4B.toByte()) {
-                throw IOException("Local file is not a valid APK/ZIP archive (magic header check failed).")
+                throw IOException(
+                    "Local file is not a valid APK/ZIP archive (magic header check failed)."
+                )
             }
             onProgress(bytes.size.toLong(), bytes.size.toLong())
             return@withContext bytes
         }
 
         if (!url.startsWith("https://", ignoreCase = true)) {
-            throw IllegalArgumentException("Insecure URL rejected by security policy: Only HTTPS is permitted.")
+            throw IllegalArgumentException(
+                "Insecure URL rejected by security policy: Only HTTPS is permitted."
+            )
         }
 
         val request = Request.Builder()
@@ -55,7 +69,9 @@ object Downloader {
         val contentLength = body.contentLength()
 
         if (contentLength > MAX_SIZE_BYTES) {
-            throw IOException("File size ($contentLength bytes) exceeds security limit of $MAX_SIZE_BYTES bytes.")
+            throw IOException(
+                "File size ($contentLength bytes) exceeds security limit of $MAX_SIZE_BYTES bytes."
+            )
         }
 
         val estimatedSize = if (contentLength > 0) contentLength.toInt() else 32 * 1024 * 1024
@@ -69,7 +85,9 @@ object Downloader {
             while (inStream.read(chunk).also { read = it } != -1) {
                 totalRead += read
                 if (totalRead > MAX_SIZE_BYTES) {
-                    throw IOException("Download stream exceeded maximum security size of $MAX_SIZE_BYTES bytes.")
+                    throw IOException(
+                        "Download stream exceeded maximum security size of $MAX_SIZE_BYTES bytes."
+                    )
                 }
                 byteBuffer.write(chunk, 0, read)
                 onProgress(totalRead, contentLength)
@@ -78,7 +96,9 @@ object Downloader {
 
         val bytes = byteBuffer.toByteArray()
         if (bytes.size < 4 || bytes[0] != 0x50.toByte() || bytes[1] != 0x4B.toByte()) {
-            throw IOException("Downloaded content is not a valid APK/ZIP archive (magic header check failed).")
+            throw IOException(
+                "Downloaded content is not a valid APK/ZIP archive (magic header check failed)."
+            )
         }
 
         bytes

@@ -16,7 +16,14 @@ import dev.sleepy.app.ui.screens.SettingsScreen
 import dev.sleepy.app.viewmodel.HomeViewModel
 import dev.sleepy.app.viewmodel.PatchViewModel
 
-/** Wires the screens together and owns the navigation state. */
+/**
+ * The app's navigation graph: one destination per screen, with the arguments each route takes.
+ *
+ * @param navController The controller that holds the navigation state and performs the
+ *   navigation actions.
+ * @param homeViewModel The view model for the home and settings screens.
+ * @param patchViewModel The view model for the patch-selection, progress, and result screens.
+ */
 @Composable
 fun SleepyNavGraph(
     navController: NavHostController,
@@ -63,6 +70,9 @@ fun SleepyNavGraph(
                     navController.navigate(Screen.Result.route) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                     }
+                },
+                onExit = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -73,6 +83,14 @@ fun SleepyNavGraph(
                 onStartOver = {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                },
+                onRetry = {
+                    // The run starts before the navigation, so the progress screen does not open
+                    // on the failed run it is replacing.
+                    patchViewModel.startPatch()
+                    navController.navigate(Screen.Progress.route) {
+                        popUpTo(Screen.Result.route) { inclusive = true }
                     }
                 }
             )

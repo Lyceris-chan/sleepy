@@ -42,19 +42,23 @@ import dev.sleepy.app.ui.state.InertKind
 import dev.sleepy.app.ui.state.PatchRow
 
 /**
- * One row of an expanded patch set: an item with its own switch, or a row that has no choice in
- * it at all — a blocklist rule another enabled rule already answers for, or one of the
- * interceptor's prefix gates.
+ * One row of an expanded patch set: an item with its own switch, or a row with no choice in it—
+ * a blocklist rule that another enabled rule already covers, or one of the interceptor's prefix
+ * gates.
  *
- * The row is the switch's target, so it reads as one labelled control rather than as a small thumb
- * beside an unrelated sentence, and its description is always visible: a switch whose effect the
- * user cannot read is not a choice.
+ * The row is the switch's target, so it appears as one labeled control rather than as a small
+ * thumb beside an unrelated sentence, and its description is visible in the row itself: a switch
+ * whose effect the user cannot read is not a choice.
  *
- * A row whose switch cannot be moved says so in three ways at once — a disabled switch, an icon,
- * and the reason in full, which comes from the model rather than from here. Nothing about the
- * state is left to colour, and an inert row is never rendered without a reason to read: the two
- * kinds of inertness are different claims, and a rule that is merely redundant becomes a working
- * switch again the moment its coverer is turned off, while a gate never will.
+ * A row whose switch cannot be moved reports that in three ways: a disabled switch, an icon, and
+ * the reason in full, which comes from the model rather than from here. Color is not the only
+ * signal for the state, and an inert row is not rendered without a reason to read. The two kinds
+ * of inertness are different claims: a rule that is only redundant becomes a working switch
+ * again when the rule that covers it is turned off, while a gate stays inert.
+ *
+ * @param row The row to render.
+ * @param onToggle Called with the row's item when the user moves its switch.
+ * @param modifier The modifier applied to the row.
  */
 @Composable
 fun PatchItemRow(
@@ -147,22 +151,24 @@ fun PatchItemRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    // The clickable row names the action in its onClickLabel, so a description on
+                    // this glyph repeats the action in a second announcement.
                     Icon(
                         imageVector = if (detailExpanded) {
                             Icons.Default.ExpandLess
                         } else {
                             Icons.Default.ExpandMore
                         },
-                        contentDescription = if (detailExpanded) {
-                            "Hide the technical target"
-                        } else {
-                            "Show the technical target"
-                        },
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = if (detailExpanded) "Hide technical target" else "View technical target",
+                        text = if (detailExpanded) {
+                            "Hide technical target"
+                        } else {
+                            "View technical target"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
@@ -201,12 +207,12 @@ fun PatchItemRow(
 }
 
 /**
- * Why a row's switch cannot be moved, in the model's own words, beside a glyph that says which of
- * the two reasons it is.
+ * The reason a row's switch cannot be moved, in the model's own words, beside a glyph that
+ * indicates which of the two kinds of reason it is.
  *
- * The glyph is decorative and unlabelled on purpose: the sentence next to it is the reason, and the
- * two kinds do not read alike — one names the pattern that covers the row, the other begins with
- * the word that says the row is required.
+ * The glyph is decorative and unlabeled on purpose: the sentence next to it is the reason, and
+ * the two kinds are worded differently—one names the pattern that covers the row, and the
+ * other begins with the word that states the row is required.
  */
 @Composable
 private fun InertNotice(kind: InertKind, reason: String) {
@@ -230,7 +236,7 @@ private fun InertNotice(kind: InertKind, reason: String) {
     }
 }
 
-/** The glyph that tells the two kinds of inert row apart at a glance. */
+/** The glyph that distinguishes the two kinds of inert row. */
 private fun InertKind.glyph(): ImageVector = when (this) {
     InertKind.COVERED -> Icons.Default.Layers
     InertKind.REQUIRED -> Icons.Default.Lock

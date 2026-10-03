@@ -10,10 +10,12 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 
+/** Saves a finished APK to the device's public Downloads folder. */
 object FileUtils {
 
     /**
-     * Saves the patched APK to public Downloads via MediaStore / Storage Access Framework
+     * Saves [sourceFile] to the public Downloads folder under [displayName], and returns the URI
+     * of the saved file, or null when the insert fails.
      */
     fun saveApkToDownloads(context: Context, sourceFile: File, displayName: String): Uri? {
         val fileName = if (displayName.endsWith(".apk")) displayName else "$displayName.apk"
@@ -25,7 +27,8 @@ object FileUtils {
                 put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/sleepy")
             }
 
-            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            val uri = context.contentResolver
+                .insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 ?: return null
 
             context.contentResolver.openOutputStream(uri)?.use { outStream ->
@@ -35,7 +38,9 @@ object FileUtils {
             }
             return uri
         } else {
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS
+            )
             val sleepyDir = File(downloadsDir, "sleepy").apply { mkdirs() }
             val destFile = File(sleepyDir, fileName)
             FileInputStream(sourceFile).use { inStream ->

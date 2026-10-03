@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 # Runs on the GitHub-hosted Ubuntu image. An Alpine container was tried and rejected:
-# GitHub provides no Alpine runner, and Android's build tools — aapt2, d8, apksigner — are
+# GitHub provides no Alpine runner, and Android's build tools—aapt2, d8, apksigner—are
 # glibc-linked binaries, so running the build under musl depends on a compatibility shim
 # that is not worth the risk to a release pipeline.
 jobs:
@@ -37,7 +37,7 @@ jobs:
         uses: android-actions/setup-android@v4
 
       # compileSdk 37 resolves to the minor-versioned package platforms;android-37.0,
-      # which a default runner image does not carry. Install it rather than assume.
+      # which a default runner image does not include. Install it rather than assume.
       - name: Install required SDK packages
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
@@ -46,10 +46,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # The patcher engine tests self-check the ZIP alignment maths and the binary-XML
-      # attribute editor. Tests that need a local reference APK are reported as skipped when
-      # the file is absent, so this is safe on a clean runner — and the skipped count in the
-      # report says how much of the suite did not run here.
+      # The patcher engine tests self-check the ZIP alignment math and the binary-XML
+      # attribute editor. A test that needs a local reference APK reports itself as skipped when
+      # the file is absent, never as a pass and never as a failure, so a clean runner runs what
+      # it can; the skipped count in the report shows how much of the suite did not run here.
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
@@ -89,8 +89,14 @@ jobs:
 
       - name: Resolve tag name
         id: vars
+        env:
+          # The tag arrives as a value in the environment. Interpolating it into the script body
+          # instead lets a tag name carrying shell syntax run as part of this step, and this
+          # step runs in the same job as the ones holding the signing secrets.
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG="${INPUT_TAG:-$REF_NAME}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Build release APK

@@ -5,15 +5,15 @@ import java.util.zip.ZipEntry
 /**
  * How far an APK entry's data must be aligned, and which entries are exempt.
  *
- * Android only requires alignment for **uncompressed** entries: a deflated entry's data
- * offset is whatever the compressed stream produced and nothing maps it directly. This is
- * easy to get backwards. `zipalign -c -v 4` on a stock APK labels every compressed entry
- * "(OK - compressed)" and checks only the stored ones, so a checker that tests `offset % 4`
- * across the board reports thousands of failures on a perfectly valid APK — which is exactly
- * what an earlier version of [ApkVerifier] did.
+ * Android requires alignment only for **uncompressed** entries: the data offset of a deflated
+ * entry is whatever the compressed stream produced, and nothing maps it directly.
+ * `zipalign -c -v 4` on a stock APK labels every compressed entry "(OK - compressed)" and
+ * checks only the stored entries, so a checker that applies an `offset % 4` test to every
+ * entry reports thousands of failures on a valid APK. An earlier version of [ApkVerifier]
+ * did that.
  *
- * The rule lives here so the repacker and the verifier cannot drift apart: the repacker pads
- * by [requiredFor] and the verifier asserts it.
+ * The rule is defined here so that the repacker and the verifier stay consistent: the
+ * repacker pads by [requiredFor], and the verifier applies the same check.
  */
 object ZipAlignment {
 
@@ -21,9 +21,9 @@ object ZipAlignment {
     const val DEFAULT = 4
 
     /**
-     * Uncompressed native libraries are mapped straight out of the APK with `mmap`, so they
-     * need page alignment, not 4-byte alignment. 16 KiB is the current requirement on
-     * 16 KiB-page devices and is a multiple of 4 KiB, so it satisfies both.
+     * Uncompressed native libraries are mapped from the APK with `mmap`, so they need page
+     * alignment rather than 4-byte alignment. 16 KiB is the current requirement on
+     * 16 KiB-page devices and is a multiple of 4 KiB, so it satisfies both requirements.
      */
     const val NATIVE_LIBRARY = 16384
 

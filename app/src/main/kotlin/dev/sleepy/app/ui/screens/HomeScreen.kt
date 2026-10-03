@@ -30,6 +30,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
@@ -39,8 +41,12 @@ import dev.sleepy.app.viewmodel.HomeViewModel
 /**
  * The entry point: pick the application to patch.
  *
- * Each card names the hosts its build downloads from, so provenance is visible before a run
+ * Each card shows the hosts its build downloads from, so provenance is visible before a run
  * starts rather than only in the settings.
+ *
+ * @param viewModel The view model that supplies the target list.
+ * @param onSourceSelected Called with the id of the source the user selects.
+ * @param onSettingsClick Called when the settings action is tapped.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,7 +67,8 @@ fun HomeScreen(
                     Text(
                         text = "sleepy",
                         style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() }
                     )
                 },
                 actions = {
@@ -119,7 +126,8 @@ fun HomeScreen(
                 text = "Target applications",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics { heading() }
             )
 
             Spacer(modifier = Modifier.height(12.dp))

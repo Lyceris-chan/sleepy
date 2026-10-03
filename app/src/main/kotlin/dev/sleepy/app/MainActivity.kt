@@ -11,6 +11,10 @@ import dev.sleepy.app.ui.theme.SleepyTheme
 import dev.sleepy.app.viewmodel.HomeViewModel
 import dev.sleepy.app.viewmodel.PatchViewModel
 
+/**
+ * The app's single activity: it hosts the navigation graph and the two view models the screens
+ * share.
+ */
 class MainActivity : ComponentActivity() {
 
     private val homeViewModel: HomeViewModel by viewModels()
@@ -19,7 +23,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // API 36+ and 37 mandatory edge-to-edge support
+        // Edge-to-edge display is required on API 36 and later.
         enableEdgeToEdge()
 
         setContent {

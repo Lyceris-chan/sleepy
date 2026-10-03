@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,13 +44,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.sleepy.app.engine.PackageNameProblem
+import dev.sleepy.app.engine.PackageNameRules
 import dev.sleepy.app.model.DeclarationMismatch
 import dev.sleepy.app.model.DeclarationSource
 import dev.sleepy.app.model.PermissionCheck
@@ -66,20 +73,26 @@ import dev.sleepy.app.viewmodel.PatchViewModel
  * Chooses which changes to apply, alone or item by item, and optionally gives the result its own
  * package name so it can be installed next to the app it was built from.
  *
- * A patch set is a header — its own switch, and what it currently selects — over an expandable body
- * of its items. The header's switch is tri-state, so a set with the gift button on and everything
- * else off is shown as such rather than rounded to on or off, and the body is where that state is
- * reached: each item has its own switch and its own description of what turning it on does.
+ * A patch set is a header—its own switch, and what it selects—over an expandable
+ * body of its items. The header's switch is tri-state, so a set with the gift button on and
+ * everything else off is shown as such rather than rounded to on or off, and the body is where
+ * that state is reached: each item has its own switch and its own description of what turning it
+ * on does.
  *
- * The body is emitted as lazy list items rather than as one composable per set, with each row keyed
- * by the item's own stable key, so expanding the eighty-one-rule blocklist or the hundred-and-forty-
- * two-function JavaScript set composes only the rows on screen.
+ * The body is emitted as lazy list items rather than as one composable per set, with each row
+ * keyed by the item's own stable key, so expanding the eighty-one-rule blocklist or the
+ * hundred-and-forty-two-function JavaScript set composes only the rows on screen.
  *
- * A row can also be inert, and then it says why: a blocklist rule another enabled rule already
- * answers for is greyed with the pattern that covers it named in full, and the interceptor's two
+ * A row can also be inert, and the row then states why: a blocklist rule that another enabled
+ * rule covers is grayed with the pattern that covers it named in full, and the interceptor's two
  * prefix gates are locked with their own reason. Both come from
  * [dev.sleepy.app.model.BlocklistCoverage], recomputed from the selection on every change, so
  * switching a covering rule off makes what it covered live again immediately.
+ *
+ * @param sourceId The id of the target whose patch sets are listed.
+ * @param viewModel The view model that supplies and edits the selection.
+ * @param onStartPatch Called when the user starts a run.
+ * @param onBack Called when the user leaves the screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,31 +109,38 @@ fun PatchSelectScreen(
     val source by viewModel.selectedSource.collectAsState()
     val selection by viewModel.selection.collectAsState()
 
-    // A set listed twice in a source's ids is one set: the rows below are keyed by set id, and two
-    // entries for the same set would be two items with one key.
+    // A set listed twice in a source's ids is one set: the rows that follow are keyed by set id, and two
+    // entries for the same set are two items with one key.
     val availablePatches = remember(source) {
-        source?.patchIds?.let { PatchRegistry.getAllForSource(it) }?.distinctBy { it.id } ?: emptyList()
+        source?.patchIds?.let { PatchRegistry.getAllForSource(it) }?.distinctBy { it.id }
+            ?: emptyList()
     }
 
-    // Recomputed whenever the selection changes — which is what makes a covered row live again as
+    // Recomputed whenever the selection changes—which is what makes a covered row live again as
     // soon as its coverer is switched off, with no state to keep in step and nothing to invalidate.
     val rowsBySet = remember(source?.id, selection) {
         availablePatches.associate { it.id to PatchRows.of(it, selection) }
     }
 
     // Held here rather than inside the rows, because a lazy list discards and rebuilds the
-    // composables of the items that scroll out of view.
-    var expandedSetIds by remember { mutableStateOf(emptySet<String>()) }
+    // composables of the items that scroll out of view. Saved so a rotation keeps the sets the
+    // reader opened rather than collapsing every one of them.
+    var expandedSetIds by rememberSaveable(
+        stateSaver = listSaver(
+            save = { it.toList() },
+            restore = { it.toSet() }
+        )
+    ) { mutableStateOf(emptySet<String>()) }
 
     val isCloneMode by viewModel.isCloneMode.collectAsState()
     val customPackageName by viewModel.customPackageName.collectAsState()
     val permissionScan by viewModel.permissions.collectAsState()
 
-    // Recomputed from the selection like the patch rows, so the last permission standing starts
-    // refusing as soon as it is the last and stops as soon as another is switched back on. The
-    // source's package is part of the inputs because it is what decides which declarations the
-    // build removes itself, whatever the selection says — the same question the manifest pass asks
-    // with the same name.
+    // Recomputed from the selection like the patch rows, so the last remaining permission becomes
+    // locked as soon as it is the last, and unlocked as soon as another is switched back on. The
+    // source's package is part of the inputs because it is what determines which declarations the
+    // build removes on its own, whatever the selection is—the same question the manifest pass
+    // asks with the same name.
     val permissionRows = remember(permissionScan, selection, source?.packageName) {
         (permissionScan as? PermissionScan.Read)
             ?.let { PatchRows.permissionRows(it.declared, selection, source?.packageName) }
@@ -131,6 +151,15 @@ fun PatchSelectScreen(
     val selectedItemCount = rowsBySet.values.sumOf { it.selectedItemCount }
     val totalItemCount = rowsBySet.values.sumOf { it.itemCount }
 
+    // The name is checked against the source's own package because a clone that keeps it replaces
+    // the original instead of installing beside it: the pipeline skips the rename for an equal
+    // name, so a run finishes without the one change that was asked for.
+    val packageNameProblem = if (isCloneMode) {
+        PackageNameRules.validate(customPackageName, source?.packageName)
+    } else {
+        null
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -138,7 +167,8 @@ fun PatchSelectScreen(
                     Text(
                         text = source?.displayName ?: "Select patches",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() }
                     )
                 },
                 navigationIcon = {
@@ -165,6 +195,7 @@ fun PatchSelectScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                         .navigationBarsPadding()
+                        .imePadding()
                 ) {
                     Button(
                         onClick = {
@@ -172,9 +203,11 @@ fun PatchSelectScreen(
                             onStartPatch()
                         },
                         // A run that removes permissions and applies no patch is still a run: the
-                        // declarations are edited either way, so the removals count towards being
-                        // able to start one.
-                        enabled = selectedItemCount > 0 || permissionRemovalCount > 0,
+                        // declarations are edited either way, so the removals count toward being
+                        // able to start one. A clone name that breaks a rule blocks the start
+                        // instead, because the rename is the reason the mode was switched on.
+                        enabled = (selectedItemCount > 0 || permissionRemovalCount > 0) &&
+                            packageNameProblem == null,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
@@ -209,6 +242,7 @@ fun PatchSelectScreen(
                     isCloneMode = isCloneMode,
                     customPackageName = customPackageName,
                     originalPackageName = source?.packageName.orEmpty(),
+                    problem = packageNameProblem,
                     onCloneModeChange = { viewModel.setCloneMode(it) },
                     onPackageNameChange = { viewModel.setCustomPackageName(it) }
                 )
@@ -218,7 +252,7 @@ fun PatchSelectScreen(
 
             // The permission section comes before the patch sets, not after them: its list is
             // shipped with the app, so it is ready before anything is downloaded, and a section
-            // below twenty-two set cards is a section most people never scroll to.
+            // a section after twenty-two set cards is one most people do not scroll to.
             item(key = PatchRows.permissionCardKey(), contentType = "permissions") {
                 PermissionCard(
                     scan = permissionScan,
@@ -261,7 +295,8 @@ fun PatchSelectScreen(
                     text = "Configure modding pipeline",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -289,7 +324,9 @@ fun PatchSelectScreen(
                         set = patchSet,
                         rows = setRows,
                         expanded = expanded,
-                        onSetToggled = { enabled -> viewModel.setPatchSetEnabled(patchSet.id, enabled) },
+                        onSetToggled = { enabled ->
+                            viewModel.setPatchSetEnabled(patchSet.id, enabled)
+                        },
                         onExpandedChange = {
                             expandedSetIds = if (expanded) {
                                 expandedSetIds - patchSet.id
@@ -302,7 +339,10 @@ fun PatchSelectScreen(
 
                 if (expanded) {
                     setRows.groups.forEach { group ->
-                        item(key = PatchRows.groupKey(patchSet.id, group.label), contentType = "group") {
+                        item(
+                            key = PatchRows.groupKey(patchSet.id, group.label),
+                            contentType = "group"
+                        ) {
                             GroupHeading(label = group.label, itemCount = group.rows.size)
                         }
                         items(
@@ -327,17 +367,19 @@ fun PatchSelectScreen(
 }
 
 /**
- * The patch button's label — "3 items selected", and what else the run will do when permission
+ * The patch button's label—"3 items selected", and what else the run does when permission
  * declarations are being removed.
  *
- * The item count is the patch items and nothing else, so it keeps meaning what it always meant;
- * the permission removals are named separately rather than folded into it, because a run that
- * removes a permission and applies no patch is otherwise a run reporting "0 items selected".
+ * The item count is the patch items and nothing else, so it keeps its original meaning; the
+ * permission removals are named separately rather than folded into it, because a run that removes
+ * a permission and applies no patch is otherwise a run reporting "0 items selected".
  */
 private fun patchButtonLabel(selectedItems: Int, permissionRemovals: Int): String {
     val items = "$selectedItems ${if (selectedItems == 1) "item" else "items"} selected"
     if (permissionRemovals == 0) return "Patch APK ($items)"
-    val permissions = "$permissionRemovals ${if (permissionRemovals == 1) "permission" else "permissions"} removed"
+    val permissions = "$permissionRemovals " +
+        "${if (permissionRemovals == 1) "permission" else "permissions"}" +
+        " removed"
     return "Patch APK ($items, $permissions)"
 }
 
@@ -346,18 +388,18 @@ private fun patchButtonLabel(selectedItems: Int, permissionRemovals: Int): Strin
  *
  * The list is the one shipped with the app for this exact release, so the rows are there the
  * moment a target is chosen and nothing has to be downloaded to switch one off. It used to be read
- * from the build, which meant the section held nothing at all until a whole APK had been fetched —
- * no rows, no switches, and nothing to say that any of it existed.
+ * from the build, which meant the section held nothing at all until a whole APK had been fetched—
+ * no rows, no switches, and nothing to indicate that any of it existed.
  *
  * The build's own manifest is still read, but as a cross-check rather than as the list: a source
- * pointed at another release is the case where a shipped list would be wrong, and a permission the
- * build declares that the list does not name is a permission with no row — so it is stated instead
- * of being kept quiet. What the read finds never replaces the list on its own.
+ * pointed at another release is the case where a shipped list is wrong, and a permission the
+ * build declares that the list does not name is a permission with no row—so it is stated rather
+ * than omitted. What the read finds does not replace the list on its own.
  *
  * There is deliberately no switch for the whole section. Everywhere else a set's header carries
- * one, and a header switch here would put "remove every permission this build declares" behind one
- * tap — a state that cannot be undone on an installed app, and one the model refuses anyway once
- * the last permission stands. The rows are the only way in.
+ * one, and a header switch here puts "remove every permission this build declares" behind one
+ * tap—a state that cannot be undone on an installed app, and one the model does not allow once
+ * the last permission remains. The rows are the only way in.
  */
 @Composable
 private fun PermissionCard(
@@ -394,7 +436,8 @@ private fun PermissionCard(
                     text = "Permissions",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() }
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (rows.isNotEmpty()) {
@@ -426,8 +469,9 @@ private fun PermissionCard(
             when (scan) {
                 PermissionScan.NotRead -> {
                     Text(
-                        text = "Nothing is known about this build's permissions yet. Reading them " +
-                            "downloads the same APK the patch does and reads its manifest.",
+                        text = "Nothing is known about this build's permissions yet. " +
+                            "Reading them downloads the same APK the patch does and reads its " +
+                            "manifest.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -467,7 +511,7 @@ private fun PermissionCard(
     }
 }
 
-/** Where the list above came from, said in the section rather than only in the code. */
+/** Where the preceding list came from, stated in the section rather than only in the code. */
 private fun permissionListSource(scan: PermissionScan): String = when {
     scan is PermissionScan.Read && scan.from == DeclarationSource.SHIPPED ->
         "The permissions this release declares, shipped with sleepy, so they are here before " +
@@ -475,7 +519,7 @@ private fun permissionListSource(scan: PermissionScan): String = when {
             "still the build this list describes."
     scan is PermissionScan.Read ->
         "Read from this build's own manifest, because sleepy ships no list for this release. " +
-            "This is exactly what it declares — not a list of names that could go stale."
+            "This is exactly what it declares—not a list of names that could go stale."
     else ->
         "sleepy ships no list for this release, so what it declares has to be read from it. That " +
             "downloads the same APK the patch does, and reads its manifest."
@@ -502,12 +546,12 @@ private fun ReadProgress() {
 }
 
 /**
- * What the cross-check against the build found — the one place a difference between what sleepy
+ * What the cross-check against the build found—the one place a difference between what sleepy
  * lists and what a build declares is stated.
  *
  * Both directions are named in full rather than counted, because they are different problems with
  * different answers. A declaration the list does not name has no row, so it stays whatever the user
- * does; a listed permission the build does not declare means the switch above governs nothing. The
+ * does; a listed permission the build does not declare means the earlier switch governs nothing. The
  * list is not rewritten in either case: it describes the release sleepy supports, and a run goes by
  * the choice the user made against it.
  */
@@ -517,7 +561,7 @@ private fun PermissionCheckReport(check: PermissionCheck, onRead: () -> Unit) {
         PermissionCheck.NotChecked -> Column {
             Text(
                 text = "Not checked against the build yet. Checking downloads it and compares " +
-                    "what it declares with the list above — nothing you switch is affected " +
+                    "what it declares with the list above—nothing you switch is affected " +
                     "either way.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -602,16 +646,16 @@ private fun PermissionCheckReport(check: PermissionCheck, onRead: () -> Unit) {
 }
 
 /**
- * What the read list currently means: how many declarations are kept, how many are not the user's
- * to move, and what removing the rest will do.
+ * What the read list means: how many declarations are kept, how many are not the user's
+ * to move, and what removing the rest does.
  *
  * The effect is stated rather than implied, because it is the one thing in this screen that cannot
  * be undone on the installed app: a declaration that is deleted cannot be re-declared by the app
- * later, so the permission is not "off" — it is gone.
+ * later, so the permission is not "off"—it is gone.
  *
  * A row the build removes on its own is counted and described as itself rather than folded into
  * either end. It is not a removal the user is making, so it must not appear as one; it is not kept
- * either, so a summary that counted it as kept would be the same lie the row was fixed to avoid.
+ * either, so a summary that counts it as kept contradicts what its row states.
  */
 @Composable
 private fun PermissionSummary(rows: List<PatchRow>) {
@@ -635,24 +679,29 @@ private fun PermissionSummary(rows: List<PatchRow>) {
             if (removals > 0) " · $removals to remove" else " · none removed",
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
-        color = if (removals > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+        color = if (removals > 0) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
     )
     Spacer(modifier = Modifier.height(6.dp))
     Text(
         text = when {
             removals > 0 ->
                 "$removals declaration${if (removals == 1) "" else "s"} will be deleted from the " +
-                    "manifest of the APK this run produces. That is permanent: Android gives an app " +
-                    "only the permissions its manifest declares, and an installed app has no way to " +
-                    "declare more later, so whatever depends on ${if (removals == 1) "it" else "them"} " +
-                    "stops working for good."
+                    "manifest of the APK this run produces. That is permanent: Android gives " +
+                    "an app only the permissions its manifest declares, and an installed app " +
+                    "has no way to declare more later, so whatever depends on " +
+                    "${if (removals == 1) "it" else "them"} stops working for good."
             alwaysRemoved > 0 ->
                 "Nothing is switched off. $alwaysRemoved $removedNoun will still not be declared " +
                     "in the APK this run produces: sleepy deletes " +
                     "${if (alwaysRemoved == 1) "this one" else "these"} from every build of this " +
                     "app, which is why ${if (alwaysRemoved == 1) "its" else "their"} row has no " +
                     "switch to move."
-            else -> "Nothing is switched off, so every declaration this build ships stays in the manifest."
+            else -> "Nothing is switched off, so every declaration this build ships " +
+                "stays in the manifest."
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -677,11 +726,11 @@ private fun PermissionSummary(rows: List<PatchRow>) {
 }
 
 /**
- * "251 of 253 items selected" — the line above the list, and what the button's count is drawn from.
+ * "251 of 253 items selected"—the line shown with the list, and what the button's count is drawn from.
  *
  * Items rather than sets: a set is a grouping the pipeline happens to apply in one pass, while an
- * item is what the user actually chose between, and "22 selected" would be the same number for a
- * run that patches everything and a run that patches one function in each set.
+ * item is what the user chose between, and "22 selected" is the same number for a run that
+ * patches everything and a run that patches one function in each set.
  */
 private fun selectionSummary(selectedItems: Int, totalItems: Int): String {
     val noun = if (totalItems == 1) "item" else "items"
@@ -691,8 +740,9 @@ private fun selectionSummary(selectedItems: Int, totalItems: Int): String {
 /**
  * The heading of one feature group inside an expanded set.
  *
- * It names the feature rather than the set, so a hundred and forty-two functions read as eighteen
- * things the app does — analytics, quests, gift buttons — instead of as one undifferentiated list.
+ * It names the feature rather than the set, so a hundred and forty-two functions appear as
+ * eighteen things the app does—analytics, quests, gift buttons—instead of as one
+ * undifferentiated list.
  */
 @Composable
 private fun GroupHeading(label: String, itemCount: Int) {
@@ -729,12 +779,16 @@ private fun GroupHeading(label: String, itemCount: Int) {
  *
  * The whole row is the switch target, so it is reachable as one control with a label rather
  * than as a small thumb next to an unrelated sentence.
+ *
+ * A name the field cannot carry is reported on the field itself, before a run starts: the field
+ * shows the rule that was broken, and the screen blocks the start of a run until it is met.
  */
 @Composable
 private fun CloneModeCard(
     isCloneMode: Boolean,
     customPackageName: String,
     originalPackageName: String,
+    problem: PackageNameProblem?,
     onCloneModeChange: (Boolean) -> Unit,
     onPackageNameChange: (String) -> Unit
 ) {
@@ -790,13 +844,16 @@ private fun CloneModeCard(
                     label = { Text("Cloned package name") },
                     placeholder = { Text("$originalPackageName.sleepy") },
                     singleLine = true,
+                    isError = problem != null,
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
                         fontFamily = FontFamily.Monospace
                     ),
                     supportingText = {
-                        Text("Original: $originalPackageName")
+                        // The message states the rule rather than relying on the field's color, so
+                        // the state does not depend on color vision.
+                        Text(problem?.message ?: "Original: $originalPackageName")
                     }
                 )
             }

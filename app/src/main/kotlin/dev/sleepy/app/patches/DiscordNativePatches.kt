@@ -9,11 +9,11 @@ import dev.sleepy.app.model.SmaliPatch
  *
  * This object carries the part of that suite that [DiscordPatches] does not: the edits that
  * are neither the Hermes JavaScript bundle nor a whole-method stub of the handful of
- * telemetry entry points already covered there. Nothing here was invented — every entry
- * corresponds to a call the reference makes, and the smali it writes is its output.
+ * telemetry entry points already covered there. Every entry corresponds to a call the
+ * reference makes, and the smali it writes is the reference's output.
  *
  * Three kinds of edit are deliberately absent, because an on-device patcher that edits DEX
- * files cannot make them:
+ * files cannot apply them:
  *
  * - **AndroidManifest.xml**: the reference removes split/meta-data declarations, five dead
  *   permissions, the Sentry providers, the AppsFlyer intent query and the exported flag on
@@ -32,15 +32,19 @@ import dev.sleepy.app.model.SmaliPatch
  * Labels: the reference suite edits an apktool tree, whose branch labels are numbered
  * sequentially per method (`:cond_3`). The engine disassembles the APK itself and gets
  * address-based labels (`:cond_4c`). An anchor that names a label therefore uses the engine's
- * spelling, while every emitted replacement keeps the reference's text byte for byte — the
+ * spelling, while every emitted replacement keeps the reference's text byte for byte—the
  * labels a patch *introduces* (`:cond_gate_skip`, `:cond_no_stall`, `:new_cache`,
- * `:cond_patch_skip`) are its own and are reproduced exactly as written.
+ * `:cond_patch_skip`) are its own and are reproduced as written.
  *
  * [versionTag] and [dexName] are left null: Discord ships every class in a version-dependent
  * DEX, so the pipeline resolves the DEX from the class descriptor.
  */
 object DiscordNativePatches {
 
+    /**
+     * Blanks the hard-coded Sentry DSNs and stubs the breadcrumb facade, so crash and
+     * breadcrumb reporting has no destination.
+     */
     val SENTRY = PatchSet(
         id = "discord_native_sentry",
         label = "Blank Sentry DSNs & Breadcrumb Facade",
@@ -111,7 +115,7 @@ object DiscordNativePatches {
             ),
             SmaliPatch(
                 title = "Blanking the Sentry DSN inside CrashReporting",
-                explanation = "Removes the alpha/beta Sentry endpoint held by the crash reporter itself, so its own initialisation finds nothing to send to.",
+                explanation = "Removes the alpha/beta Sentry endpoint held by the crash reporter itself, so its own initialization finds nothing to send to.",
                 smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
                 anchor = "\"https://9a42ef460144a03b30c8b2d5321cfe11@o64374.ingest.sentry.io/5992375\"",
                 replacement = "\"\""
@@ -178,14 +182,18 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Stops the deep-link initializer that feeds campaign attribution to AppsFlyer and the
+     * ads SDK.
+     */
     val DEEP_LINKS = PatchSet(
         id = "discord_native_deep_links",
         label = "Disable Deep Link Attribution",
-        description = "Stops the deep-link initialiser that feeds campaign attribution, so incoming links are no longer resolved against AppsFlyer and the ads SDK.",
+        description = "Stops the deep-link initializer that feeds campaign attribution, so incoming links are no longer resolved against AppsFlyer and the ads SDK.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Disabling deep-link attribution at startup",
-                explanation = "Skips the deep-link initialisation that hands campaign data to the attribution SDKs.",
+                explanation = "Skips the deep-link initialization that hands campaign data to the attribution SDKs.",
                 smaliPath = "com/discord/deep_link/DeepLinks.smali",
                 methodSignature = ".method public final init(Landroid/content/Context;)V",
                 replacementBody = """.method public final init(Landroid/content/Context;)V
@@ -197,6 +205,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Suppresses short-gap JavaScript stall reports and stops the per-touch event logger
+     * from recording gestures.
+     */
     val WATCHDOG = PatchSet(
         id = "discord_native_watchdog",
         label = "JS Watchdog & Touch Telemetry",
@@ -249,6 +261,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Stubs the native modules that buffer, snapshot and ship performance and telemetry
+     * data.
+     */
     val TELEMETRY_MODULES = PatchSet(
         id = "discord_native_telemetry_modules",
         label = "Disable Native Telemetry Modules",
@@ -321,8 +337,8 @@ object DiscordNativePatches {
 .end method"""
             ),
             SmaliPatch(
-                title = "Ignoring jank report acknowledgements",
-                explanation = "No-ops the acknowledgement that would clear buffered jank reports, which are never collected anyway.",
+                title = "Ignoring jank report acknowledgments",
+                explanation = "No-ops the acknowledgment that would clear buffered jank reports, which are never collected anyway.",
                 smaliPath = "com/discord/jank_stats/JankSessionModule.smali",
                 methodSignature = ".method public ackReports(Lcom/facebook/react/bridge/ReadableArray;)V",
                 replacementBody = """.method public ackReports(Lcom/facebook/react/bridge/ReadableArray;)V
@@ -451,6 +467,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Stubs the debug-level logging entry points that walk the stack on every call. Error,
+     * warning and info logging is kept for diagnostics.
+     */
     val LOG_NOISE = PatchSet(
         id = "discord_native_log_noise",
         label = "Silence Debug Logging",
@@ -481,6 +501,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Stops the permanent logcat capture process, the per-frame metrics listener and the
+     * unused telemetry database.
+     */
     val AUDIT = PatchSet(
         id = "discord_native_audit",
         label = "Disable Logcat Capture, Frame Metrics and Dead Telemetry Database",
@@ -522,10 +546,13 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Shares one OkHttp disk cache between the React Native clients that rebuild it.
+     */
     val OKHTTP_CACHE = PatchSet(
         id = "discord_native_okhttp_cache",
         label = "Share One OkHttp Disk Cache",
-        description = "Memoises the OkHttp disk cache that React Native rebuilds for every client. Three clients opening the same directory thrash each other's journal and re-download the same images; sharing one cache is OkHttp's supported configuration.",
+        description = "Memoizes the OkHttp disk cache that React Native rebuilds for every client. Three clients opening the same directory thrash each other's journal and re-download the same images; sharing one cache is OkHttp's supported configuration.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Reusing the existing disk cache",
@@ -573,6 +600,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Moves React Native's request interceptors onto OkHttp's application list, where
+     * answering a request with a synthetic 204 does not kill the process.
+     */
     val INTERCEPTORS = PatchSet(
         id = "discord_native_interceptors",
         label = "Stop the Blocklist Interceptor Killing the Process",
@@ -588,6 +619,9 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Cuts off the JavaScript resource-usage polls and the native counters behind them.
+     */
     val JS_POLLS = PatchSet(
         id = "discord_native_js_polls",
         label = "Stop JavaScript Diagnostic Polls",
@@ -663,6 +697,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Stubs the React Native systrace module, which only emitted debug trace events for
+     * the JavaScript bridge.
+     */
     val SYSTRACE = PatchSet(
         id = "discord_native_systrace",
         label = "Disable Systrace Instrumentation",
@@ -727,6 +765,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Returns early from the crash-reporting entry points that still ran and logged while
+     * reporting is off.
+     */
     val CRASH_LOGCAT = PatchSet(
         id = "discord_native_crash_logcat",
         label = "Suppress Crash-Reporting Logcat Spam",
@@ -822,7 +864,7 @@ object DiscordNativePatches {
             ),
             SmaliPatch(
                 title = "Skipping last-crash persistence when reporting is off",
-                explanation = "Returns immediately from the routine that writes the last crash to disk, so nothing is serialised or stored.",
+                explanation = "Returns immediately from the routine that writes the last crash to disk, so nothing is serialized or stored.",
                 smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
                 anchor = """    :try_start_0
     iget-object v0, p2, Lio/sentry/f4;->d:Lio/sentry/protocol/v;""",
@@ -872,6 +914,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Stops contact and installed-app fingerprinting and pins the React Native Fabric
+     * flags to React Native's defaults.
+     */
     val PRIVACY = PatchSet(
         id = "discord_native_privacy",
         label = "Cut Contact and Installed-App Fingerprinting",
@@ -936,6 +982,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Stubs the resource-usage sampler, the performance tracing loop and the jank
+     * aggregator.
+     */
     val RESOURCE_MONITORS = PatchSet(
         id = "discord_native_resource_monitors",
         label = "Disable Resource Monitor Collection",
@@ -1010,6 +1060,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Removes the profiler dump and parse that runs when the JavaScript thread has
+     * stalled, the Rust panic reporter and per-transaction tracing.
+     */
     val CALL_PATH = PatchSet(
         id = "discord_native_call_path",
         label = "Strip Work From the Call and Stall Path",
@@ -1088,6 +1142,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Fixes the video renderer's UI-thread stall, logs the media callback failures that
+     * were dropped, and keeps the media engine alive after one failure.
+     */
     val MEDIA = PatchSet(
         id = "discord_native_media",
         label = "Media Engine and Voice Call Fixes",
@@ -1219,6 +1277,10 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Keeps the microphone and camera foreground-service types while the app is
+     * backgrounded and falls through to the next candidate when a type is not permitted.
+     */
     val FOREGROUND_SERVICE = PatchSet(
         id = "discord_native_foreground_service",
         label = "Keep Calls on a Microphone Foreground Service",
@@ -1252,6 +1314,9 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Pins Discord's server-driven performance experiments to the cheapest treatment.
+     */
     val EXPERIMENTS = PatchSet(
         id = "discord_native_experiments",
         label = "Force Cheaper Performance Experiments",
@@ -1327,6 +1392,7 @@ object DiscordNativePatches {
         )
     )
 
+    /** Every set this object defines. */
     val ALL = listOf(
         SENTRY,
         DEEP_LINKS,

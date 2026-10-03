@@ -6,6 +6,13 @@ import dev.sleepy.app.model.StepResult
 import dev.sleepy.app.model.StepStatus
 import java.security.MessageDigest
 
+/**
+ * Patches Hermes bytecode bundles in place, without moving tables or offsets.
+ *
+ * The patcher replaces the Sentry DSN envelope endpoint with an unreachable address of the same
+ * length, and rewrites individual function bodies with a stub, padding the remaining bytes with
+ * `AsyncBreakCheck` opcodes. Every change keeps the byte offsets in the bundle the same.
+ */
 object HermesPatcher {
 
     /**
@@ -18,14 +25,19 @@ object HermesPatcher {
 
     private const val NOP_ASYNC_BREAK_CHECK = 0x7E.toByte()
 
-    // HBC v98 opcodes, taken from hermes-decomp's own Bytecode98.json rather than from
-    // memory: LoadConstUInt8 = 0x8b, LoadConstUndefined = 0x93, LoadConstNull = 0x94,
+    // HBC v98 opcodes, taken from hermes-decomp's own Bytecode98.json:
+    // LoadConstUInt8 = 0x8b, LoadConstUndefined = 0x93, LoadConstNull = 0x94,
     // LoadConstTrue = 0x95, LoadConstFalse = 0x96, Ret = 0x76. Each takes a Reg8 operand.
-    private val STUB_LOAD_CONST_UNDEFINED = byteArrayOf(0x93.toByte(), 0x00, 0x76.toByte(), 0x00) // LoadConstUndefined r0; Ret r0
-    private val STUB_LOAD_CONST_FALSE = byteArrayOf(0x96.toByte(), 0x00, 0x76.toByte(), 0x00)     // LoadConstFalse r0; Ret r0
-    private val STUB_LOAD_CONST_NULL = byteArrayOf(0x94.toByte(), 0x00, 0x76.toByte(), 0x00)      // LoadConstNull r0; Ret r0
-    private val STUB_LOAD_CONST_TRUE = byteArrayOf(0x95.toByte(), 0x00, 0x76.toByte(), 0x00)      // LoadConstTrue r0; Ret r0
-    private val STUB_LOAD_CONST_ZERO = byteArrayOf(0x8b.toByte(), 0x00, 0x00, 0x76.toByte(), 0x00) // LoadConstUInt8 r0, 0; Ret r0
+    private val STUB_LOAD_CONST_UNDEFINED =
+        byteArrayOf(0x93.toByte(), 0x00, 0x76.toByte(), 0x00)  // LoadConstUndefined r0; Ret r0
+    private val STUB_LOAD_CONST_FALSE =
+        byteArrayOf(0x96.toByte(), 0x00, 0x76.toByte(), 0x00)  // LoadConstFalse r0; Ret r0
+    private val STUB_LOAD_CONST_NULL =
+        byteArrayOf(0x94.toByte(), 0x00, 0x76.toByte(), 0x00)  // LoadConstNull r0; Ret r0
+    private val STUB_LOAD_CONST_TRUE =
+        byteArrayOf(0x95.toByte(), 0x00, 0x76.toByte(), 0x00)  // LoadConstTrue r0; Ret r0
+    private val STUB_LOAD_CONST_ZERO =
+        byteArrayOf(0x8b.toByte(), 0x00, 0x00, 0x76.toByte(), 0x00)  // LoadConstUInt8 r0, 0; Ret r0
 
     /**
      * Validates whether [bytes] begins with the Hermes bytecode magic header.
@@ -50,12 +62,15 @@ object HermesPatcher {
     }
 
     /**
-     * In-place length-preserving Sentry DSN neutralization and Hermes bytecode SHA-1 footer re-hash.
-     * Pure Kotlin implementation matching core.py patch_js_sentry_dsn.
+     * In-place length-preserving Sentry DSN neutralization and Hermes bytecode SHA-1 footer
+     * re-hash. Pure Kotlin implementation matching core.py patch_js_sentry_dsn.
      */
     fun nullifySentryDsn(bundleBytes: ByteArray): Pair<ByteArray, StepResult?> {
         val bundleString = String(bundleBytes, Charsets.ISO_8859_1)
-        val regex = Regex("https://[0-9a-z]+\\.ingest\\.sentry\\.io/api/\\d+/envelope/\\?sentry_version=\\d+&sentry_key=[0-9a-f]+&sentry_client=[A-Za-z0-9._%]+")
+        val regex = Regex(
+            "https://[0-9a-z]+\\.ingest\\.sentry\\.io/api/\\d+/envelope/" +
+                "\\?sentry_version=\\d+&sentry_key=[0-9a-f]+&sentry_client=[A-Za-z0-9._%]+"
+        )
         val match = regex.find(bundleString)
         if (match != null) {
             val orig = match.value
@@ -69,8 +84,10 @@ object HermesPatcher {
 
             return patched to StepResult(
                 title = "Nullifying JS Sentry DSN",
-                explanation = "Replaces Sentry envelope ingest endpoint with invalid 0.0.0.0 in JavaScript bytecode to drop crash telemetry",
-                technicalTarget = "assets/index.android.bundle :: sentry.io/api -> https://0.0.0.0/...",
+                explanation = "Replaces Sentry envelope ingest endpoint with invalid 0.0.0.0 in " +
+                    "JavaScript bytecode to drop crash telemetry",
+                technicalTarget = "assets/index.android.bundle :: sentry.io/api -> " +
+                    "https://0.0.0.0/...",
                 status = StepStatus.OK
             )
         }
@@ -78,13 +95,15 @@ object HermesPatcher {
     }
 
     /**
-     * Patches a Hermes function in-place in Modern12 (HBC v97+) bytecode without moving tables or offsets.
-     * Rewrites function bytecode prologue with the stub and pads remaining bytes with AsyncBreakCheck (0x7E).
+     * Patches a Hermes function in-place in Modern12 (HBC v97+) bytecode without moving tables
+     * or offsets. Rewrites the function bytecode prologue with the stub and pads the remaining
+     * bytes with AsyncBreakCheck (0x7E).
      */
     fun patchFunctionInPlace(bundleBytes: ByteArray, patch: HermesPatch): StepResult {
         val title = patch.title ?: "hermes: ${patch.functionName} (fn ${patch.functionId})"
         val explanation = patch.explanation
-        val technicalTarget = "Hermes fn ${patch.functionId} (${patch.functionName}) -> ${patch.hasmStub.trim().lines().firstOrNull() ?: "stub"}"
+        val technicalTarget = "Hermes fn ${patch.functionId} (${patch.functionName}) -> " +
+            "${patch.hasmStub.trim().lines().firstOrNull() ?: "stub"}"
 
         if (!isHermesBytecode(bundleBytes)) {
             return StepResult(
@@ -102,7 +121,9 @@ object HermesPatcher {
                 explanation = explanation,
                 technicalTarget = technicalTarget,
                 status = StepStatus.FAIL,
-                detail = "Invalid function ID: ${patch.functionId}"
+                detail = "Invalid function ID: ${patch.functionId}",
+                // Nothing was written, so the bundle that ships is the one that was there.
+                failureIsFatal = false
             )
 
         val location = HermesFunctionTable.locate(bundleBytes, fid)
@@ -112,33 +133,43 @@ object HermesPatcher {
                 explanation = explanation,
                 technicalTarget = technicalTarget,
                 status = StepStatus.FAIL,
-                detail = "Function $fid is outside this bundle's function table, or the bundle uses a Hermes bytecode " +
-                    "version whose header layout is not implemented, so nothing was written."
+                detail = "Function $fid is outside this bundle's function table, or the bundle " +
+                    "uses a Hermes bytecode version whose header layout is not implemented, so " +
+                    "nothing was written.",
+                // Nothing was written, so the bundle that ships is the one that was there.
+                failureIsFatal = false
             )
         }
 
         val bodyOffset = location.bodyOffset
         val bcSize = location.bytecodeSize
 
-        // The shape is stated by the patch, never inferred from its documentation text.
-        // Inferring it silently turned an awaiting caller's promise into `undefined`, which
-        // is the failure mode the reference's PROMISE_TARGETS table exists to prevent.
+        // The patch states the shape; the patcher does not infer it from the patch's
+        // documentation text. Inferring it turned an awaiting caller's promise into
+        // `undefined` with no error reported, which is the failure mode the reference's
+        // PROMISE_TARGETS table exists to prevent.
         val stub = when (patch.stubShape) {
             HermesStubShape.UNDEFINED -> STUB_LOAD_CONST_UNDEFINED
             HermesStubShape.FALSE -> STUB_LOAD_CONST_FALSE
             HermesStubShape.TRUE -> STUB_LOAD_CONST_TRUE
             HermesStubShape.NULL -> STUB_LOAD_CONST_NULL
             HermesStubShape.ZERO -> STUB_LOAD_CONST_ZERO
-            HermesStubShape.PROMISE -> return StepResult(
-                title = title,
-                explanation = explanation,
-                technicalTarget = technicalTarget,
-                status = StepStatus.FAIL,
-                detail = "This stub has to return a resolved promise, which means emitting GetGlobalObject/TryGetById/" +
-                    "GetByIdShort against the bundle's own string table — the identifiers for \"Promise\" and " +
-                    "\"resolve\" are per-bundle, and resolving them is not implemented. Returning undefined instead " +
-                    "would break every caller that awaits this function, so nothing was written."
-            )
+            HermesStubShape.PROMISE -> {
+                return StepResult(
+                    title = title,
+                    explanation = explanation,
+                    technicalTarget = technicalTarget,
+                    status = StepStatus.FAIL,
+                    detail = "This stub has to return a resolved promise, which means emitting " +
+                        "GetGlobalObject/TryGetById/GetByIdShort against the bundle's own string " +
+                        "table—the identifiers for \"Promise\" and \"resolve\" are per-bundle, " +
+                        "and resolving them is not implemented. Returning undefined " +
+                        "instead would break every caller that awaits this function, so " +
+                        "nothing was written.",
+                    // Nothing was written, so the bundle that ships is the one that was there.
+                    failureIsFatal = false
+                )
+            }
         }
 
         val start = bodyOffset
@@ -150,7 +181,10 @@ object HermesPatcher {
                 explanation = explanation,
                 technicalTarget = technicalTarget,
                 status = StepStatus.FAIL,
-                detail = "Function bytecode bounds [$start..${start + len}] exceed bundle size (${bundleBytes.size})"
+                detail = "Function bytecode bounds [$start..${start + len}] exceed bundle size " +
+                    "(${bundleBytes.size})",
+                // Nothing was written, so the bundle that ships is the one that was there.
+                failureIsFatal = false
             )
         }
 
@@ -178,6 +212,17 @@ object HermesPatcher {
         )
     }
 
+    /**
+     * Applies Sentry DSN neutralization and every Hermes function patch to a bundle.
+     *
+     * DSN neutralization runs first, then each function patch in order, and the SHA-1 footer is
+     * recomputed when at least one patch reported [StepStatus.OK].
+     *
+     * @param bundleBytes The Hermes bytecode bundle to patch.
+     * @param patches The patches to apply, in the order given.
+     * @param onPatchStart Called before each patch is applied. Default: null.
+     * @return The patched bundle and one [StepResult] for each patch.
+     */
     fun applyPatches(
         bundleBytes: ByteArray,
         patches: List<HermesPatch>,

@@ -1,5 +1,6 @@
 package dev.sleepy.app.ui.screens
 
+import android.animation.ValueAnimator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,50 +39,66 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.PatchProgress
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.ui.components.StepLogItem
+import dev.sleepy.app.ui.state.ScrollMotion
+import dev.sleepy.app.ui.state.newestStepIndex
+import dev.sleepy.app.ui.state.phaseCopy
+import dev.sleepy.app.ui.state.resultActionLabel
+import dev.sleepy.app.ui.state.scrollMotionFor
+import dev.sleepy.app.ui.state.STOPPED_COPY
 import dev.sleepy.app.viewmodel.PatchViewModel
-import kotlinx.coroutines.delay
 
 /**
- * Live view of a patch run.
+ * The progress screen for a running patch: the current phase, the reasons for it, and the log of
+ * changes.
  *
- * The header answers "what is happening right now and why", and the list underneath is a
- * plain-language account of every change. The exact class, method or function behind each
- * line is one tap away rather than in the reader's face, but it is always there — this is a
- * tool that rewrites someone's app, so the mechanism stays inspectable.
+ * The phase card states what is happening and why, and the list underneath is a plain-language
+ * account of every change. The exact class, method or function behind each line is one tap away
+ * rather than shown in the row itself, but it remains available—this tool rewrites an app, so
+ * the mechanism stays inspectable.
+ *
+ * @param viewModel The view model that supplies the progress, step log and cancellation.
+ * @param onFinished Called when the user opens the result screen.
+ * @param onExit Called when the user leaves for the app list after a stopped run.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProgressScreen(
     viewModel: PatchViewModel,
-    onFinished: () -> Unit
+    onFinished: () -> Unit,
+    onExit: () -> Unit
 ) {
     val progress by viewModel.progress.collectAsState()
     val steps by viewModel.stepLog.collectAsState()
     val isPatching by viewModel.isPatching.collectAsState()
+    val stopped by viewModel.stopped.collectAsState()
 
     var showCancelDialog by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
+    // The newest row is scrolled to only while the platform reports that animations are enabled.
+    // With them off, the list jumps rather than animates, so the same movement happens without the
+    // motion a reader who turned animations off asked not to see.
     LaunchedEffect(steps.size) {
-        if (steps.isNotEmpty()) {
-            listState.animateScrollToItem(steps.size - 1)
+        val target = newestStepIndex(steps.size) ?: return@LaunchedEffect
+        when (scrollMotionFor(ValueAnimator.areAnimatorsEnabled())) {
+            ScrollMotion.ANIMATED -> listState.animateScrollToItem(target)
+            ScrollMotion.IMMEDIATE -> listState.scrollToItem(target)
         }
     }
 
     BackHandler(enabled = isPatching) {
         showCancelDialog = true
-    }
-
-    LaunchedEffect(progress) {
-        if (progress is PatchProgress.Done || progress is PatchProgress.Failed) {
-            delay(600)
-            onFinished()
-        }
     }
 
     val appliedCount = steps.count { it.status == StepStatus.OK }
@@ -122,7 +140,29 @@ fun ProgressScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            CurrentPhaseCard(progress = progress)
+            // A stopped run leaves the pipeline idle with its step log still on screen. Without a
+            // branch for that state the card that follows falls through to "Getting ready" and its
+            // spinner, which reports a run about to start rather than one that was stopped.
+            if (stopped && progress is PatchProgress.Idle) {
+                StoppedCard(onExit = onExit)
+            } else {
+                CurrentPhaseCard(progress = progress)
+
+                // A finished run and a failed one both have a result screen, and the reader opens
+                // it rather than being taken there. The label states which of the two is waiting.
+                resultActionLabel(progress)?.let { label ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = onFinished,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Text(label, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -135,7 +175,9 @@ fun ProgressScreen(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { heading() }
                 )
                 if (steps.isNotEmpty()) {
                     Text(
@@ -154,7 +196,7 @@ fun ProgressScreen(
 
             if (steps.isEmpty()) {
                 Text(
-                    text = "Starting up — nothing has been changed yet.",
+                    text = "Starting up—nothing has been changed yet.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -188,7 +230,8 @@ fun ProgressScreen(
             },
             text = {
                 Text(
-                    text = "Nothing will be installed. The app you started with is untouched — only the work in progress is discarded.",
+                    text = "Nothing will be installed. The app you started with is untouched—" +
+                        "only the work in progress is discarded.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -215,51 +258,10 @@ fun ProgressScreen(
     }
 }
 
-/** The headline card: what phase we are in, and why that phase exists. */
+/** The headline card: the current phase and the reason for it. */
 @Composable
 private fun CurrentPhaseCard(progress: PatchProgress) {
-    val title = when (val p = progress) {
-        is PatchProgress.Downloading -> "Downloading the app"
-        is PatchProgress.Decoding -> "Opening the package"
-        is PatchProgress.MergingSplits -> "Adding the missing native libraries"
-        is PatchProgress.Patching -> p.step
-        is PatchProgress.Assembling -> "Rebuilding the APK"
-        is PatchProgress.Signing -> "Signing the result"
-        is PatchProgress.Done -> "Finished"
-        is PatchProgress.Failed -> "Something went wrong"
-        PatchProgress.Idle -> "Getting ready"
-    }
-
-    val why = when (val p = progress) {
-        is PatchProgress.Downloading -> "Fetching the untouched original so every change can be traced."
-        is PatchProgress.Decoding -> "Reading the package in memory. The file on disk is never modified."
-        is PatchProgress.MergingSplits ->
-            if (p.librariesMerged > 0) {
-                "This build ships its native code separately. Putting it back is what stops the app crashing on launch."
-            } else {
-                "Checking the extra pieces this build was split into."
-            }
-        is PatchProgress.Patching -> p.explanation ?: "Applying the changes you selected."
-        is PatchProgress.Assembling -> "Putting the modified files back and re-aligning the archive."
-        is PatchProgress.Signing -> "Android refuses to install an unsigned app, and the result is verified afterwards."
-        is PatchProgress.Done -> "The patched app is ready to install."
-        is PatchProgress.Failed -> p.message
-        PatchProgress.Idle -> "Preparing the patching engine."
-    }
-
-    val detail: String? = when (val p = progress) {
-        is PatchProgress.Downloading -> {
-            val received = p.bytesReceived / (1024 * 1024.0)
-            val total = p.bytesTotal / (1024 * 1024.0)
-            if (p.bytesTotal > 0) "%.1f of %.1f MB".format(received, total) else "%.1f MB so far".format(received)
-        }
-        is PatchProgress.MergingSplits ->
-            if (p.librariesMerged > 0) "${p.librariesMerged} libraries for ${p.abis.joinToString(", ")}" else null
-        is PatchProgress.Patching ->
-            if (p.total > 0) "Step ${(p.current + 1).coerceAtMost(p.total)} of ${p.total}" else null
-        is PatchProgress.Failed -> p.detail?.lineSequence()?.take(3)?.joinToString("\n")
-        else -> null
-    }
+    val copy = phaseCopy(progress)
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -269,26 +271,37 @@ private fun CurrentPhaseCard(progress: PatchProgress) {
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            // The title and the reason form one polite live region, so a screen reader announces
+            // each new phase once. The detail line and the progress bar are siblings rather than
+            // part of it: they change on every tick, and a live region around them announces
+            // every one of those changes.
+            Column(
+                modifier = Modifier.clearAndSetSemantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = copy.announcement
+                }
+            ) {
+                Text(
+                    text = copy.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
 
-            Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
-                text = why,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                Text(
+                    text = copy.why,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-            AnimatedVisibility(visible = detail != null) {
+            AnimatedVisibility(visible = copy.detail != null) {
                 Column {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = detail.orEmpty(),
+                        text = copy.detail.orEmpty(),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -299,7 +312,8 @@ private fun CurrentPhaseCard(progress: PatchProgress) {
 
             val ratio = when (val p = progress) {
                 is PatchProgress.Downloading -> if (p.bytesTotal > 0) p.percent / 100f else null
-                is PatchProgress.Patching -> if (p.total > 0) p.current.toFloat() / p.total.toFloat() else null
+                is PatchProgress.Patching ->
+                    if (p.total > 0) p.current.toFloat() / p.total.toFloat() else null
                 is PatchProgress.Done -> 1f
                 else -> null
             }
@@ -321,6 +335,47 @@ private fun CurrentPhaseCard(progress: PatchProgress) {
                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     color = MaterialTheme.colorScheme.primary,
                 )
+            }
+        }
+    }
+}
+
+/** The card shown after a run is stopped, which opens the way back to the app list. */
+@Composable
+private fun StoppedCard(onExit: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = STOPPED_COPY.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = STOPPED_COPY.why,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Button(
+                onClick = onExit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Text(STOPPED_COPY.action, style = MaterialTheme.typography.labelLarge)
             }
         }
     }

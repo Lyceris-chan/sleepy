@@ -1,4 +1,4 @@
-# smali/baksmali — keep all public API
+# smali/baksmali—keep all public API
 -keep class com.android.tools.smali.** { *; }
 -dontwarn com.android.tools.smali.**
 -dontwarn org.antlr.**
@@ -6,7 +6,7 @@
 -dontwarn java.awt.**
 -dontwarn javax.swing.**
 
-# apksig — keep signing classes
+# apksig—keep signing classes
 -keep class com.android.apksig.** { *; }
 -dontwarn com.android.apksig.**
 -dontwarn sun.security.**

@@ -15,56 +15,57 @@ import dev.sleepy.app.model.SmaliPatch
  * - work361/patch_premium_settings.py (The premium rows in the profile's settings list)
  *
  * patch_dex.py (OctoGram 3.6.0) is deliberately not transcribed: no source here offers a 3.6.0
- * build, so its entries could never run, and a patch that cannot run is a row in the selection
- * list that lies about what will happen. The edits it describes are noted where they would have
- * gone, so adding a 3.6.0 source is a matter of porting them rather than rediscovering them.
+ * build, so its entries cannot run, and a patch that cannot run is a row in the selection
+ * list that describes a change it does not make. The edits it describes are noted where they would
+ * have gone, so adding a 3.6.0 source means porting them rather than rediscovering them.
  *
- * Nothing here is invented: every entry resolves to a real edit in one of those scripts.
- * All DEX container assignments are resolved dynamically at runtime by inspecting the
- * target APK's DEX headers, so no patch hardcodes a container. Version tags ensure
- * version-specific obfuscated class names are targeted accurately without conflicting
- * with unrelated classes.
+ * Every entry corresponds to an edit in one of those scripts. The engine resolves all DEX
+ * container assignments at runtime by inspecting the target APK's DEX headers, so no patch
+ * hardcodes a container. Version tags mark an entry for one build, so version-specific obfuscated
+ * class names are targeted without conflicting with unrelated classes.
  *
- * Two deliberate divergences from the reference scripts, both behaviour-preserving:
- * stub bodies here use `.locals 0` where the scripts reuse the method's original
- * `.registers N`. With a body that only returns, the two assemble to equivalent code.
- * The reference's own line-anchored edits are expressed as unique-string anchors.
+ * Two deliberate divergences from the reference scripts, both behavior-preserving: stub bodies
+ * here use `.locals 0` where the scripts reuse the method's original `.registers N`. With a body
+ * that only returns, the two assemble to equivalent code. The reference's own line-anchored edits
+ * are expressed as unique-string anchors.
  *
- * An entry's `title` and `explanation` are read by the user: while it runs, and in the selection
- * screen's technical panel, which lists both for every entry under the class and method it touches.
- * They are written for that reader — what the entry suppresses, fetches or shows, in terms of what
- * would otherwise happen — while the class, method and version stay in the entry's own fields.
+ * The user reads an entry's `title` and `explanation` while a patch runs and in the selection
+ * screen's technical panel, which lists both for every entry under the class and method it
+ * touches. They are written for that reader—what the entry suppresses, fetches or shows, in
+ * terms of what would otherwise happen—while the class, method and version stay in the entry's
+ * own fields.
  *
- * The levels the [LOG_EMITTERS] emitters are described by were read from the 3.6.1 build's own
- * method bodies: R8's single-letter names carry no level of their own, and the bodies differ only
- * in which emitter they funnel into and at which level.
+ * The levels of the [LOG_EMITTERS] entries come from the 3.6.1 build's own method bodies: R8's
+ * single-letter names do not indicate a level, and the bodies differ only in which emitter they
+ * funnel into and at which level.
  *
- * The edits below are grouped by the choice each belongs to, and [OctoGramPatchItems] is the table
+ * The following edits are grouped by the choice each belongs to, and [OctoGramPatchItems] is the table
  * that pairs a group with an item the user can switch: the item's name, the feature it belongs to
- * and the line saying what switching it on does. A set here therefore declares only its own switch
- * and hands the engine a generator rather than a patch list, because the engine applies a set's
- * static patches whether or not they are selected and asks only a generator for the subset a
- * selection names — which is the only way a set whose items are switched one at a time can say so.
+ * and the line describing what switching it on does. A set here therefore declares only its own
+ * switch and passes the engine a generator rather than a patch list, because the engine applies a
+ * set's static patches whether or not they are selected and calls a generator only for the subset
+ * a selection names—which is the only way a set whose items are switched one at a time can
+ * express that.
  */
 object OctoGramPatches {
 
     /**
-     * The build the manifest's OctoGram source carries — see `sources.json`.
+     * The build named by the manifest's OctoGram source—see `sources.json`.
      *
      * Every entry here is tagged for this one build or left untagged, because an entry tagged for
-     * another build can never run on any source this app offers. The reference scripts' 3.6.0
+     * another build cannot run on any source this app offers. The reference scripts' 3.6.0
      * entries are therefore not ported at all.
      *
      * The entries spell their tags out rather than reading this constant, and this is the value the
      * content test holds every tag to: a tag mistyped in one entry then fails that test, instead of
-     * silently following whatever this constant was last changed to.
+     * matching whatever value this constant was last changed to.
      */
     const val REGISTERED_BUILD = "3.6.1"
 
     /**
      * The edit that stops the sponsored rows being built into a channel's chat list.
      *
-     * 3.6.1 (build 38275): ChatActivity.If -> return-void. The row itself is never inserted, so the
+     * 3.6.1 (build 38275): ChatActivity.If -> return-void. The row itself is not inserted, so the
      * list is built without it rather than with it hidden.
      */
     internal val SPONSORED_CHAT_LIST_ROWS = listOf(
@@ -89,7 +90,7 @@ object OctoGramPatches {
      *
      * 3.6.1 (build 38275): MessagesController.J1 -> return null. It returns the holder of the
      * messages that would fill a sponsored row, and every caller tests its result for null
-     * straight away, which is what makes a null return safe here.
+     * straight away, so a null return takes the callers' existing null branch.
      */
     internal val SPONSORED_REQUEST = listOf(
         SmaliPatch(
@@ -110,8 +111,9 @@ object OctoGramPatches {
         )
     )
 
-    // 3.6.1 (build 38275). The reference's 3.6.0 pair for this set — org/telegram/ui/o.ss(Z)V and
-    // org/telegram/messenger/m0.sc(J) — is not ported, for the reason in the header.
+    // 3.6.1 (build 38275). The reference's 3.6.0 pair for this set—org/telegram/ui/o.ss(Z)V and
+    // org/telegram/messenger/m0.sc(J)—is not ported, for the reason in the header.
+    /** The set that blocks sponsored posts in channels. */
     val SPONSORED_MSGS = octoGramSet(
         id = "octogram_sponsored_msgs",
         label = "Block sponsored posts in channels",
@@ -142,8 +144,10 @@ object OctoGramPatches {
         )
     )
 
-    // The reference's 3.6.0 variant for this set — y5l.Q() — is not ported, for the reason in the
-    // header.
+    // The reference's 3.6.0 variant for this set—y5l.Q()—is not ported, for the reason in
+    // the header.
+
+    /** The set that removes the ads shown between photos. */
     val PHOTO_VIEWER_ADS = octoGramSet(
         id = "octogram_photo_viewer_ads",
         label = "Remove the ads between photos",
@@ -179,8 +183,10 @@ object OctoGramPatches {
         )
     )
 
-    // The reference's 3.6.0 variant for this set — be6.m1(TLObject) — is not ported, for the reason
+    // The reference's 3.6.0 variant for this set—be6.m1(TLObject)—is not ported, for the reason
     // in the header.
+
+    /** The set that filters sponsored channels and bots out of search results. */
     val SEARCH_ADS = octoGramSet(
         id = "octogram_search_ads",
         label = "Filter sponsored channels out of search",
@@ -198,7 +204,7 @@ object OctoGramPatches {
     internal val OTA_UPDATE_CHECK = listOf(
         SmaliPatch(
             title = "The GitHub update request (3.6.1)",
-            explanation = "Slices dispatcher case :pswitch_160 so the no-update callback is signalled directly and no request to GitHub is ever made. " +
+            explanation = "Slices dispatcher case :pswitch_160 so the no-update callback is signaled directly and no request to GitHub is ever made. " +
                 "Calling the callback keeps the update UI from waiting forever on a reply that will not arrive.",
             versionTag = "3.6.1",
             smaliPath = "j6d.smali",
@@ -217,8 +223,10 @@ object OctoGramPatches {
         )
     )
 
-    // The reference's 3.6.0 variant for this set — hxk.o0(Lhxk$i) — is not ported, for the reason in
-    // the header.
+    // The reference's 3.6.0 variant for this set—hxk.o0(Lhxk$i)—is not ported, for the reason
+    // in the header.
+
+    /** The set that stops the built-in GitHub update check. */
     val OTA_UPDATER = octoGramSet(
         id = "octogram_ota_updater",
         label = "Stop the built-in update check",
@@ -289,6 +297,7 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that drops navigation to the Premium upsell in the app's routers. */
     val PREMIUM_UPSELL = octoGramSet(
         id = "octogram_premium_upsell",
         label = "Reduce premium paywall entry points (partial)",
@@ -304,9 +313,9 @@ object OctoGramPatches {
     /**
      * The twelve emitters of OctoGram's log class, `cn8`.
      *
-     * The single letters are R8's names and say nothing about the level; the level each funnels into,
-     * and whether it carries a throwable, is what the entries' own explanations carry instead, read
-     * from the bodies in the 3.6.1 build.
+     * The single letters are R8's names and do not indicate a level; the entries' own explanations
+     * state the level each funnels into and whether it takes a throwable, read from the bodies in
+     * the 3.6.1 build.
      */
     internal val LOG_EMITTERS = listOf(
         SmaliPatch(
@@ -320,7 +329,7 @@ object OctoGramPatches {
         ),
         SmaliPatch(
             title = "Log emitter b (debug, tag and message)",
-            explanation = "Writes the caller's tag and message. The same two arguments as d, k and o — these four " +
+            explanation = "Writes the caller's tag and message. The same two arguments as d, k and o—these four " +
                 "differ only in the level they write at.",
             versionTag = "3.6.1",
             smaliPath = "cn8.smali",
@@ -329,7 +338,7 @@ object OctoGramPatches {
         ),
         SmaliPatch(
             title = "Log emitter d (error, tag and message)",
-            explanation = "Writes the caller's tag and message. The same two arguments as b, k and o — these four " +
+            explanation = "Writes the caller's tag and message. The same two arguments as b, k and o—these four " +
                 "differ only in the level they write at.",
             versionTag = "3.6.1",
             smaliPath = "cn8.smali",
@@ -374,7 +383,7 @@ object OctoGramPatches {
         ),
         SmaliPatch(
             title = "Log emitter k (info, tag and message)",
-            explanation = "Writes the caller's tag and message. The same two arguments as b, d and o — these four " +
+            explanation = "Writes the caller's tag and message. The same two arguments as b, d and o—these four " +
                 "differ only in the level they write at.",
             versionTag = "3.6.1",
             smaliPath = "cn8.smali",
@@ -395,7 +404,7 @@ object OctoGramPatches {
         SmaliPatch(
             title = "Log emitter n (info, message only, redacted)",
             explanation = "The one emitter that redacts before it writes: the message is run through all five of " +
-                "the log class's patterns — tokens, secrets and passwords, ids, and JSON payloads — and then " +
+                "the log class's patterns—tokens, secrets and passwords, ids, and JSON payloads—and then " +
                 "written under the fixed tag OctoLogging. Its job is to keep secrets out of a shared log, and " +
                 "nothing else in the class does that, so with it stubbed nothing is written at all.",
             versionTag = "3.6.1",
@@ -405,7 +414,7 @@ object OctoGramPatches {
         ),
         SmaliPatch(
             title = "Log emitter o (warning, tag and message)",
-            explanation = "Writes the caller's tag and message. The same two arguments as b, d and k — these four " +
+            explanation = "Writes the caller's tag and message. The same two arguments as b, d and k—these four " +
                 "differ only in the level they write at.",
             versionTag = "3.6.1",
             smaliPath = "cn8.smali",
@@ -415,7 +424,7 @@ object OctoGramPatches {
         SmaliPatch(
             title = "Log emitter p (stack trace into the log file)",
             explanation = "Writes a throwable's stack trace into the log-file writer it is handed rather than to " +
-                "logcat — \"Caused by: \" and each frame, following the cause chain. This is the path by which " +
+                "logcat—\"Caused by: \" and each frame, following the cause chain. This is the path by which " +
                 "a crash reaches the log file on disk.",
             versionTag = "3.6.1",
             smaliPath = "cn8.smali",
@@ -427,8 +436,8 @@ object OctoGramPatches {
     /**
      * The five uploaders on the app-log path.
      *
-     * The reference describes all five as log-only, so each becomes a return-void; three of them live
-     * in PremiumPreviewFragment.
+     * The reference describes all five as log-only, so each becomes a return-void; three of them
+     * live in PremiumPreviewFragment.
      */
     internal val LOG_UPLOADERS = listOf(
         SmaliPatch(
@@ -478,6 +487,7 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that silences OctoGram's own diagnostic log and its uploaders. */
     val OCTO_LOGGER = octoGramSet(
         id = "octogram_logger",
         label = "Silence OctoGram's own diagnostic log",
@@ -492,14 +502,14 @@ object OctoGramPatches {
      * The four writes of the client's global logging switch, pinned to `false`.
      *
      * The switch is read in roughly 250 places, so forcing the single value it is written
-     * with disables logging app-wide far more cheaply than silencing each reader. The four
-     * writes live in four different classes, and each one is forced independently because
-     * any of them can be the one that runs.
+     * with disables logging app-wide without editing every reader. The four writes live in
+     * four different classes, and each one is forced independently because any of them can
+     * be the one that runs.
      *
-     * sx0.smali:182 — note the reference splices the constant before the store and the register is
+     * In sx0.smali:182 the reference splices the constant before the store, and the register is
      * then read again a few instructions later by the branch that installs the custom
-     * uncaught-exception handler, so that handler is no longer installed. That is the shipped
-     * reference behaviour, reproduced rather than "fixed".
+     * uncaught-exception handler, so that handler is no longer installed. This side effect is the
+     * shipped reference behavior, reproduced rather than "fixed".
      */
     internal val LOGGING_GATE_WRITES = listOf(
         SmaliPatch(
@@ -541,23 +551,28 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that pins Telegram's global logging switch to false. */
     val LOGGING_GATE = octoGramSet(
         id = "octogram_logging_gate",
         label = "Turn Telegram's logging off app-wide",
         description = "Telegram decides whether to write its own logs from a single flag, and reads it in hundreds " +
-            "of places — the database layer, network buffers, VoIP among them. Pinning the flag to false at the " +
+            "of places—the database layer, network buffers, VoIP among them. Pinning the flag to false at the " +
             "four sites that write it turns logging off everywhere at once, instead of editing every reader. " +
-            "One consequence is part of the shipped behaviour: the same flag also decides whether a custom " +
+            "One consequence is part of the shipped behavior: the same flag also decides whether a custom " +
             "uncaught-exception handler is installed, so with it false that handler is not installed either.",
     )
 
     /**
      * The one edit each Firebase set makes: its registrar's component list, emptied.
      *
-     * Untagged, because the registrar ships identically in every build and needs no version to be
+     * Untagged, because the registrar has shipped identically across the supported builds and needs no version to be
      * found in. Only the obfuscated Telegram classes are renamed between builds.
      */
-    private fun firebaseRegistrarEdit(smaliPath: String, title: String, explanation: String) = SmaliPatch(
+    private fun firebaseRegistrarEdit(
+        smaliPath: String,
+        title: String,
+        explanation: String
+    ) = SmaliPatch(
         title = title,
         explanation = explanation,
         versionTag = null,
@@ -583,6 +598,7 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that disables Firebase A/B testing. */
     val FIREBASE_ABT = octoGramSet(
         id = "octogram_firebase_abt",
         label = "Disable Firebase A/B testing",
@@ -599,6 +615,7 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that disables Firebase Remote Config. */
     val FIREBASE_REMOTE_CONFIG = octoGramSet(
         id = "octogram_firebase_remoteconfig",
         label = "Disable Firebase Remote Config",
@@ -616,6 +633,7 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that disables the Kotlin wrapper around Remote Config. */
     val FIREBASE_REMOTE_CONFIG_KTX = octoGramSet(
         id = "octogram_firebase_remoteconfig_ktx",
         label = "Disable the Remote Config Kotlin wrapper",
@@ -634,6 +652,7 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that disables Google Play Services data transport. */
     val FIREBASE_DATATRANSPORT = octoGramSet(
         id = "octogram_firebase_datatransport",
         label = "Disable Google Play Services data transport",
@@ -645,24 +664,25 @@ object OctoGramPatches {
     /**
      * OctoGram's own crash reporter, switched off at the call that installs it.
      *
-     * `yb3` is OctoGram's crash-logging subsystem — the strings in it read "Crashlytics", but no
-     * Firebase library is behind them, and this APK contains no crashlytics package at all. `g()` is
-     * its init, called from exactly one place, `LaunchActivity` at startup, and it does four things:
-     * it logs a line, creates the crash-notification channel, installs OctoGram's own
-     * `UncaughtExceptionHandler` (`rx0`), and posts a runnable (`wb3`) that checks for a crash log
-     * left by an earlier run.
+     * `yb3` is OctoGram's crash-logging subsystem: the strings in it contain the word
+     * "Crashlytics", but no Firebase library is behind them, and this APK contains no crashlytics
+     * package at all. `g()` is its init, called from exactly one place, `LaunchActivity` at
+     * startup, and it performs four steps: it logs a line, creates the crash-notification channel,
+     * installs OctoGram's own `UncaughtExceptionHandler` (`rx0`), and posts a runnable (`wb3`) that
+     * checks for a crash log left by an earlier run.
      *
-     * The handler is why this edit exists at all rather than being covered by [LOGGING_GATE]: the
-     * flag that gate pins false decides whether the handler inside `sx0` is installed, and `yb3.g()`
-     * installs a second, independent one on every launch that never consults that flag. With `g()`
-     * stubbed no crash is captured, so the file it would write and the "OctoGram just crashed!"
-     * notification it would raise are both gone.
+     * This handler is why the edit is separate from [LOGGING_GATE]: the flag that gate pins false
+     * determines whether the handler inside `sx0` is installed, and `yb3.g()` installs a second,
+     * independent one on every launch that does not consult that flag. With `g()` stubbed no crash
+     * is captured, so the file it would write and the "OctoGram just crashed!" notification it
+     * would raise are both gone.
      *
-     * Nothing depends on `g()` having run: `yb3.<clinit>` sets its own statics, and `yb3.e()` — the
-     * logs-directory getter the rest of the reporter uses — resolves that directory itself.
+     * Nothing else depends on `g()` having run: `yb3.<clinit>` sets its own statics, and
+     * `yb3.e()`—the logs-directory getter the rest of the reporter uses—resolves that
+     * directory itself.
      *
-     * The reference keeps the method's original `.registers 5` line; a body that only returns reads
-     * no register, so this is `.locals 0`, which assembles to the same code (see the header).
+     * The reference keeps the method's original `.registers 5` line. A body that only returns reads
+     * no register, so this entry uses `.locals 0` (see the header).
      */
     internal val CRASH_REPORTER_STARTUP = listOf(
         SmaliPatch(
@@ -682,6 +702,7 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that stops OctoGram's own crash reporter from being installed. */
     val CRASH_REPORTER = octoGramSet(
         id = "octogram_crash_reporter",
         label = "Switch off OctoGram's own crash reporter",
@@ -697,25 +718,25 @@ object OctoGramPatches {
      *
      * `ProfileActivity.yd()` resets every row index to -1 and then inserts each row by asking a
      * condition and storing the row it took, so replacing the branch with an unconditional `goto`
-     * to the same label leaves that row's index at -1 — hidden, and unclickable for free, because
+     * to the same label leaves that row's index at -1—hidden, and unclickable as well, because
      * the click router matches rows by index and -1 matches nothing.
      *
      * The third edit is the one that makes the other two work. The combined premium-sections row is
      * inserted when *any* of premiumRow, starsRow, tonRow or businessRow is still -1, and skipped
      * only when all five premium-ish rows are present, so hiding the Premium row on its own would
-     * have made the sections row appear in its place. Forcing the first of those checks to jump past
-     * the insert keeps it out of the list altogether. The three are therefore one choice, which is
-     * what [OctoGramPatchItems] offers them as.
+     * have made the sections row appear in its place. Forcing the first of those checks to jump
+     * past the insert keeps it out of the list altogether. The three are therefore one choice, and
+     * [OctoGramPatchItems] offers them as one item.
      *
-     * `starsRow` (Telegram Stars), `tonRow` (TON) and `businessRow` (Telegram Business) are separate
-     * paid products rather than Telegram Premium and are deliberately left visible, so their checks
-     * and their rows are untouched.
+     * `starsRow` (Telegram Stars), `tonRow` (TON) and `businessRow` (Telegram Business) are
+     * separate paid products rather than Telegram Premium and are deliberately left visible, so
+     * their checks and their rows are untouched.
      */
     internal val PREMIUM_SETTINGS_ROWS = listOf(
         SmaliPatch(
             title = "Hiding the Telegram Premium row",
             explanation = "Skips the row insert for premiumRow, so the settings list on your profile has no " +
-                "Telegram Premium row: its index stays at -1, which is also why the row cannot be tapped — the " +
+                "Telegram Premium row: its index stays at -1, which is also why the row cannot be tapped—the " +
                 "click router matches rows by index.",
             versionTag = "3.6.1",
             smaliPath = "org/telegram/ui/ProfileActivity.smali",
@@ -739,11 +760,11 @@ object OctoGramPatches {
                 "the insert to the label the skip path uses.",
             versionTag = "3.6.1",
             smaliPath = "org/telegram/ui/ProfileActivity.smali",
-            // `if-gez v4, :cond_346` alone occurs four times in this class — once for each of the
-            // four checks — so the anchor carries the lines the engine disassembles between the row
-            // index being read and the check, which is what makes this the premiumRow one. The two
-            // `.line` directives are part of that text and are matched exactly as the disassembler
-            // writes them.
+            // `if-gez v4, :cond_346` alone occurs four times in this class—once for each of the
+            // four checks—so the anchor contains the lines the engine disassembles between the
+            // row index being read and the check, which is what identifies this one as the
+            // premiumRow check. The two `.line` directives are part of that text and are matched
+            // exactly as the disassembler writes them.
             anchor = """    iget v4, v0, Lorg/telegram/ui/ProfileActivity;->premiumRow:I
 
     .line 820
@@ -757,13 +778,14 @@ object OctoGramPatches {
         )
     )
 
+    /** The set that hides the premium rows in the profile's settings list. */
     val PREMIUM_SETTINGS = octoGramSet(
         id = "octogram_premium_settings",
         label = "Hide the premium rows in the profile's settings list",
         description = "Takes the premium rows out of the settings list on your profile: the Telegram Premium row, " +
             "the Send a Gift row, and the combined premium-sections row that would otherwise appear in their " +
             "place. The rows share one list and their conditions overlap, so this is one switch rather than " +
-            "three — hiding only the first would put a different premium row on screen. Telegram Stars, TON and " +
+            "three—hiding only the first would put a different premium row on screen. Telegram Stars, TON and " +
             "Telegram Business are separate products and stay visible.",
     )
 
@@ -771,10 +793,10 @@ object OctoGramPatches {
      * One OctoGram set: its own switch, and the edits [OctoGramPatchItems] offers as its items.
      *
      * The set declares no patches of its own. The engine applies a set's patches whether or not
-     * they are selected and asks only a generator for the subset a selection names, so a set whose
-     * edits are switched one at a time has to hand the engine a generator instead. The generator is
+     * they are selected and calls a generator only for the subset a selection names, so a set whose
+     * edits are switched one at a time has to pass the engine a generator instead. The generator is
      * built here rather than asked for by name, because asking [OctoGramPatchItems] for anything
-     * would initialise it, and its entries read the edit groups above — see that file's header for
+     * would initialize it, and its entries read the preceding edit groups—see that file's header for
      * why the two must not reach into each other while building.
      */
     private fun octoGramSet(id: String, label: String, description: String) = PatchSet(
@@ -784,6 +806,7 @@ object OctoGramPatches {
         generator = OctoGramItemGenerator(id),
     )
 
+    /** Every OctoGram set, in the order the selection screen lists them. */
     val ALL = listOf(
         SPONSORED_MSGS,
         PHOTO_VIEWER_ADS,

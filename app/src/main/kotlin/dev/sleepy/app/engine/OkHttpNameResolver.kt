@@ -11,18 +11,21 @@ import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import dev.sleepy.app.model.TargetApk
 
 /**
- * The obfuscated okhttp3 names the generated blocklist interceptor has to spell out.
+ * The obfuscated okhttp3 names that the generated blocklist interceptor has to write out.
  */
 data class OkHttpProtocolNames(
-    /** `okhttp3.Response.<init>`'s descriptor — parameter list *and* return type, e.g. `(...)V`. */
+    /**
+     * `okhttp3.Response.<init>`'s descriptor—parameter list *and* return type, for example
+     * `(...)V`.
+     */
     val responseConstructorDescriptor: String,
-    /** The `okhttp3.Protocol` enum, without the `L`/`;` a descriptor carries — e.g. `ps/s`. */
+    /** The `okhttp3.Protocol` enum, without the `L`/`;` a descriptor carries—such as `ps/s`. */
     val protocolClass: String,
-    /** Field in [protocolClass] holding the `HTTP_1_1` constant — e.g. `i`. */
+    /** Field in [protocolClass] holding the `HTTP_1_1` constant—such as `i`. */
     val protocolHttp11Field: String
 )
 
-/** Either the names above, or why they could not be read. */
+/** Either the preceding names, or why they could not be read. */
 sealed interface OkHttpResolution {
     /** The names, read from the target build. */
     data class Resolved(val names: OkHttpProtocolNames) : OkHttpResolution
@@ -32,14 +35,14 @@ sealed interface OkHttpResolution {
 }
 
 /**
- * Reads the okhttp3 names R8 renames on every release, straight out of the target's DEX.
+ * Reads the okhttp3 names R8 renames on every release, from the target's DEX.
  *
- * The blocklist interceptor builds an `okhttp3.Response` by hand, so it has to name the
+ * The blocklist interceptor constructs an `okhttp3.Response` manually, so it has to name the
  * `Response.<init>` descriptor, the `Protocol` enum and that enum's `HTTP_1_1` field. On 346.2
  * they were `Lcs/t;`, `Lcs/q;` and `Lgc/k;`; on 347.5 two of the three had moved, which produced
  * a `NoClassDefFoundError: Lcs/t;` on every request until the desktop reference stopped writing
  * them down. This is that same lookup, reading the DEX rather than an apktool tree, because an
- * on-device patcher never has the tree.
+ * on-device patcher does not have the tree.
  *
  * Reference: `quirky-noether/discord/patches/blocklist.py::discover_okhttp`.
  */
@@ -92,7 +95,7 @@ object OkHttpNameResolver {
         )
 
         // A descriptor is `(...)V`. The return type is part of it: dropping the trailing V
-        // produces a smali parse error a thousand lines later with no hint as to the cause.
+        // produces a smali parse error much later, with no hint as to the cause.
         val descriptor = buildString {
             append('(')
             constructor.parameterTypes.forEach { append(it) }
@@ -100,7 +103,7 @@ object OkHttpNameResolver {
             append(constructor.returnType)
         }
 
-        // Which obfuscated class the Protocol enum is moves per release, so it is recognised by
+        // Which obfuscated class the Protocol enum is moves per release, so it is recognized by
         // what it does rather than by name. It is the only class the constructor takes that
         // builds a constant out of the "http/1.1" string and assigns it to a static field of its
         // own type.
@@ -131,9 +134,9 @@ object OkHttpNameResolver {
      * The class is accepted on the same two facts the reference uses: its `<clinit>` builds a
      * constant from the `"http/1.1"` string, and it assigns a static field of the class's own
      * type. The field name then comes from the assignment that *follows* the `"HTTP_1_1"` marker,
-     * because the enum writes six fields of its own type and only that marker says which of them
-     * is HTTP/1.1 — the marker is the constant's own name, and the enum constructor consumes it
-     * immediately before the field is stored.
+     * because the enum writes six fields of its own type and only that marker identifies which of
+     * them is HTTP/1.1—the marker is the constant's own name, and the enum constructor consumes
+     * it immediately before the field is stored.
      */
     private fun http11FieldOf(classDef: ClassDef): String? {
         val clinit = classDef.methods.firstOrNull { it.name == "<clinit>" } ?: return null

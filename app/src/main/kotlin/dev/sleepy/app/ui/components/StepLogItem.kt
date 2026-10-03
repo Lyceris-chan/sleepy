@@ -32,8 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.StepResult
@@ -43,10 +46,14 @@ import dev.sleepy.app.ui.theme.statusColors
 /**
  * One line of the patch log.
  *
- * Each entry leads with what changed in the user's terms, then why it was done, and only
- * reveals the exact class, method or function id when the row is expanded. The engineering
- * detail stays available — this is a tool that modifies someone's app, so the mechanism is
- * never hidden — but it no longer has to be read to understand the outcome.
+ * Each entry leads with what changed in the user's terms, then why it was done, and only reveals
+ * the exact class, method or function id when the row is expanded. The engineering detail stays
+ * available—this tool modifies an app, so the mechanism stays inspectable—but reading it is
+ * not required to understand the outcome.
+ *
+ * @param result The logged step to render.
+ * @param modifier The modifier applied to the row.
+ * @param initiallyExpanded Whether the technical detail starts open.
  */
 @Composable
 fun StepLogItem(
@@ -55,9 +62,17 @@ fun StepLogItem(
     initiallyExpanded: Boolean = false
 ) {
     val (icon, statusColor, statusLabel) = when (result.status) {
-        StepStatus.OK -> StepBadge(Icons.Default.Check, MaterialTheme.statusColors.success, "Applied")
-        StepStatus.SKIP -> StepBadge(Icons.Default.Remove, MaterialTheme.statusColors.warning, "Skipped")
-        StepStatus.FAIL -> StepBadge(Icons.Default.Close, MaterialTheme.colorScheme.error, "Failed")
+        StepStatus.OK -> {
+            StepBadge(Icons.Default.Check, MaterialTheme.statusColors.success, "Applied")
+        }
+
+        StepStatus.SKIP -> {
+            StepBadge(Icons.Default.Remove, MaterialTheme.statusColors.warning, "Skipped")
+        }
+
+        StepStatus.FAIL -> {
+            StepBadge(Icons.Default.Close, MaterialTheme.colorScheme.error, "Failed")
+        }
     }
 
     val technical = result.technicalTarget?.takeIf { it.isNotBlank() && it != result.title }
@@ -70,7 +85,21 @@ fun StepLogItem(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .then(
-                if (hasDetail) Modifier.clickable { expanded = !expanded } else Modifier
+                if (hasDetail) {
+                    Modifier
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = if (expanded) {
+                                "Hide technical detail"
+                            } else {
+                                "Show technical detail"
+                            },
+                            onClick = { expanded = !expanded }
+                        )
+                        .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
+                } else {
+                    Modifier
+                }
             ),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = MaterialTheme.shapes.large
@@ -115,9 +144,15 @@ fun StepLogItem(
 
                 if (hasDetail) {
                     Spacer(modifier = Modifier.width(8.dp))
+                    // The clickable surface names the action in its onClickLabel, so a description
+                    // on this glyph repeats the action in a second announcement.
                     Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) "Hide technical detail" else "Show technical detail",
+                        imageVector = if (expanded) {
+                            Icons.Default.ExpandLess
+                        } else {
+                            Icons.Default.ExpandMore
+                        },
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
@@ -154,7 +189,7 @@ fun StepLogItem(
     }
 }
 
-/** Icon, accent colour and accessibility label for one status. */
+/** Icon, accent color and accessibility label for one status. */
 private data class StepBadge(
     val icon: ImageVector,
     val color: Color,

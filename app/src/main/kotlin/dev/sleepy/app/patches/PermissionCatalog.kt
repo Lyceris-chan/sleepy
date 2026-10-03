@@ -9,49 +9,50 @@ import dev.sleepy.app.model.PermissionCoverage
 import dev.sleepy.app.model.PermissionRow
 
 /**
- * What sleepy knows about permissions: one entry per permission, saying what it lets an app do,
- * what stops working without it, and whether removing it is offered at all.
+ * What sleepy records about permissions: one entry per permission, describing what it lets an app
+ * do, what stops working without it, and whether removing it is offered at all.
  *
  * ## What this is, and what it deliberately is not
- * This answers one question — given the name of a permission, what does it mean and what does
- * removing it cost — and nothing else. Which permissions are on offer is not decided here: that is
- * the declarations of the release being patched, which [DeclaredPermissions] ships and a build
- * nothing is shipped for supplies from its own manifest. The split is deliberate, because the two
- * go stale differently: a name this table has never heard of is still a row (it is described as
- * unknown rather than hidden), while a permission a build declares and its shipped list does not
- * name has no row at all, which is why that case is reported instead of resolved silently.
+ * This table answers one question—given the name of a permission, what does it mean and what
+ * does removing it cost—and nothing else. Which permissions are on offer is not determined
+ * here: that is the declarations of the release being patched, which [DeclaredPermissions] ships
+ * and a build nothing is shipped for supplies from its own manifest. The split is deliberate,
+ * because the two go stale differently: a name this table does not cover is still a row (it is
+ * described as unknown rather than hidden), while a permission a build declares and its shipped
+ * list does not name has no row at all, which is why that case is reported rather than omitted.
  *
  * ## Which declarations are not a choice
- * Two of the rows a build declares are decided rather than offered, and neither decision lives
+ * Two of the rows a build declares are fixed rather than offered, and neither decision lives
  * here. The app's own essential permissions carry a [Permission.lockReason]; the declarations the
- * patch takes out of this build whatever the user says are named by
+ * patch takes out of this build whatever the user selects are named by
  * [DiscordManifestEdits.deadPermissionsIn], which is the same call the manifest pass edits with. A
- * row over one of those reads as removed and says why, so the section describes the build the run
- * produces rather than a switch that would change nothing.
+ * row over one of those is shown as removed and gives the reason, so the section describes the
+ * build the run produces rather than a switch that would change nothing.
  *
- * ## Removal is permanent, and every description says so
+ * ## Removal is permanent, and every description records it
  * Android grants an app only the permissions its manifest declares. An installed app cannot add a
- * declaration later — there is no API for it, and an update is a different install — so a
+ * declaration later—there is no API for it, and an update is a different install—so a
  * permission removed here cannot be asked for again, by this build or by anything the app does at
  * runtime. That is not a consequence a user can be expected to infer from "contacts", so every
  * entry's description ends with [REMOVAL_CONSEQUENCE], written once and appended by the two
- * builders below so no entry can be written without it.
+ * builders that follow so no entry can be written without it.
  *
  * ## Essentiality
- * A permission is locked only where removing the declaration breaks the app's *core* function —
- * the thing the app is for — and not merely a feature. Where that was not certain the permission
- * is left switchable and its description says what would stop working, because a lock the user
- * cannot argue with is worse than a consequence they can read: a feature that guards itself
- * degrades, while one the app assumes throws.
+ * A permission is locked only where removing the declaration breaks the app's *core* function—
+ * the thing the app is for—and not merely a feature. Where that was not certain the permission
+ * is left switchable and its description states what would stop working, because a lock the user
+ * cannot override is worse than a consequence they can read: a feature that checks for the
+ * permission degrades, while a feature that assumes it throws.
  *
  * Two are locked: [INTERNET] and [ACCESS_NETWORK_STATE]. Both are install-time permissions that
  * prompt for nothing and reveal nothing about the user, so there is no privacy to gain from
- * removing them; both are enforced by the platform with an exception rather than a refusal, so the
- * app does not degrade without them, it crashes or hangs on the first thing it tries to do. Every
- * other declaration here — a camera, a contact list, an advertising id — is a feature the user can
- * weigh, and is offered as a choice. Which of those choices a given build gets to make is a
- * separate question, and it is the one in the section above: on Discord the contact list is removed
- * by every build this patch makes, and its row says that rather than offering a switch over it.
+ * removing them; both are enforced by the platform with an exception rather than an ordinary
+ * result, so the app does not degrade without them, it crashes or hangs on the first thing it
+ * tries to do. Every other declaration here—a camera, a contact list, an advertising id—is a
+ * feature the user can weigh, and is offered as a choice. Which of those choices a given build
+ * gets to make is a separate question, and it is the one described in the preceding section: on Discord the
+ * contact list is removed by every build this patch makes, and its row records that rather than
+ * offering a switch over it.
  */
 object PermissionCatalog {
 
@@ -60,36 +61,36 @@ object PermissionCatalog {
      *
      * It is not a patch set: it has no entry in `sources.json`, no [dev.sleepy.app.model.PatchSet]
      * and nothing in [PatchItemCatalog], because its items are the declarations of the release
-     * being patched rather than a table. What it does have is item keys, so the same [PatchSelection]
-     * the patch rows are toggled through also carries the permissions, and one switch model serves
-     * both.
+     * being patched rather than a table. What it does have is item keys, so the same
+     * [PatchSelection] the patch rows are toggled through also carries the permissions, and one
+     * switch model serves both.
      */
     const val SET_ID = "manifest_permissions"
 
-    /** The feature group every permission item belongs to, which is what the section heads itself. */
+    /** The feature group every permission item belongs to; the section uses it as its heading. */
     const val DECLARED_GROUP = "Permissions this build declares"
 
     /**
      * The sentence every entry's description ends with.
      *
-     * It says *permanently* rather than "until you reinstall", because reinstalling the official
+     * It uses *permanently* rather than "until you reinstall", because reinstalling the official
      * app does not undo this: the build that was patched would have to be patched again, and that
      * is a different build, not a setting.
      */
     const val REMOVAL_CONSEQUENCE: String =
         "Removing this is permanent: Android gives an app only the permissions its manifest " +
             "declares, and an installed app has no way to declare another one later, so the app " +
-            "can never ask for this permission again — on this install, or on any update of it."
+            "can never ask for this permission again—on this install, or on any update of it."
 
     // -- The two locked permissions ------------------------------------------------------------
-    // Locked because the platform does not degrade without them. Both are `normal` permissions:
-    // granted at install with no prompt, which is why removing one takes nothing away from the
-    // user's privacy and only takes away the app's ability to work.
+    // Locked because a call that needs them throws rather than degrading. Both are `normal`
+    // permissions: granted at install with no prompt, which is why removing one takes nothing
+    // away from the user's privacy and only takes away the app's ability to work.
 
     private val INTERNET = entry(
         name = "android.permission.INTERNET",
         label = "Internet",
-        what = "Lets the app open network connections at all — messages, calls, media, updates.",
+        what = "Lets the app open network connections at all—messages, calls, media, updates.",
         lockReason = "Required: every request the app makes goes through this permission, and the " +
             "platform refuses the connection at the socket rather than reporting a network error. " +
             "Without it the app cannot sign in, load a conversation or reach anything: it fails on " +
@@ -103,8 +104,8 @@ object PermissionCatalog {
         what = "Lets the app ask whether the device is online and what kind of connection it is on.",
         lockReason = "Required: the app checks connectivity before it connects, and the platform " +
             "throws for that check when this is missing instead of answering \"offline\". The check " +
-            "the app makes on start-up becomes a crash. It reports no personal data — whether " +
-            "there is a connection, not what is sent over it — so removing it costs you nothing and " +
+            "the app makes on start-up becomes a crash. It reports no personal data—whether " +
+            "there is a connection, not what is sent over it—so removing it costs you nothing and " +
             "breaks the app."
     )
 
@@ -135,7 +136,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.NFC",
             label = "NFC",
-            what = "Lets the app read and write NFC tags and hand a phone number to the system dialler."
+            what = "Lets the app read and write NFC tags and hand a phone number to the system dialer."
         )
     )
 
@@ -146,7 +147,7 @@ object PermissionCatalog {
             name = "android.permission.READ_EXTERNAL_STORAGE",
             label = "Read shared storage (older Android)",
             what = "Lets the app read files and media in shared storage on the Android versions " +
-                "where this declaration still applies — builds cap it at the version that replaced " +
+                "where this declaration still applies—builds cap it at the version that replaced " +
                 "it with the per-type permissions below. Without it, choosing a file or a photo to " +
                 "send fails on those versions."
         ),
@@ -154,7 +155,7 @@ object PermissionCatalog {
             name = "android.permission.WRITE_EXTERNAL_STORAGE",
             label = "Write shared storage (older Android)",
             what = "Lets the app save into shared storage on the Android versions where this " +
-                "declaration still applies — a downloaded file, an exported photo. Without it those " +
+                "declaration still applies—a downloaded file, an exported photo. Without it those " +
                 "saves fail on those versions; the app's own private storage keeps working."
         ),
         entry(
@@ -205,7 +206,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.RECORD_AUDIO",
             label = "Microphone",
-            what = "Lets the app record from the microphone — voice messages, calls, voice chat. " +
+            what = "Lets the app record from the microphone—voice messages, calls, voice chat. " +
                 "Without it recording a voice message fails and a call connects with no audio from " +
                 "you; hearing the other side is unaffected."
         ),
@@ -226,7 +227,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.BLUETOOTH_CONNECT",
             label = "Bluetooth devices",
-            what = "Lets the app use devices already paired with the phone — a headset or a car's " +
+            what = "Lets the app use devices already paired with the phone—a headset or a car's " +
                 "microphone. Without it call and media audio never goes to Bluetooth; it plays " +
                 "through the phone's own speaker instead."
         ),
@@ -260,13 +261,13 @@ object PermissionCatalog {
             name = "android.permission.FOREGROUND_SERVICE",
             label = "Background service",
             what = "Lets the app keep something running while it is not on screen, under a visible " +
-                "notification — a call, a transfer, a sync. Without it anything running stops when " +
+                "notification—a call, a transfer, a sync. Without it anything running stops when " +
                 "the app leaves the screen and only resumes when it is opened again."
         ),
         entry(
             name = "android.permission.FOREGROUND_SERVICE_MICROPHONE",
             label = "Background service: microphone",
-            what = "Lets the background service above keep the microphone open — a voice call or a " +
+            what = "Lets the background service above keep the microphone open—a voice call or a " +
                 "voice chat. Without it a call ends or goes silent the moment the app is not on " +
                 "screen."
         ),
@@ -287,7 +288,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
             label = "Background service: media playback",
-            what = "Lets the background service keep playing audio — a music player, a voice " +
+            what = "Lets the background service keep playing audio—a music player, a voice " +
                 "message. Without it playback stops when the app leaves the screen."
         ),
         entry(
@@ -299,13 +300,13 @@ object PermissionCatalog {
         entry(
             name = "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
             label = "Background service: data sync",
-            what = "Lets the background service keep fetching — message history, media, an upload. " +
+            what = "Lets the background service keep fetching—message history, media, an upload. " +
                 "Without it syncing stops when the app leaves the screen and catches up only when " +
                 "it is opened again."
         ),
         entry(
             name = "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
-            label = "Background service: uncategorised",
+            label = "Background service: uncategorized",
             what = "Lets an app declare a background service that fits none of the named kinds " +
                 "above. Without it that service cannot be started at all on Android 14 and later."
         ),
@@ -325,7 +326,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.SCHEDULE_EXACT_ALARM",
             label = "Exact alarms",
-            what = "Lets the app set a timed reminder that fires at the minute it is set for — a " +
+            what = "Lets the app set a timed reminder that fires at the minute it is set for—a " +
                 "scheduled message, a reminder. Without it those are scheduled loosely and can " +
                 "arrive late, because the system batches them with everything else."
         ),
@@ -428,7 +429,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.WRITE_SYNC_SETTINGS",
             label = "Change sync settings",
-            what = "Lets the app turn the system's background sync for its account on or off — the " +
+            what = "Lets the app turn the system's background sync for its account on or off—the " +
                 "checkbox in Android's account settings. Without it the app cannot change that " +
                 "setting and the checkbox does nothing."
         ),
@@ -447,7 +448,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.ACCESS_COARSE_LOCATION",
             label = "Approximate location",
-            what = "Lets the app place you roughly — to the neighbourhood — for sharing a live " +
+            what = "Lets the app place you roughly—to the neighborhood—for sharing a live " +
                 "location or finding people nearby. Without it those features cannot start."
         ),
         entry(
@@ -489,7 +490,7 @@ object PermissionCatalog {
         entry(
             name = "android.permission.REQUEST_INSTALL_PACKAGES",
             label = "Install apps",
-            what = "Lets the app install an APK it has — this is how a built-in updater installs " +
+            what = "Lets the app install an APK it has—this is how a built-in updater installs " +
                 "what it downloaded. Without it that install fails, and the update has to be " +
                 "installed by hand from a file manager."
         ),
@@ -520,7 +521,7 @@ object PermissionCatalog {
             name = "com.google.android.gms.permission.AD_ID",
             label = "Advertising identifier",
             what = "Lets the app read the resettable advertising identifier Play Services keeps, " +
-                "which is what ad measurement and personalised ads are built on. Without it the app " +
+                "which is what ad measurement and personalized ads are built on. Without it the app " +
                 "gets the all-zeros identifier, so anything measured or targeted by it stops being."
         ),
         entry(
@@ -540,7 +541,7 @@ object PermissionCatalog {
         entry(
             name = "com.android.vending.BILLING",
             label = "In-app purchases",
-            what = "Lets the app sell through Google Play — a Nitro subscription, a coin pack, " +
+            what = "Lets the app sell through Google Play—a Nitro subscription, a coin pack, " +
                 "Telegram Premium. Without it the purchase screens cannot reach Play, so buying or " +
                 "restoring a purchase inside the app fails."
         ),
@@ -555,7 +556,7 @@ object PermissionCatalog {
         entry(
             name = "com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE",
             label = "Install referrer",
-            what = "Lets the app read, once, which link or ad an install came from — the mechanism " +
+            what = "Lets the app read, once, which link or ad an install came from—the mechanism " +
                 "behind an invite link that credits whoever sent it. Without it the app cannot read " +
                 "it and the credit does not happen."
         ),
@@ -568,8 +569,8 @@ object PermissionCatalog {
     )
 
     // -- Launcher badge counts -------------------------------------------------------------------
-    // One per launcher family: an app that wants its unread count on the icon has to ask each
-    // launcher's own provider, because Android itself never generalised this. Removing one costs
+    // One per launcher family: an app that shows its unread count on the icon has to ask each
+    // launcher's own provider, because Android itself did not generalize this. Removing one costs
     // the number on the icon on that launcher and nothing else.
 
     private val BADGES = listOf(
@@ -599,8 +600,8 @@ object PermissionCatalog {
             label = "OctoGram's own translation service",
             what = "OctoGram's own permission, which it defines and then holds: it is what keeps " +
                 "its on-device translation service to itself, so no other app can bind to it. " +
-                "Without the app's request for it, the service is still OctoGram's — the app " +
-                "reaches it either way, being its owner — so nothing in the app changes; what is " +
+                "Without the app's request for it, the service is still OctoGram's—the app " +
+                "reaches it either way, being its owner—so nothing in the app changes; what is " +
                 "gone is the guard against other apps."
         ),
         entry(
@@ -644,7 +645,7 @@ object PermissionCatalog {
 
     private val BY_NAME: Map<String, Permission> = ENTRIES.associateBy { it.name }
 
-    /** Every entry, in table order — what a reviewer reads to see the classification. */
+    /** Every entry, in table order—what a reviewer reads to see the classification. */
     val all: List<Permission> get() = ENTRIES
 
     /**
@@ -652,7 +653,7 @@ object PermissionCatalog {
      * receivers to itself.
      *
      * It is built from the application id, so it is a different name in every app and in every
-     * clone of one — `com.discord.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` and
+     * clone of one—`com.discord.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` and
      * `it.octogram.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` are the same declaration of
      * two apps. It is matched by its suffix for that reason rather than listed by name.
      */
@@ -661,9 +662,9 @@ object PermissionCatalog {
     /**
      * The entry for a permission the manifest declares.
      *
-     * A name the table does not cover is described rather than dropped: sleepy cannot say what it
-     * does, and saying so is the honest answer — hiding it would leave a declaration the user
-     * cannot see and cannot choose about.
+     * A name the table does not cover is described rather than dropped: sleepy has no information
+     * about what it does, and hiding it would leave a declaration the user cannot see and cannot
+     * choose about.
      */
     fun entryFor(name: String): Permission = BY_NAME[name] ?: when {
         name.endsWith(DYNAMIC_RECEIVER_SUFFIX) -> entry(
@@ -673,7 +674,7 @@ object PermissionCatalog {
                 "permission the app itself holds so its internal broadcast receivers accept " +
                 "broadcasts only from itself on Android 13 and later. Without it, a receiver " +
                 "registration that asks for this permission is no longer covered, so receivers " +
-                "registered that way can fail where they run — this is the one declaration in this " +
+                "registered that way can fail where they run—this is the one declaration in this " +
                 "list whose removal can stop an app from starting rather than cost it a feature."
         )
 
@@ -682,7 +683,7 @@ object PermissionCatalog {
             label = name.substringAfterLast('.').replace('_', ' ').lowercase()
                 .replaceFirstChar { it.uppercase() },
             what = "Sleepy has no entry for this permission, so it cannot say what stops working " +
-                "without it — only that this build asks for it."
+                "without it—only that this build asks for it."
         )
     }
 
@@ -690,8 +691,8 @@ object PermissionCatalog {
      * The entries for the permission names a build declares, in the order the manifest declares
      * them, with duplicates dropped.
      *
-     * The build's own order is kept because it is the order the APK was built with — the locked
-     * ones generally come first, since the build tooling writes them that way — and a list that
+     * The build's own order is kept because it is the order the APK was built with—the locked
+     * ones generally come first, because the build tooling writes them that way—and a list that
      * re-sorted them would be reordering a file the user is about to have edited.
      */
     fun entriesFor(declared: List<String>): List<Permission> =
@@ -703,8 +704,8 @@ object PermissionCatalog {
     /**
      * The declared permissions as selectable items.
      *
-     * These are [PatchItem]s so the permission switches are the same switches as everywhere else —
-     * the same keys, the same [PatchSelection], the same row rendering — even though no
+     * These items are [PatchItem]s so the permission switches are the same switches as everywhere
+     * else—the same keys, the same [PatchSelection], the same row rendering—even though no
      * [dev.sleepy.app.model.PatchSet] has them and nothing in [PatchItemCatalog] lists them.
      */
     fun itemsOf(declared: List<String>): List<PatchItem> = entriesFor(declared).map { permission ->
@@ -724,8 +725,9 @@ object PermissionCatalog {
      * [PermissionCoverage.rows] supplies both the per-permission locks and the rule that the last
      * remaining permission stays, so the list and [removals] cannot disagree about what is
      * removable: they are the same call. [removedRegardless] names the declarations the build
-     * removes on its own — see [dev.sleepy.app.engine.DiscordManifestEdits.deadPermissionsIn],
-     * which is what decides them — and the rows over them read as removed rather than kept.
+     * removes on its own—see [dev.sleepy.app.engine.DiscordManifestEdits.deadPermissionsIn],
+     * which is the call that determines them—and the rows over them are shown as removed rather
+     * than kept.
      */
     fun rows(
         declared: List<String>,
@@ -738,12 +740,12 @@ object PermissionCatalog {
      * [rows] against a selection, which is what both the list and the pipeline read.
      *
      * A selection that names no permission is read as "every declaration kept" rather than as
-     * "every one of them switched off". The two are not the same claim and the difference is not
-     * cosmetic: a selection is a list of what is *on*, so a selection made for the patch sets
-     * names no permission by construction, and reading that as a list of removals would show the
-     * user a manifest being gutted that nothing is going to touch.
+     * "every one of them switched off". The two readings are not the same claim and the
+     * difference is not cosmetic: a selection is a list of what is *on*, so a selection made for
+     * the patch sets names no permission, and reading that as a list of removals
+     * would show the user removals that nothing is going to carry out.
      *
-     * [packageName] is the build being patched, and it is what decides which declarations are
+     * [packageName] is the build being patched, and it determines which declarations are
      * fixed-removed rather than a choice: the same list rendered for another app offers switches
      * over names sleepy only takes out of this one.
      */
@@ -761,11 +763,11 @@ object PermissionCatalog {
     }
 
     /**
-     * Whether the selection says anything at all about this build's permissions.
+     * Whether the selection names any permission of this build at all.
      *
      * False is the state a source is in before its APK has been read, and it is the gate that
-     * keeps a permission change from being made by a selection that never mentioned permissions:
-     * a selection that names none of them removes none of them, however many the build declares.
+     * keeps a permission change from being made by a selection that names no permissions: a
+     * selection that names none of them removes none of them, however many the build declares.
      */
     fun isEngaged(selection: PatchSelection): Boolean =
         selection.keys.any { it.startsWith("$SET_ID:") }
@@ -774,15 +776,16 @@ object PermissionCatalog {
      * The declarations to remove, in the order the manifest declares them.
      *
      * A permission is removed when the selection does not name it *and* the row it produces is
-     * switchable — so a locked row, the last permission standing, and a declaration the build
-     * removes on its own are never in this list whatever the selection says. All three gates are
-     * re-applied here rather than trusted to the caller: this is the list a build is edited with,
-     * and an empty selection reaching it means "nothing to do", never "remove everything".
+     * switchable—so a locked row, the last permission standing, and a declaration the build
+     * removes on its own are not in this list whatever the selection contains. This function
+     * re-applies all three gates rather than trusting the caller: this is the list a build is
+     * edited with, and an empty selection reaching it means "nothing to do", not "remove
+     * everything".
      *
-     * [packageName] is passed on to [rows], and it is load-bearing for the same reason: the
-     * declarations sleepy takes out of this build by itself are taken out by
+     * [packageName] is passed on to [rows], for the same reason: the declarations sleepy takes out
+     * of this build by itself are taken out by
      * [dev.sleepy.app.engine.DiscordManifestEdits.plan]'s own group, and a name reaching this list
-     * as well would be one selector the manifest pass is asked to remove twice — reported the
+     * as well would be one selector the manifest pass is asked to remove twice—reported the
      * second time as an element the build does not have.
      */
     fun removals(
@@ -800,19 +803,19 @@ object PermissionCatalog {
      * One badge entry.
      *
      * The sixteen launcher badge permissions differ only in whose provider they open, so they are
-     * built rather than written out; the consequence is the same for all of them and never
-     * involves the notification itself.
+     * built rather than written out; the consequence is the same for all of them, without
+     * involving the notification itself.
      */
     private fun badge(name: String, launcher: String): Permission = entry(
         name = name,
         label = "Badge count ($launcher)",
         what = "Lets the app set the number on its own icon on $launcher. Without it the icon " +
-            "shows no unread count there — the notification itself still arrives, and every other " +
+            "shows no unread count there—the notification itself still arrives, and every other " +
             "launcher is unaffected."
     )
 
     /**
-     * One catalogue entry: what it does, and — unless it is locked — that removing it cannot be
+     * One catalog entry: what it does, and—unless it is locked—that removing it cannot be
      * undone.
      *
      * The consequence is appended here rather than written into each of the entries so that

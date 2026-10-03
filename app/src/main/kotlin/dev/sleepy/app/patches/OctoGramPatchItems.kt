@@ -10,43 +10,42 @@ import dev.sleepy.app.model.TargetApk
 
 /**
  * What every OctoGram edit is, in the user's terms: the switch it belongs to, the feature it sits
- * under, and the line saying what switching it on does.
+ * under, and the line describing what switching it on does.
  *
- * OctoGram's sets used to be one switch each, which is the wrong size wherever a set holds more
- * than one decision. The clearest case is the logger: silencing the emitters and silencing the
- * uploaders are two choices, and someone who wants the log written to logcat but nothing shipped
- * to Telegram's servers has no way to say so behind one switch. The premium rows are the opposite
- * case and are deliberately *one* item over three edits — hiding the premium row alone makes the
- * sections row appear in its place, so a list offering that edit on its own would offer a state
- * that is documented as wrong.
+ * One switch per set does not fit a set that holds more than one decision. The clearest case is
+ * the logger: silencing the emitters and silencing the uploaders are two choices, and a user who
+ * wants the log written to logcat but nothing shipped to Telegram's servers cannot express that
+ * behind one switch. The premium rows are the opposite case and are deliberately *one* item over
+ * three edits—hiding the premium row alone makes the sections row appear in its place, so a list
+ * offering that edit on its own would offer a state the reference scripts document as incorrect.
  *
  * The patches themselves stay in [OctoGramPatches], grouped one list per item, next to the set they
  * belong to: this table pairs a group with the switch that turns it on, and owns the wording. An
  * entry's patches are the same objects the engine applies, so there is one definition of each edit
- * and no second copy to drift.
+ * and no second copy to fall out of step.
  *
- * Nothing here invents an edit: every entry names a group of patches that exists in the reference
- * scripts, and a test asserts that the entries and the sets cover each other exactly — a set with
- * no entry would be a set that cannot be selected at all, and an entry with no patch would be a
- * row that claims to change something it does not.
+ * Every entry names a group of patches that exists in the reference scripts, and a test asserts
+ * that the entries and the sets cover each other exactly—a set with no entry would be a set that
+ * cannot be selected at all, and an entry with no patch would be a row describing a change it does
+ * not make.
  *
- * The per-entry wording is one voice with the sets' own descriptions in [OctoGramPatches]: how the
- * app stops spending the user's data and attention, rather than which method a letter-name replaced
- * this release. The class, the method and the version tag stay in the entry's own fields, where the
- * technical panel reads them from.
+ * The per-entry wording matches the sets' own descriptions in [OctoGramPatches]: it describes how
+ * the app stops spending the user's data and attention rather than which method a letter-name
+ * replaced this release. The class, the method and the version tag stay in the entry's own fields,
+ * where the technical panel reads them from.
  */
 object OctoGramPatchItems {
 
     /**
      * One item: the switch, and the edits it applies.
      *
-     * @property identity the item's identity within its set — see [PatchItem.identity]. It is what a
-     *   saved selection records, so it is a name for the thing being switched off and never an
-     *   index: these have to survive a release that reorders an entry's patches or splits an item
-     *   into two.
+     * @property identity the item's identity within its set—see [PatchItem.identity]. It is
+     *     what a saved selection records, so it is a name for the thing being switched off and
+     *     not an index: these have to survive a release that reorders an entry's patches or
+     *     splits an item into two.
      * @property label the row's name as the list shows it.
      * @property group the feature heading the row is listed under.
-     * @property description one line saying what switching the item on does to the app.
+     * @property description one line describing what switching the item on does to the app.
      * @property patches the edits this item applies, in the order they are applied.
      */
     data class Entry(
@@ -57,8 +56,8 @@ object OctoGramPatchItems {
         val patches: List<SmaliPatch>
     )
 
-    // The feature headings, declared once. A heading repeated inline in twenty places is a heading
-    // that can be spelled two ways, which would list one feature twice.
+    // The feature headings, declared once. A heading repeated inline at each use is a heading that
+    // can be spelled two ways, which would list one feature twice.
     private const val CHANNEL_POSTS = "Sponsored posts in channels"
     private const val MEDIA_VIEWER = "Ads in the media viewer"
     private const val SEARCH = "Sponsored search results"
@@ -77,9 +76,9 @@ object OctoGramPatchItems {
      * Every set's entries, by set id.
      *
      * Keyed by the set's own id (`OctoGramPatches.SPONSORED_MSGS.id` rather than the string again),
-     * so an id renamed in one place cannot leave a set with no items and an entry no set can select.
-     * Reading those ids here is safe in either initialisation order because nothing in
-     * [OctoGramPatches] reads this table while building its sets — see [OctoGramItemGenerator].
+     * so an id renamed in one place cannot leave a set with no items and an entry no set can
+     * select. Reading those ids here works in either initialization order because nothing in
+     * [OctoGramPatches] reads this table while building its sets—see [OctoGramItemGenerator].
      */
     private val ENTRIES: Map<String, List<Entry>> = linkedMapOf(
         OctoGramPatches.SPONSORED_MSGS.id to listOf(
@@ -129,7 +128,7 @@ object OctoGramPatchItems {
                 label = "The GitHub release request",
                 group = UPDATE_CHECK,
                 description = "The app stops asking GitHub whether a newer OctoGram exists. The \"you are up to " +
-                    "date\" path is signalled instead, so the update screen still finishes rather than waiting " +
+                    "date\" path is signaled instead, so the update screen still finishes rather than waiting " +
                     "on a reply that will never arrive.",
                 patches = OctoGramPatches.OTA_UPDATE_CHECK
             )
@@ -149,7 +148,7 @@ object OctoGramPatchItems {
                 label = "The main window's override",
                 group = PAYWALL,
                 description = "The same drop on the window-stack override the main window uses. The paywall is " +
-                    "reachable that way too, so the router guard alone would leave those paths open — the two " +
+                    "reachable that way too, so the router guard alone would leave those paths open—the two " +
                     "are separate switches because they are separate code paths, and switching both on is the " +
                     "usual choice.",
                 patches = OctoGramPatches.PREMIUM_UPSELL_WINDOW_STACK
@@ -184,7 +183,7 @@ object OctoGramPatchItems {
                 description = "Telegram decides whether to write its own logs from a single flag read in hundreds " +
                     "of places; pinning it to false at the four sites that write it turns logging off " +
                     "everywhere at once, rather than editing every reader. One consequence is part of the " +
-                    "shipped behaviour: the same flag also decides whether a custom uncaught-exception handler " +
+                    "shipped behavior: the same flag also decides whether a custom uncaught-exception handler " +
                     "is installed, so that handler is not installed either.",
                 patches = OctoGramPatches.LOGGING_GATE_WRITES
             )
@@ -278,10 +277,16 @@ object OctoGramPatchItems {
         )
     }
 
-    /** The item key of one entry, e.g. `octogram_logger:emitters` — what a saved selection records. */
+    /**
+     * The item key of one entry, for example `octogram_logger:emitters`—what a saved selection
+     * records.
+     */
     fun itemKeyOf(setId: String, identity: String): String = PatchItem.keyOf(setId, identity)
 
-    /** Every patch of a set's items, in item order — what the set applies when nothing is narrowed. */
+    /**
+     * Every patch of a set's items, in item order—what the set applies when nothing is
+     * narrowed.
+     */
     fun patches(setId: String): List<SmaliPatch> = entries(setId).flatMap { it.patches }
 
     /** The patches of [setId] whose items [selection] switches on, in item order. */
@@ -315,8 +320,8 @@ object OctoGramPatchItems {
      *
      * An item with a single edit spells that edit out here, because its row is the only place the
      * user can read it before patching. An item with several lists their titles and points at the
-     * set's technical panel for the full text of each, which is where the panel already prints them:
-     * the explanations are moved, never dropped.
+     * set's technical panel for the full text of each, which is where the panel already prints
+     * them: the explanations are moved rather than dropped.
      */
     fun detail(item: PatchItem): String? {
         val entry = entryOf(item) ?: return null
@@ -341,38 +346,40 @@ object OctoGramPatchItems {
         !patch.methodSignature.isNullOrBlank() -> "replaces ${patch.methodSignature}"
         !patch.switchCaseLabel.isNullOrBlank() -> "slices switch case ${patch.switchCaseLabel}"
         !patch.anchor.isNullOrBlank() ->
-            "splices around: " + patch.anchor.lines().joinToString(" ; ") { it.trim() }.trim(' ', ';')
+            "splices around: " +
+                patch.anchor.lines().joinToString(" ; ") { it.trim() }.trim(' ', ';')
 
         else -> "one smali entry"
     }
 }
 
 /**
- * The generator one OctoGram set hands the engine, so the set applies the edits of the items the
+ * The generator one OctoGram set passes the engine, so the set applies the edits of the items the
  * user has switched on and nothing else.
  *
- * The engine applies a set's own patches whether or not they are selected, and asks only a
- * generator for the subset a selection names — so a set whose edits are switched one at a time has
- * to reach the engine this way. Each set gets its own instance because the engine hands a generator
- * nothing but the target APK and the selection: the set it belongs to is the one thing it has to
- * carry itself.
+ * The engine applies a set's own patches whether or not they are selected, and calls a generator
+ * only for the subset a selection names—so a set whose edits are switched one at a time has to
+ * reach the engine this way. Each set gets its own instance because the engine passes a generator
+ * nothing but the target APK and the selection: the set it belongs to is the one value it has to
+ * hold itself.
  *
  * It is a class of its own rather than a member of [OctoGramPatchItems] on purpose: a member would
- * be reached through that object's instance, so building the patch table would initialise the item
- * table, and initialising the item table reads the patch table. Nothing here reads either at
- * construction time, which is what makes the two files' initialisers independent of each other.
+ * be reached through that object's instance, so building the patch table would initialize the item
+ * table, and initializing the item table reads the patch table. Nothing here reads either at
+ * construction time, which keeps the two files' initializers independent of each other.
  */
-internal class OctoGramItemGenerator(private val setId: String) : PatchGenerator, SelectivePatchGenerator {
+internal class OctoGramItemGenerator(private val setId: String) :
+    PatchGenerator, SelectivePatchGenerator {
 
     override fun generate(target: TargetApk): GeneratedPatches =
         GeneratedPatches(patches = OctoGramPatchItems.patches(setId))
 
     override fun generate(target: TargetApk, selection: PatchSelection): GeneratedPatches {
         val patches = OctoGramPatchItems.patches(setId, selection)
-        // The pipeline drops a set with no selected item before it reaches a generator, so this is
-        // the second line of defence rather than the first: it exists so that a set that somehow
-        // arrives with nothing to apply is reported as skipped with a reason, rather than reported
-        // as patched having done nothing.
+        // The pipeline drops a set with no selected item before it reaches a generator, so this
+        // check is the second line of defense rather than the first: it exists so that a set
+        // that somehow arrives with nothing to apply is reported as skipped with a reason, rather
+        // than reported as patched having done nothing.
         if (patches.isEmpty()) {
             return GeneratedPatches(
                 patches = emptyList(),

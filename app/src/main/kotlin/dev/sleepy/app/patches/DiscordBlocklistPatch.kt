@@ -19,20 +19,20 @@ import dev.sleepy.app.model.TargetWrittenGenerator
  * The network blocklist interceptor for Discord, transcribed from
  * `quirky-noether/discord/patches/blocklist.py`.
  *
- * One method — `DeviceResourceUsageRecorder$Companion.requestStatsInterceptor` — is shared by
- * every OkHttp client that matters here: the React Native XHR client (which carries all of the
+ * One method—`DeviceResourceUsageRecorder$Companion.requestStatsInterceptor`—is shared by
+ * every OkHttp client this patch concerns: the React Native XHR client (which carries all of the
  * client's JavaScript traffic), the media download client, the bundle updater and Fresco. This
  * set replaces its body with one that matches the request URL against the rules in
- * [DiscordBlocklistRules] and answers a match with a synthetic HTTP 204, so the request is never
+ * [DiscordBlocklistRules] and answers a match with a synthetic HTTP 204, so the request is not
  * sent.
  *
  * The 204 rather than a dropped response is deliberate: the JavaScript side reads it as a
  * successful empty response and clears its retry buffer, whereas dropping the response makes the
- * client retry forever.
+ * client retry without a limit.
  *
  * Unlike every other set in this package this patch cannot be a static string. It constructs an
  * `okhttp3.Response` by hand, so it has to spell out names R8 renames on every release; the body
- * is therefore generated against the APK the user selected — see [OkHttpNameResolver]. Because it
+ * is therefore generated against the APK the user selected—see [OkHttpNameResolver]. Because it
  * answers a request without calling `chain.proceed()`, it only works where the interceptors are
  * on OkHttp's application list, which is what [DiscordNativePatches.INTERCEPTORS] arranges.
  *
@@ -46,29 +46,35 @@ object DiscordBlocklistPatch {
     private const val RECORDER_CLASS =
         "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali"
 
-    /** The one method, matched exactly as the reference matches it. */
+    /** The one method, matched as the reference matches it. */
     private const val INTERCEPTOR_SIGNATURE =
         ".method private final requestStatsInterceptor(Lokhttp3/Interceptor${'$'}Chain;" +
             "Lcom/discord/resource_usage/DeviceResourceUsageRecorder${'$'}RequestStats;)" +
             "Lokhttp3/Response;"
 
+    /**
+     * The blocklist set: rebuilds the shared OkHttp interceptor so requests matching a rule are
+     * answered with a synthetic HTTP 204. The replacement body is generated against the target
+     * APK, because it has to name members that R8 renames.
+     */
     val NETWORK_BLOCKLIST = PatchSet(
         id = "discord_native_blocklist",
-        label = "Block Tracking, Advertising and Monetisation Endpoints",
-        description = "Rebuilds Discord's shared OkHttp interceptor so requests to tracking, advertising, survey and monetisation endpoints are answered " +
+        label = "Block Tracking, Advertising and Monetization Endpoints",
+        description = "Rebuilds Discord's shared OkHttp interceptor so requests to tracking, advertising, survey and monetization endpoints are answered " +
             "with an empty HTTP 204 instead of being sent, covering ${DiscordBlocklistRules.HOST_RULES.size} host rules and " +
             "${DiscordBlocklistRules.API_RULES.size} API path rules. The three obfuscated OkHttp names the method has to spell out are read from the " +
             "target build, so a release where they cannot be resolved is skipped with a reason rather than patched with another release's names.",
         generator = BlocklistGenerator
     )
 
+    /** Every set this object defines. */
     val ALL = listOf(NETWORK_BLOCKLIST)
 
     /**
-     * This set's item key for [rule], e.g. `discord_native_blocklist:api:/typing`.
+     * This set's item key for [rule], for example `discord_native_blocklist:api:/typing`.
      *
      * The rule's identity is its kind and its pattern, so a saved selection keeps meaning the same
-     * rule across releases — the pattern is what the interceptor scans for, and a rule that
+     * rule across releases—the pattern is what the interceptor scans for, and a rule that
      * changes pattern is a different rule.
      */
     fun itemKeyOf(rule: BlocklistRule): String =
@@ -83,7 +89,7 @@ object DiscordBlocklistPatch {
 
     /**
      * This set's rows as the UI shows them: the two gates as locked rows, then every rule with its
-     * switch and the reason that switch may be inert.
+     * switch and the reason that switch can be inert.
      *
      * Recomputed from [selection] on every call rather than cached, so turning a covering rule off
      * makes everything it covered live again with nothing to keep in step.
@@ -102,7 +108,8 @@ object DiscordBlocklistPatch {
      * nothing to scan for would otherwise emit a method that only rebuilds the stock path.
      */
     fun generatedPatches(target: TargetApk, selection: PatchSelection): GeneratedPatches {
-        val hostRules = DiscordBlocklistRules.HOST_RULES.filter { selection.contains(itemKeyOf(it)) }
+        val hostRules =
+            DiscordBlocklistRules.HOST_RULES.filter { selection.contains(itemKeyOf(it)) }
         val apiRules = DiscordBlocklistRules.API_RULES.filter { selection.contains(itemKeyOf(it)) }
         if (hostRules.isEmpty() && apiRules.isEmpty()) {
             return GeneratedPatches(
@@ -118,7 +125,10 @@ object DiscordBlocklistPatch {
     }
 
     /** The generator, usable with a selection and without one. */
-    private object BlocklistGenerator : PatchGenerator, SelectivePatchGenerator, TargetWrittenGenerator {
+    private object BlocklistGenerator :
+        PatchGenerator,
+        SelectivePatchGenerator,
+        TargetWrittenGenerator {
 
         override fun generate(target: TargetApk): GeneratedPatches = generate(
             target = target,
@@ -174,19 +184,19 @@ object DiscordBlocklistPatch {
      * how it was tuned against the live app. An on-device patcher has no such switch and the
      * shipped desktop build is generated without it, so the body here is what that build's method
      * contains: the block in full, the debug logging absent. Everything else is reproduced as
-     * written, down to the blank lines and the label names — a subset changes which rules are
+     * written, down to the blank lines and the label names—a subset changes which rules are
      * emitted and nothing else, so the reference comparison still holds rule for rule.
      *
      * The labels are the interesting part. `:not_proxied` and `:skip_<n>` bracket each API rule so
      * a rule only blocks when the URL is an API call, and every host rule branches to the shared
-     * `:block`, which is emitted after the early return — smali resolves forward branches, so the
+     * `:block`, which is emitted after the early return—smali resolves forward branches, so the
      * blocked path can be built once at the end of the method instead of per rule.
      *
      * @param ctorDescriptor `Lokhttp3/Response;`'s hand-built constructor, return type included.
-     * @param protocolClass the Protocol enum, without `L`/`;`.
-     * @param protocolField the Protocol field holding the `HTTP_1_1` constant.
-     * @param hostRules the host patterns to emit, in order. Defaults to the whole table.
-     * @param apiRules the API path patterns to emit, in order. The `:skip_<n>` labels are numbered
+     * @param protocolClass The Protocol enum, without `L`/`;`.
+     * @param protocolField The Protocol field holding the `HTTP_1_1` constant.
+     * @param hostRules The host patterns to emit, in order. Defaults to the whole table.
+     * @param apiRules The API path patterns to emit, in order. The `:skip_<n>` labels are numbered
      *   within this list, so it has to match the rules the caller selected.
      */
     fun interceptorBody(

@@ -21,8 +21,11 @@ import dev.sleepy.app.model.AppSource
  * The distinct hosts this source's files are fetched from.
  *
  * A source can be a base APK plus split configuration files, and those can live on different
- * hosts; every one of them is listed so a reader can see the full set of servers this app
- * talks to for a build.
+ * hosts; every one of them is listed so a reader can see every server this app contacts for a
+ * build.
+ *
+ * @param source The source whose download URLs are inspected.
+ * @return The distinct non-blank hosts of those URLs, in the order they first appear.
  */
 fun downloadHosts(source: AppSource): List<String> =
     (listOf(source.url) + source.splitUrls)
@@ -30,11 +33,14 @@ fun downloadHosts(source: AppSource): List<String> =
         .distinct()
 
 /**
- * Where the selected APK comes from, stated plainly.
+ * The hosts the selected APK is downloaded from.
  *
  * This is text rather than a link on purpose: it sits inside a card that is itself clickable,
- * and a second tap target in the same row would make the card ambiguous to anyone using
- * switch access or a screen reader.
+ * and a second tap target in the same row makes the card ambiguous to anyone using switch
+ * access or a screen reader.
+ *
+ * @param hosts The host names to list, as returned by [downloadHosts].
+ * @param modifier The modifier applied to the row.
  */
 @Composable
 fun DownloadHostRow(

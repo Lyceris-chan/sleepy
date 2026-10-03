@@ -50,7 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,11 +58,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import dev.sleepy.app.model.BuildOutcome
 import dev.sleepy.app.model.PatchProgress
 import dev.sleepy.app.model.VerificationReport
 import dev.sleepy.app.ui.theme.statusColors
@@ -73,31 +75,40 @@ import java.io.File
 /**
  * The end of a patch run.
  *
- * Everything on this screen is the result of a check that actually ran against the finished
- * file, and nothing is rounded up to a success: a source that publishes no hash says so
- * instead of reporting a pass, and steps that were skipped are separated from steps that
- * failed. A reader should be able to tell what was verified, what was assumed, and what is
- * still unknown without opening a log.
+ * Everything on this screen is the result of a check that ran against the finished file, and
+ * nothing is rounded up to a success: a source that publishes no hash states that instead of
+ * reporting a pass, and steps that were skipped are separated from steps that failed. A reader
+ * should be able to tell what was checked, what was assumed, and what is still unknown without
+ * opening a log.
+ *
+ * @param viewModel The view model that supplies the finished report.
+ * @param onStartOver Called when the user returns to the app list.
+ * @param onRetry Called when the user runs the same selection again.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResultScreen(
     viewModel: PatchViewModel,
-    onStartOver: () -> Unit
+    onStartOver: () -> Unit,
+    onRetry: () -> Unit
 ) {
     val progress by viewModel.progress.collectAsState()
     val source by viewModel.selectedSource.collectAsState()
     val context = LocalContext.current
-    var savedMessage by remember { mutableStateOf<String?>(null) }
+    // Saved rather than remembered: a rotation between the save and the reader seeing the
+    // confirmation must not drop the message that states where the file went.
+    var savedMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val presentation = resultPresentation((progress as? PatchProgress.Done)?.report?.outcome)
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (progress is PatchProgress.Done) "Build Successful" else "Build Failed",
+                        text = presentation.headline,
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() }
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -117,45 +128,87 @@ fun ResultScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             when (val p = progress) {
-                is PatchProgress.Done -> BuildSuccessContent(
-                    report = p.report,
-                    sha256 = p.sha256,
-                    sourceName = source?.displayName ?: "The application",
-                    savedMessage = savedMessage,
-                    onSave = {
-                        val apkFile = File(p.outputUri.path ?: "")
-                        val targetName = "${source?.id ?: "sleepy"}_patched.apk"
-                        val savedUri = FileUtils.saveApkToDownloads(context, apkFile, targetName)
-                        if (savedUri != null) {
-                            savedMessage = "Saved to Downloads/sleepy/$targetName"
-                            Toast.makeText(context, "Saved to Downloads!", Toast.LENGTH_LONG).show()
-                        } else {
-                            Toast.makeText(context, "Failed to save file", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onShare = {
-                        val apkFile = File(p.outputUri.path ?: "")
-                        try {
-                            val contentUri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                apkFile
-                            )
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/vnd.android.package-archive"
-                                putExtra(Intent.EXTRA_STREAM, contentUri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                is PatchProgress.Done -> if (!presentation.offersArtifact) {
+                    // The pipeline reports a blocking failure as PatchProgress.Failed and deletes
+                    // the file, so a Done carrying one is a state that should not arise.
+                    // Presenting it as a failure rather than as a result keeps the two in
+                    // agreement if it does.
+                    BuildFailureContent(
+                        message = "The build produced no usable APK",
+                        detail = p.report.patchesFailed.joinToString("; ")
+                            .takeIf { it.isNotEmpty() }
+                    )
+                } else {
+                    BuildSuccessContent(
+                        report = p.report,
+                        sha256 = p.sha256,
+                        sourceName = source?.displayName ?: "The application",
+                        savedMessage = savedMessage,
+                        onSave = {
+                            val apkFile = File(p.outputUri.path ?: "")
+                            val targetName = "${source?.id ?: "sleepy"}_patched.apk"
+                            val savedUri =
+                                FileUtils.saveApkToDownloads(context, apkFile, targetName)
+                            if (savedUri != null) {
+                                savedMessage = "Saved to Downloads/sleepy/$targetName"
+                                Toast.makeText(context, "Saved to Downloads!", Toast.LENGTH_LONG)
+                                    .show()
+                            } else {
+                                Toast.makeText(context, "Failed to save file", Toast.LENGTH_SHORT)
+                                    .show()
                             }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share patched APK"))
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Unable to share APK: ${e.message}", Toast.LENGTH_SHORT).show()
+                        },
+                        onShare = {
+                            val apkFile = File(p.outputUri.path ?: "")
+                            try {
+                                val contentUri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    apkFile
+                                )
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/vnd.android.package-archive"
+                                    putExtra(Intent.EXTRA_STREAM, contentUri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(shareIntent, "Share patched APK")
+                                )
+                            } catch (e: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "Unable to share APK: ${e.message}",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
-                    }
-                )
+                    )
+                }
 
-                is PatchProgress.Failed -> BuildFailureContent(message = p.message, detail = p.detail)
+                is PatchProgress.Failed ->
+                    BuildFailureContent(message = p.message, detail = p.detail)
 
                 else -> Unit
+            }
+
+            // A run that failed a step leaves a selection worth running again, so the screen offers
+            // the retry rather than sending the reader back through the selection by hand.
+            if (presentation.offersRetry) {
+                Button(
+                    onClick = onRetry,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Try again", style = MaterialTheme.typography.labelLarge)
+                }
             }
 
             TextButton(
@@ -178,7 +231,14 @@ fun ResultScreen(
     }
 }
 
-/** The success path: what was built, what was checked, and what was changed. */
+/**
+ * The path for a run that produced a file worth offering: what was built, what was checked,
+ * and what was changed.
+ *
+ * A run whose steps were all applied and one that finished with failed steps are told apart here
+ * as well as in the headline, because the file is offered in both cases and the difference is why
+ * the user might not want it.
+ */
 @Composable
 private fun BuildSuccessContent(
     report: VerificationReport,
@@ -188,11 +248,22 @@ private fun BuildSuccessContent(
     onSave: () -> Unit,
     onShare: () -> Unit
 ) {
+    val incomplete = report.outcome == BuildOutcome.Incomplete
     StatusHero(
-        icon = Icons.Default.CheckCircle,
-        tint = MaterialTheme.statusColors.success,
-        title = "Patched APK Ready",
-        subtitle = "$sourceName was modified and re-signed on this device."
+        icon = if (incomplete) Icons.Default.Warning else Icons.Default.CheckCircle,
+        tint = if (incomplete) {
+            MaterialTheme.statusColors.warning
+        } else {
+            MaterialTheme.statusColors.success
+        },
+        title = if (incomplete) "Patched APK Ready, With Failed Steps" else "Patched APK Ready",
+        subtitle = if (incomplete) {
+            "$sourceName was patched and re-signed, " +
+                "but the steps listed under PATCH OUTCOME failed. " +
+                "The file installs; those changes are not in it."
+        } else {
+            "$sourceName was modified and re-signed on this device."
+        }
     )
 
     OutputCard(report)
@@ -451,8 +522,8 @@ private fun DownloadIntegrityCard(report: VerificationReport) {
 
             // Three outcomes, not two: a scheme that cannot apply to this build was not
             // checked, so it is named as not applicable rather than as a failure. JAR signing
-            // is only honoured below API 24, which is why this row reads that way on most
-            // builds — a v1 signature is written, and nothing that installs the APK reads it.
+            // is honored only earlier than API 24, which is why this row shows that status on most
+            // builds—a v1 signature is written, and nothing that installs the APK reads it.
             AuditRow(
                 icon = signatureIcon(report.v1SignatureValid),
                 tint = signatureTint(report.v1SignatureValid),
@@ -576,7 +647,8 @@ private fun PatchOutcomeCard(report: VerificationReport) {
 
             if (report.patchesSkipped.isNotEmpty()) {
                 Text(
-                    text = "Skipped steps were not needed for this build, which is not a failure. " +
+                    text = "Skipped steps were not needed for this build, " +
+                        "which is not a failure. " +
                         "They are listed below so the difference is visible.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -625,7 +697,11 @@ private fun ChecksumCard(sha256: String) {
     }
 }
 
-/** One counted outcome. The tint is paired with an icon and a word, never used alone. */
+/**
+ * One counted outcome.
+ *
+ * The tint is paired with an icon and a word, so it is not the only signal.
+ */
 @Composable
 private fun OutcomeTile(
     icon: ImageVector,
@@ -668,8 +744,8 @@ private fun OutcomeTile(
 /**
  * One checked property.
  *
- * The icon repeats the status word rather than replacing it, so the row still reads correctly
- * without colour vision.
+ * The icon repeats the status word rather than replacing it, so the row still conveys its status
+ * without color vision.
  */
 @Composable
 private fun AuditRow(
@@ -724,7 +800,7 @@ private fun AuditRow(
     }
 }
 
-/** A short list of step names, for the reader who wants to know exactly which ones. */
+/** A short list of step names, for the reader checking exactly which ones. */
 @Composable
 private fun BulletList(items: List<String>, limit: Int = 8) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -745,7 +821,7 @@ private fun BulletList(items: List<String>, limit: Int = 8) {
     }
 }
 
-/** The small capitalised heading that opens each card. */
+/** The small capitalized heading that opens each card. */
 @Composable
 private fun SectionLabel(text: String) {
     Row(
@@ -762,9 +838,52 @@ private fun SectionLabel(text: String) {
             text = text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.semantics { heading() }
         )
     }
+}
+
+/**
+ * The headline over the result screen and whether the produced file is offered.
+ *
+ * Both come from one value so the two stay consistent. Only a run whose steps were all applied
+ * is called successful. A run that finished with failed steps still offers its file—the archive
+ * it produced installs—under a headline that does not call it a success. A run that produced
+ * no usable file offers nothing.
+ */
+internal data class ResultPresentation(
+    val headline: String,
+    val offersArtifact: Boolean,
+    val offersRetry: Boolean
+)
+
+/**
+ * The presentation of a run that finished with [outcome], or of one that did not finish when
+ * [outcome] is null.
+ *
+ * A run that failed a step offers a retry. A run whose steps were all applied does not: its file
+ * is finished, and running the same selection again produces a second copy rather than a
+ * different result.
+ */
+internal fun resultPresentation(outcome: BuildOutcome?): ResultPresentation = when (outcome) {
+    BuildOutcome.Success -> ResultPresentation(
+        headline = "Build Successful",
+        offersArtifact = true,
+        offersRetry = false
+    )
+
+    BuildOutcome.Incomplete -> ResultPresentation(
+        headline = "Build Incomplete",
+        offersArtifact = true,
+        offersRetry = true
+    )
+
+    BuildOutcome.Failed, null -> ResultPresentation(
+        headline = "Build Failed",
+        offersArtifact = false,
+        offersRetry = true
+    )
 }
 
 /**
@@ -780,7 +899,7 @@ internal fun signatureStatusText(verified: Boolean?): String = when (verified) {
     null -> "Not applicable"
 }
 
-/** Pass, fail and not-applicable differ by glyph, so the three are never colour-only. */
+/** Pass, fail and not-applicable differ by glyph as well as color. */
 private fun signatureIcon(passed: Boolean?): ImageVector = when (passed) {
     true -> Icons.Default.CheckCircle
     false -> Icons.Default.Warning
@@ -794,7 +913,7 @@ private fun signatureTint(passed: Boolean?): Color = when (passed) {
     null -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
-/** Human-readable size, in the unit a reader would use for an APK. */
+/** Human-readable size, in the unit a reader uses for an APK. */
 private fun formatByteSize(bytes: Long): String {
     val megabytes = bytes / (1024.0 * 1024.0)
     return if (megabytes >= 1.0) {

@@ -6,27 +6,27 @@ import java.security.MessageDigest
 /**
  * Writes whole reference-build function bodies into a Hermes bundle.
  *
- * A function body is a fixed-size region of the bundle: the function header says where it
- * starts and how long it is, and nothing else in the file addresses its interior. That makes
- * replacement a question of size alone. When the reference's body is no longer than the one the
- * bundle already has, it is written over the old one and the remainder — which sits after the
- * body's final `Ret` and is unreachable — is filled with `AsyncBreakCheck` (`0x7E`, a valid
- * one-byte zero-operand opcode in HBC 98) so that nothing is left holding half of the old
- * function's instructions. When it is longer, the body cannot grow where it is, so it moves to
- * the end of the file behind a large `FunctionHeader` and the function's 96-bit table entry is
- * re-pointed at it.
+ * A function body is a fixed-size region of the bundle: the function header specifies where it
+ * starts and how long it is, and nothing else in the file addresses its interior. Replacement
+ * therefore depends on size alone. When the reference's body is no longer than the one the
+ * bundle already has, the patcher writes it over the old one and fills the remainder—which
+ * sits after the body's final `Ret` and is unreachable—with `AsyncBreakCheck` (`0x7E`, a
+ * valid one-byte zero-operand opcode in HBC 98), so that no part of the old function's
+ * instructions remains. When the reference's body is longer, the patcher appends it to the end
+ * of the file behind a large `FunctionHeader` and re-points the function's 96-bit table entry
+ * at it, because the function's original region cannot contain the extra bytes.
  *
  * ## Bodies are declared at the reference's size, not at the bundle's
  *
- * A replacement is almost always shorter than what it replaces, and the reference build
- * declares the shorter extent: function 13894's body is 143 bytes in the base bundle and 7 in
- * the reference. The declaration is therefore narrowed to the replacement's length, in the
- * 96-bit entry's `bytecodeSizeInBytes` bits or in the large header's `+12` slot, exactly as the
- * reference does. Padding without narrowing the declaration would still run identically — the
- * padding is unreachable — but 134 of the patched functions would then declare a body longer
- * than the one the reference declares for them, and the two bundles could not be compared
- * function for function, which is the property this patcher exists to establish: applied to the
- * Discord 348.5 bundle, all 128,469 of its function bodies come out byte-identical to the
+ * A replacement is usually shorter than the body it replaces, and the reference build declares
+ * the shorter extent: function 13894's body is 143 bytes in the base bundle and 7 in the
+ * reference. The declaration is therefore narrowed to the replacement's length, in the 96-bit
+ * entry's `bytecodeSizeInBytes` bits or in the large header's `+12` slot, as the reference
+ * does. Padding without narrowing the declaration also runs identically, because the padding is
+ * unreachable, but it leaves 134 of the patched functions declaring a body longer than the one
+ * the reference declares for them, and the two bundles cannot then be compared function for
+ * function—the comparison this patcher is designed to produce. Applied to the Discord 348.5
+ * bundle, the patcher produces 128,469 function bodies that are byte-identical to the
  * reference's.
  *
  * ## One body, two functions
@@ -34,30 +34,31 @@ import java.security.MessageDigest
  * Functions 57119 and 57120 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
  * share a single 51-byte body in this bundle but have different replacements, 51 and 23 bytes.
  * One write cannot serve both, so the longer replacement keeps the shared region and the other
- * function is relocated: its own 23 bytes then live at the end of the file, where its header
- * declares exactly them. Nothing is overwritten and both bodies come out identical to the
- * reference's — where the shared region alone would have had `AsyncBreakCheck` written over one
- * of them.
+ * function is relocated: its own 23 bytes are written at the end of the file, where its large
+ * header declares that size. Nothing is overwritten and both bodies are identical to the
+ * reference's; writing both into the shared region overwrites one of them with
+ * `AsyncBreakCheck`.
  *
  * ## What is not invented
  *
  * A relocated function needs a large `FunctionHeader` (37 bytes: nine 32-bit fields, then a
- * flags byte). Every function relocated here already has one — a body past 2^25 or longer than
- * 16,383 bytes is what the large header is for — and it is copied from the function itself, so
- * the fields this patcher does not name, the flags byte and the word at `+32`, keep the
- * bundle's own values rather than a guess; only `+0 offset` and `+12 bytecodeSizeInBytes` are
- * written. A function small enough to be encoded entirely in its 96-bit entry has no header to
- * copy: one is then built over a byte template taken from any other overflowed function, with
- * the entry's packed fields unpacked into its 32-bit slots ([largeHeader]). That path is
- * format-faithful but unexercised by the Discord patch set, which relocates only functions that
- * already have a header.
+ * flags byte). Every function relocated here already has one, because a body past 2^25 or
+ * longer than 16,383 bytes needs a large header. The patcher copies that header from the
+ * function itself, so the fields it does not name—the flags byte and the word at `+32`—
+ * keep the bundle's own values rather than values invented by the patcher; only `+0 offset` and
+ * `+12 bytecodeSizeInBytes` are written. A function small enough to be encoded entirely in its
+ * 96-bit entry has no header to copy: the patcher then builds one over a byte template taken
+ * from any other overflowed function, with the entry's packed fields unpacked into its 32-bit
+ * slots ([largeHeader]). That path follows the format but is unexercised by the Discord patch
+ * set, which relocates only functions that already have a header.
  *
  * ## Ordering
  *
  * The output is the input's bytes up to the old footer, then the relocated bodies and headers
- * four-byte aligned, then a fresh SHA-1 footer, with `fileLength` bumped to cover the lot.
- * Anything the input carried past `fileLength` is dropped: it is not part of the bundle. The
- * input array is never modified, and when no patch applies it is handed straight back.
+ * four-byte aligned, then a fresh SHA-1 footer, with `fileLength` increased to cover the
+ * appended bytes. Anything the input carried past `fileLength` is dropped: it is not part of
+ * the bundle. The input array is not modified, and when no patch applies the patcher returns
+ * it unchanged.
  */
 object HermesBundlePatcher {
 
@@ -122,6 +123,7 @@ object HermesBundlePatcher {
         val functionId: Int,
         val name: String,
         val action: Action,
+        /** A description of the outcome, with byte counts and offsets where they apply. */
         val detail: String
     )
 
@@ -130,7 +132,8 @@ object HermesBundlePatcher {
         val bundleBytes: ByteArray,
         val outcomes: List<PatchOutcome>
     ) {
-        val writtenInPlace: List<PatchOutcome> get() = outcomes.filter { it.action == Action.WRITTEN_IN_PLACE }
+        val writtenInPlace: List<PatchOutcome>
+            get() = outcomes.filter { it.action == Action.WRITTEN_IN_PLACE }
         val relocated: List<PatchOutcome> get() = outcomes.filter { it.action == Action.RELOCATED }
         val skipped: List<PatchOutcome> get() = outcomes.filter { it.action == Action.SKIPPED }
 
@@ -142,9 +145,9 @@ object HermesBundlePatcher {
      * Applies every patch that fits, and reports why the rest did not.
      *
      * A patch is skipped rather than forced when the function is not in the bundle's table, or
-     * when the body found there is not the size the patch was extracted from — that second case
-     * means the bundle is not the build this patch set targets, and writing anyway would
-     * overwrite whatever function sits at that offset now.
+     * when the body found there is not the size the patch was extracted from—that second case
+     * means the bundle is not the build this patch set targets, and writing anyway overwrites
+     * whatever function occupies that offset.
      */
     fun apply(bundleBytes: ByteArray, patches: List<FunctionPatch>): Result {
         if (!HermesPatcher.isHermesBytecode(bundleBytes)) {
@@ -166,7 +169,8 @@ object HermesBundlePatcher {
             return skipAll(
                 bundleBytes,
                 patches,
-                "the file header declares $fileLength bytes, which is not a bundle of ${bundleBytes.size} bytes"
+                "the file header declares $fileLength bytes, which is not a bundle of " +
+                    "${bundleBytes.size} bytes"
             )
         }
 
@@ -177,23 +181,32 @@ object HermesBundlePatcher {
         for ((patchIndex, patch) in patches.withIndex()) {
             val location = HermesFunctionTable.locate(bundleBytes, patch.functionId)
             if (location == null) {
-                outcomes[patchIndex] = skip(patch, "function ${patch.functionId} is not in this bundle's function table")
+                outcomes[patchIndex] = skip(
+                    patch,
+                    "function ${patch.functionId} is not in this bundle's function table"
+                )
                 continue
             }
             if (location.bytecodeSize != patch.originalSize) {
                 outcomes[patchIndex] = skip(
                     patch,
-                    "function ${patch.functionId} is ${location.bytecodeSize} bytes in this bundle but the " +
-                        "patch was extracted from a ${patch.originalSize}-byte body, so this bundle is not " +
-                        "the build the patch set targets"
+                    "function ${patch.functionId} is ${location.bytecodeSize} bytes in this " +
+                        "bundle but the patch was extracted from a ${patch.originalSize}-byte " +
+                        "body, so this bundle is not the build the patch set targets"
                 )
                 continue
             }
-            plans += Plan(patchIndex, patch, patch.replacement, location.bodyOffset, location.bytecodeSize)
+            plans += Plan(
+                patchIndex,
+                patch,
+                patch.replacement,
+                location.bodyOffset,
+                location.bytecodeSize
+            )
         }
 
-        // Nothing to write: hand back the bundle exactly as it came in, footer and all, rather
-        // than re-emitting it byte for byte.
+        // Nothing to write: the patcher returns the bundle as it came in, including the footer,
+        // rather than re-emitting it byte for byte.
         if (plans.isEmpty()) return resultOf(bundleBytes, outcomes)
 
         // A replacement larger than the body cannot be written over it, and a replacement
@@ -205,7 +218,8 @@ object HermesBundlePatcher {
         for (group in overlappingGroups(plans)) {
             val winner = group
                 .sortedWith(
-                    compareByDescending<Int> { plans[it].replacement.size }.thenBy { plans[it].patch.functionId }
+                    compareByDescending<Int> { plans[it].replacement.size }
+                        .thenBy { plans[it].patch.functionId }
                 )
                 .first()
             for (index in group) {
@@ -213,7 +227,8 @@ object HermesBundlePatcher {
             }
         }
 
-        val appends = layoutAppends(fileLength, plans.indices.filter { relocated[it] }.map { plans[it] })
+        val appends =
+            layoutAppends(fileLength, plans.indices.filter { relocated[it] }.map { plans[it] })
         val output = ByteArray(appends.newFileLength)
         System.arraycopy(bundleBytes, 0, output, 0, fileLength - SHA1_FOOTER_SIZE)
 
@@ -241,8 +256,8 @@ object HermesBundlePatcher {
                 plan.patch.functionId,
                 plan.patch.name,
                 Action.RELOCATED,
-                "${plan.replacement.size} bytes appended at ${append.bodyOffset} behind a large header at " +
-                    "${append.headerOffset}, replacing " +
+                "${plan.replacement.size} bytes appended at ${append.bodyOffset} behind a " +
+                    "large header at ${append.headerOffset}, replacing " +
                     if (plan.replacement.size > plan.bytecodeSize) {
                         "a ${plan.bytecodeSize}-byte body that cannot grow in place"
                     } else {
@@ -254,12 +269,18 @@ object HermesBundlePatcher {
         writeU32Le(output, FILE_LENGTH_OFFSET, appends.newFileLength)
         val digest = MessageDigest.getInstance("SHA-1")
         digest.update(output, 0, appends.newFileLength - SHA1_FOOTER_SIZE)
-        System.arraycopy(digest.digest(), 0, output, appends.newFileLength - SHA1_FOOTER_SIZE, SHA1_FOOTER_SIZE)
+        System.arraycopy(
+            digest.digest(),
+            0,
+            output,
+            appends.newFileLength - SHA1_FOOTER_SIZE,
+            SHA1_FOOTER_SIZE
+        )
 
         return resultOf(output, outcomes)
     }
 
-    /** A patch that will be written, resolved against the input bundle. */
+    /** A patch to write, resolved against the input bundle. */
     private class Plan(
         val patchIndex: Int,
         val patch: FunctionPatch,
@@ -269,9 +290,9 @@ object HermesBundlePatcher {
     ) {
         /**
          * Writes the replacement over the old body, pads the remainder, and narrows the
-         * declaration to the replacement. Which field to narrow is decided by the same flag the
-         * bundle's own reader goes by: an overflowed function keeps its size in the large
-         * header's `+12` slot, the rest in the 96-bit entry's bits 0..13.
+         * declaration to the replacement. The same flag that the bundle's own reader checks
+         * selects the field to narrow: an overflowed function keeps its size in the large
+         * header's `+12` slot, and the rest keep it in the 96-bit entry's bits 0..13.
          */
         fun writeInPlace(output: ByteArray) {
             System.arraycopy(replacement, 0, output, bodyOffset, replacement.size)
@@ -281,7 +302,11 @@ object HermesBundlePatcher {
 
             val words = entryWords(output, patch.functionId)
             if (words.overflowed) {
-                writeU32Le(output, words.largeHeaderOffset + LARGE_HEADER_SIZE_FIELD, replacement.size)
+                writeU32Le(
+                    output,
+                    words.largeHeaderOffset + LARGE_HEADER_SIZE_FIELD,
+                    replacement.size
+                )
             } else {
                 writeEntry(
                     output,
@@ -299,8 +324,8 @@ object HermesBundlePatcher {
     private class Appends(val entries: List<Append>, val newFileLength: Int)
 
     /**
-     * Lays relocated bodies and headers out after the input's last real byte — which is where
-     * the 20-byte footer began — aligning each, and returns the file length they imply.
+     * Lays relocated bodies and headers out after the input's last real byte—which is where
+     * the 20-byte footer began—aligning each, and returns the file length they imply.
      */
     private fun layoutAppends(fileLength: Int, relocated: List<Plan>): Appends {
         var cursor = fileLength - SHA1_FOOTER_SIZE
@@ -336,11 +361,31 @@ object HermesBundlePatcher {
             if (template >= 0) {
                 System.arraycopy(state, template, header, 0, LARGE_HEADER_SIZE)
             }
-            writeU32Le(header, LARGE_HEADER_PARAM_COUNT_FIELD, (words.w0 ushr PARAM_COUNT_SHIFT) and PARAM_COUNT_MASK)
-            writeU32Le(header, LARGE_HEADER_LOOP_DEPTH_FIELD, (words.w0 ushr LOOP_DEPTH_SHIFT) and LOOP_DEPTH_MASK)
-            writeU32Le(header, LARGE_HEADER_FUNCTION_NAME_FIELD, (words.w1 ushr FUNCTION_NAME_SHIFT) and FUNCTION_NAME_MASK)
-            writeU32Le(header, LARGE_HEADER_NUM_REG_COUNT_FIELD, (words.w1 ushr NUM_REG_COUNT_SHIFT) and NUM_REG_COUNT_MASK)
-            writeU32Le(header, LARGE_HEADER_NON_PTR_REG_COUNT_FIELD, (words.w1 ushr NON_PTR_REG_COUNT_SHIFT) and NON_PTR_REG_COUNT_MASK)
+            writeU32Le(
+                header,
+                LARGE_HEADER_PARAM_COUNT_FIELD,
+                (words.w0 ushr PARAM_COUNT_SHIFT) and PARAM_COUNT_MASK
+            )
+            writeU32Le(
+                header,
+                LARGE_HEADER_LOOP_DEPTH_FIELD,
+                (words.w0 ushr LOOP_DEPTH_SHIFT) and LOOP_DEPTH_MASK
+            )
+            writeU32Le(
+                header,
+                LARGE_HEADER_FUNCTION_NAME_FIELD,
+                (words.w1 ushr FUNCTION_NAME_SHIFT) and FUNCTION_NAME_MASK
+            )
+            writeU32Le(
+                header,
+                LARGE_HEADER_NUM_REG_COUNT_FIELD,
+                (words.w1 ushr NUM_REG_COUNT_SHIFT) and NUM_REG_COUNT_MASK
+            )
+            writeU32Le(
+                header,
+                LARGE_HEADER_NON_PTR_REG_COUNT_FIELD,
+                (words.w1 ushr NON_PTR_REG_COUNT_SHIFT) and NON_PTR_REG_COUNT_MASK
+            )
             writeU32Le(header, LARGE_HEADER_FRAME_SIZE_FIELD, words.w2 and FRAME_SIZE_MASK)
         }
         writeU32Le(header, LARGE_HEADER_OFFSET_FIELD, bodyOffset)
@@ -350,12 +395,14 @@ object HermesBundlePatcher {
 
     /**
      * Points a function's 96-bit entry at a large header: the overflow flag, and the 32 bits the
-     * pointer is split across — `offset`'s low 24 bits and `functionName`'s 8.
+     * pointer is split across—`offset`'s low 24 bits and `functionName`'s 8.
      */
     private fun repoint(state: ByteArray, functionId: Int, headerOffset: Int) {
         val words = entryWords(state, functionId)
-        val w0 = (words.w0 and OVERFLOW_OFFSET_MASK.inv()) or (headerOffset and OVERFLOW_OFFSET_MASK)
-        val w1 = (words.w1 and BYTECODE_SIZE_MASK.inv() and (FUNCTION_NAME_MASK shl FUNCTION_NAME_SHIFT).inv()) or
+        val w0 =
+            (words.w0 and OVERFLOW_OFFSET_MASK.inv()) or (headerOffset and OVERFLOW_OFFSET_MASK)
+        val w1 = (words.w1 and BYTECODE_SIZE_MASK.inv() and
+            (FUNCTION_NAME_MASK shl FUNCTION_NAME_SHIFT).inv()) or
             (((headerOffset ushr 24) and FUNCTION_NAME_MASK) shl FUNCTION_NAME_SHIFT)
         writeEntry(state, functionId, w0, w1, words.w2 or (FLAG_OVERFLOWED shl 24))
     }
@@ -375,8 +422,8 @@ object HermesBundlePatcher {
 
     /**
      * Index ranges of plans whose bodies overlap, so that at most one of each range can be
-     * written where it is. Overlap is not an oddity of this bundle: 3,860 of its functions share
-     * a body with a neighbour and 11,508 partially overlap one.
+     * written where it is. Overlap is common in this bundle: 3,860 of its functions share a
+     * body with a neighbor and 11,508 partially overlap one.
      */
     private fun overlappingGroups(plans: List<Plan>): List<List<Int>> {
         val order = plans.indices.sortedBy { plans[it].bodyOffset }
@@ -399,9 +446,13 @@ object HermesBundlePatcher {
     private class EntryWords(val w0: Int, val w1: Int, val w2: Int) {
         val overflowed: Boolean get() = ((w2 ushr 24) and 0xFF) and FLAG_OVERFLOWED != 0
 
-        /** `(functionName shl 24) or (offset and 0x00FFFFFF)`, as [HermesFunctionTable] reads it. */
+        /**
+         * `(functionName shl 24) or (offset and 0x00FFFFFF)`, as [HermesFunctionTable] reads it.
+         */
         val largeHeaderOffset: Int
-            get() = (((w1 ushr FUNCTION_NAME_SHIFT) and FUNCTION_NAME_MASK) shl 24) or (w0 and OVERFLOW_OFFSET_MASK)
+            get() =
+                (((w1 ushr FUNCTION_NAME_SHIFT) and FUNCTION_NAME_MASK) shl 24) or
+                    (w0 and OVERFLOW_OFFSET_MASK)
     }
 
     private fun entryWords(state: ByteArray, functionId: Int): EntryWords {
@@ -420,7 +471,11 @@ object HermesBundlePatcher {
         writeU32Le(state, slot + 8, w2)
     }
 
-    private fun skipAll(bundleBytes: ByteArray, patches: List<FunctionPatch>, reason: String): Result =
+    private fun skipAll(
+        bundleBytes: ByteArray,
+        patches: List<FunctionPatch>,
+        reason: String
+    ): Result =
         Result(bundleBytes, patches.map { skip(it, reason) })
 
     private fun resultOf(bundleBytes: ByteArray, outcomes: Array<PatchOutcome?>): Result =
@@ -429,7 +484,8 @@ object HermesBundlePatcher {
     private fun skip(patch: FunctionPatch, reason: String): PatchOutcome =
         PatchOutcome(patch.functionId, patch.name, Action.SKIPPED, reason)
 
-    private fun alignUp(offset: Int): Int = (offset + APPEND_ALIGNMENT - 1) / APPEND_ALIGNMENT * APPEND_ALIGNMENT
+    private fun alignUp(offset: Int): Int =
+        (offset + APPEND_ALIGNMENT - 1) / APPEND_ALIGNMENT * APPEND_ALIGNMENT
 
     private fun readU32Le(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or

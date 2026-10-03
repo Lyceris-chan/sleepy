@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -56,15 +57,22 @@ import dev.sleepy.app.ui.state.TriState
  * One patch set in the selection list: its own switch, and the disclosure that opens its items.
  *
  * The switch is the set's, not an item's, so it is tri-state: on when every item is on, off when
- * none is, and showing a dash when the set is partly on — which is a state the user reaches on
- * purpose, by switching one item on inside the set. What a tap on it does is
- * [PatchRows.headerChecked]'s decision, so it is the same for everyone and is stated in the row's
- * own summary line: a set that is not fully on is completed by a tap, and one that is fully on is
+ * none is, and showing a dash when the set is partly on—a state the user reaches on purpose by
+ * switching one item on inside the set. What a tap on it does is defined by
+ * [PatchRows.headerChecked], so the behavior is the same for every set, and the row's summary
+ * line states it: a set that is not fully on is completed by a tap, and one that is fully on is
  * cleared by it.
  *
  * The set's items are not rendered here. They are emitted as their own lazy rows by the screen,
  * so a set of a hundred and forty-two or eighty-one items scrolls without composing all of them,
  * and this card stays a header.
+ *
+ * @param set The patch set to render.
+ * @param rows The set's rows and switch state for the current selection.
+ * @param expanded Whether the set's item rows are shown.
+ * @param onSetToggled Called with the new value when the set's switch is moved.
+ * @param onExpandedChange Called when the disclosure row is tapped.
+ * @param modifier The modifier applied to the card.
  */
 @Composable
 fun PatchSetCard(
@@ -76,9 +84,9 @@ fun PatchSetCard(
     modifier: Modifier = Modifier
 ) {
     var technicalExpanded by remember(set.id) { mutableStateOf(false) }
-    // A set whose edits are switched one at a time carries no patches of its own — the engine takes
-    // them from its generator — so the targets it touches are read from the item table as well, or
-    // the panel would report "0 hooks" for the set with the most of them.
+    // A set whose edits are switched one at a time carries no patches of its own—the engine takes
+    // them from its generator—so the targets it touches are read from the item table as well, or
+    // the panel reports "0 hooks" for the set with the most of them.
     val itemPatches = remember(set.id) { PatchItemCatalog.itemPatches(set.id) }
     val hookCount = set.smaliPatches.size + set.hermesPatches.size + itemPatches.size
     val selected = rows.triState != TriState.NONE
@@ -137,9 +145,9 @@ fun PatchSetCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                // Three states, two of which read as "the set is contributing something": the dash
-                // in the thumb is what tells them apart, so the state is never carried by the track
-                // colour alone.
+                // Three states, two of which mean "the set is contributing something": the dash
+                // in the thumb is what distinguishes them, so the state is not carried by the
+                // track color alone.
                 Switch(
                     checked = selected,
                     onCheckedChange = null,
@@ -181,7 +189,11 @@ fun PatchSetCard(
                     },
                     expanded = expanded,
                     onClick = onExpandedChange,
-                    onClickLabel = if (expanded) "Hide this set's items" else "Show this set's items"
+                    onClickLabel = if (expanded) {
+                        "Hide this set's items"
+                    } else {
+                        "Show this set's items"
+                    }
                 )
             }
 
@@ -193,8 +205,8 @@ fun PatchSetCard(
                     "Hide technical targets"
                 } else {
                     // A set whose patch is generated from the target APK has no hooks to count, and
-                    // "0 hooks" would read as "changes nothing" when it is the largest edit in the
-                    // set.
+                    // "0 hooks" reports the set as changing nothing when it is the largest edit in
+                    // the set.
                     when {
                         hookCount > 0 -> "View technical details ($hookCount hooks)"
                         set.generator != null -> "View technical details (generated for this build)"
@@ -220,7 +232,7 @@ fun PatchSetCard(
 /**
  * The glyph inside a switch's thumb, sized the way Material sizes its own.
  *
- * A switch's thumb content is never labelled: the switch it sits in already announces its state,
+ * A switch's thumb content is not labeled: the switch it sits in already announces its state,
  * and the dash it carries when a set is partly on is repeated in words by the summary beside it.
  */
 @Composable
@@ -232,15 +244,18 @@ private fun ThumbIcon(icon: ImageVector) {
     )
 }
 
-/** "3 of 145 items selected", and the same sentence a screen reader hears for the set switch. */
+/**
+ * The summary line for a set—"3 of 145 items selected"—which is also the description the set
+ * switch reports to a screen reader.
+ */
 private fun selectionSummary(rows: PatchSetRows): String {
     val noun = if (rows.itemCount == 1) "item" else "items"
     return "${rows.selectedItemCount} of ${rows.itemCount} $noun selected"
 }
 
 /**
- * One line that opens something, the same shape [StepLogItem] uses for its detail: a labelled
- * target at least a finger high, with the action spelled out for a screen reader.
+ * One line that opens something, the same shape [StepLogItem] uses for its detail: a labeled
+ * target at least 48 dp high, with the action spelled out for a screen reader.
  */
 @Composable
 private fun DisclosureRow(
@@ -275,9 +290,11 @@ private fun DisclosureRow(
                 color = MaterialTheme.colorScheme.primary
             )
         }
+        // The clickable row names the action in its onClickLabel, so a description on this glyph
+        // repeats the action in a second announcement.
         Icon(
             imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = onClickLabel,
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(18.dp)
         )
@@ -288,9 +305,9 @@ private fun DisclosureRow(
  * What one smali entry rewrites, as the one line under its class path.
  *
  * An entry replaces a method, slices a case out of a switch, or splices around an anchor, and only
- * the first has a method signature. A line reading "Method: null" would be noise exactly where the
- * precise target belongs, so each shape is named as itself and a shape with nothing to name gets no
- * line at all.
+ * the first has a method signature. A line reading "Method: null" reports nothing where the
+ * precise target belongs, so each shape is named for itself, and a shape with nothing to name gets
+ * no line at all.
  */
 private fun targetLine(patch: SmaliPatch): String? = when {
     !patch.methodSignature.isNullOrBlank() -> "Method: ${patch.methodSignature}"
@@ -304,13 +321,13 @@ private fun targetLine(patch: SmaliPatch): String? = when {
 /**
  * The exact bytecode and bytecode-stub targets behind a set.
  *
- * This is the audit trail the app has always shown — which classes, methods and function ids a set
- * rewrites — kept rather than replaced by the per-item list: the item list says what each switch
- * does, and this says what the set would touch on the build being patched.
+ * This is the audit trail the app shows—which classes, methods and function ids a set rewrites—
+ * kept rather than replaced by the per-item list: the item list describes what each switch does,
+ * and this one describes what the set touches on the build being patched.
  *
- * [itemPatches] are the entries a set's items carry, for the sets that hand the engine a generator
+ * [itemPatches] are the entries a set's items carry, for the sets that pass the engine a generator
  * instead of declaring patches. They are listed under the same heading because to this reader they
- * are the same fact — the set's own patches first, then the ones behind its switches.
+ * are the same fact—the set's own patches first, then the ones behind its switches.
  */
 @Composable
 private fun PatchTechnicalTargets(set: PatchSet, itemPatches: List<SmaliPatch>) {
@@ -329,7 +346,8 @@ private fun PatchTechnicalTargets(set: PatchSet, itemPatches: List<SmaliPatch>) 
                 text = "SMALI METHOD SURGERY TARGETS",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { heading() }
             )
             smaliPatches.forEach { smaliPatch ->
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -351,8 +369,8 @@ private fun PatchTechnicalTargets(set: PatchSet, itemPatches: List<SmaliPatch>) 
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    // The dex is resolved at patch time, so an entry that names one says which, and
-                    // an entry that leaves it to the pipeline does not read "[null]".
+                    // The dex is resolved at patch time, so an entry that names one records which,
+                    // and an entry that leaves it to the pipeline does not read "[null]".
                     Text(
                         text = smaliPatch.dexName?.takeIf { it.isNotBlank() }
                             ?.let { "• [$it] ${smaliPatch.smaliPath}" }
@@ -383,12 +401,14 @@ private fun PatchTechnicalTargets(set: PatchSet, itemPatches: List<SmaliPatch>) 
                 text = "HERMES BYTECODE STUBS (index.android.bundle)",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { heading() }
             )
             set.hermesPatches.forEach { hermesPatch ->
                 Column {
                     Text(
-                        text = "• Function ID ${hermesPatch.functionId}: ${hermesPatch.functionName}",
+                        text = "• Function ID ${hermesPatch.functionId}: " +
+                            "${hermesPatch.functionName}",
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurface
@@ -403,9 +423,9 @@ private fun PatchTechnicalTargets(set: PatchSet, itemPatches: List<SmaliPatch>) 
             }
         }
 
-        // Only a generator that writes its patch text from the target APK may claim to: a generator
-        // that selects among patches written ahead of time solves a different problem, and the
-        // sentence below would be false about it.
+        // Only a generator that writes its patch text from the target APK is labeled this way: a
+        // generator that selects among patches written ahead of time solves a different problem,
+        // and the following sentence does not describe it.
         if (set.generator is TargetWrittenGenerator) {
             if (smaliPatches.isNotEmpty() || set.hermesPatches.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -414,7 +434,8 @@ private fun PatchTechnicalTargets(set: PatchSet, itemPatches: List<SmaliPatch>) 
                 text = "GENERATED FROM THE TARGET APK",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { heading() }
             )
             Text(
                 text = "This method is written while the APK is patched rather than ahead of " +

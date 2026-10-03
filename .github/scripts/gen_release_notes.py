@@ -7,13 +7,13 @@ The body has two halves, and each half has exactly one source:
   single source of truth for what a release changed, in the words a reader of the changelog
   reads, so the body repeats its section for the tag verbatim rather than restating it. The
   git log is deliberately not used for this half: it records commits rather than user-visible
-  changes, and its subjects ("feat(ui): choose patches one at a time") would neither read as
-  changelog entries nor cover the same set of changes the changelog does.
+  changes, and its subjects ("feat(ui): choose patches one at a time") are not changelog
+  entries and do not cover the same set of changes the changelog does.
 
 - The supported builds, where each one is downloaded from, and the known limitations come
   from sources.json, which is attached to the release. Nothing is written twice, so the notes
-  and the manifest cannot drift apart. An unstated gap reads as a guarantee, which is why the
-  limitations are rendered here in full rather than summarised.
+  and the manifest stay in step. An unstated gap can be mistaken for full coverage, which is
+  why the limitations are rendered here in full rather than summarized.
 
 Usage:
     python3 .github/scripts/gen_release_notes.py <tag>
@@ -94,7 +94,7 @@ def changelog_section(tag):
     section, which is where a release cut before its changelog entry was written keeps its
     changes; its heading is replaced with the tag, since "Unreleased" is not what is being
     published. Neither being present is not an error: the notes are still worth publishing with
-    the sources and the limitations in them, and the caller says so on stderr.
+    the sources and the limitations in them, and the caller reports that on stderr.
     """
     text = _read(CHANGELOG_NAME)
     if text is None:
@@ -138,9 +138,9 @@ def build_body(tag, data, section):
     lines = [
         f"# {app_name} {tag}",
         "",
-        f"{app_name} patches Discord and OctoGram on your phone, on your device. It downloads the "
-        "original app from the source listed below, applies the changes you choose, signs the result "
-        "and saves it. Nothing is uploaded.",
+        f"{app_name} patches Discord and OctoGram on your device. It downloads the "
+        "original app from the source in the following table, applies the changes you choose, signs "
+        "the result and saves it. The work happens on your device.",
         "",
     ]
 
@@ -151,15 +151,15 @@ def build_body(tag, data, section):
     else:
         lines.extend([
             "This tag has no section in the changelog yet. The supported builds and the known "
-            "limitations for this release are below.",
+            "limitations for this release appear in the following sections.",
         ])
 
     lines.extend([
         "",
         "## Supported builds",
         "",
-        "This release patches the following exact builds. The URL under each one is where it is "
-        "downloaded from, and is the only place the original app is fetched from.",
+        "This release patches the following exact builds. The app downloads each one from the URL "
+        "shown in its row.",
         "",
         "| Target | Version | Downloaded from | Download checked against |",
         "| :--- | :--- | :--- | :--- |",
@@ -182,7 +182,7 @@ def build_body(tag, data, section):
         )
 
     # The set names go below the table: GitHub renders a table cell on one line, so a collapsed
-    # list inside a cell would come out as literal markup.
+    # list inside a cell comes out as literal markup.
     for source in sources:
         patch_ids = source.get("patch_ids", [])
         display_name = source.get("display_name", source.get("id", ""))
@@ -203,24 +203,24 @@ def build_body(tag, data, section):
         f"[`sources.json`]({SOURCES_NAME}), which is attached to this release. The download, the "
         "patching and the signing all happen on your device.",
         "- Where the source publishes a SHA-256, the download is checked against it before anything "
-        "is patched, and a mismatch stops the build. Where it does not, the app says so instead of "
-        "claiming a check it cannot make.",
+        "is patched, and a mismatch stops the build. Where it does not, the app reports that no "
+        "check is made rather than a check it cannot make.",
         "- The finished APK's signature and ZIP alignment are read back from the file rather than "
         "assumed, and a build that fails either check is reported as failed.",
         f"- This release was built from the source at [{project_url}]({project_url}), which is the "
         "repository of this patcher and of no app it patches.",
     ])
 
-    # Limitations are stated per source, from the manifest, and are never omitted: an unstated
-    # gap reads as a guarantee.
+    # Limitations are stated per source, from the manifest, and none are omitted: an unstated
+    # gap can be mistaken for full coverage.
     if limitations:
         by_id = {source.get("id"): source for source in sources}
         lines.extend([
             "",
             "## Known limitations",
             "",
-            "These builds do not do everything the reference patch suites do. Stated here rather "
-            "than left implicit:",
+            "These builds do not do everything the reference patch suites do. The following "
+            "sections list the limitations in full.",
         ])
         for source_id, items in limitations.items():
             source = by_id.get(source_id)

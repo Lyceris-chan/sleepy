@@ -12,20 +12,20 @@ apksig          = "9.4.1"
 okhttp          = "5.5.0"
 
 [libraries]
-# Compose — managed by BOM
+# Compose—managed by BOM
 compose-bom             = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
 compose-ui              = { group = "androidx.compose.ui", name = "ui" }
 compose-material3       = { group = "androidx.compose.material3", name = "material3" }
 compose-material-icons  = { group = "androidx.compose.material", name = "material-icons-extended" }
 
-# AndroidX — NOT in BOM, version explicitly
+# AndroidX—NOT in BOM, version explicitly
 activity-compose        = { group = "androidx.activity", name = "activity-compose", version.ref = "activity-compose" }
 navigation-compose      = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 lifecycle-viewmodel     = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 adaptive                = { group = "androidx.compose.material3.adaptive", name = "adaptive", version.ref = "adaptive" }
 coroutines-android      = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
-# APK tooling — from google() repo
+# APK tooling—from google() repo
 smali                   = { group = "com.android.tools.smali", name = "smali", version.ref = "smali" }
 baksmali                = { group = "com.android.tools.smali", name = "smali-baksmali", version.ref = "smali" }
 apksig                  = { group = "com.android.tools.build", name = "apksig", version.ref = "apksig" }

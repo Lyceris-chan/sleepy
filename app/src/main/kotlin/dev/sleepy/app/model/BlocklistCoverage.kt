@@ -1,30 +1,31 @@
 package dev.sleepy.app.model
 
 /**
- * One row of the blocklist list the UI shows: a rule with a switch, or a gate without one.
+ * One row of the blocklist that the UI shows: a rule with a switch, or a gate without one.
  *
- * @property label the row's name.
- * @property description what the row does, in the user's terms.
- * @property lockedReason why the switch cannot be used, or null when it can. There are exactly
- *   two reasons and they are different claims — see [BlocklistCoverage.COVERED_REASON_PREFIX] and
- *   [BlocklistCoverage.REQUIRED_REASON_PREFIX]. A rule can carry the first, a gate the second.
+ * @property label The row's name.
+ * @property description What the row does, in the user's terms.
+ * @property lockedReason Why the switch cannot be used, or null when it can. Two reasons share
+ *   this field and they are different statements—see
+ *   [BlocklistCoverage.COVERED_REASON_PREFIX] and [BlocklistCoverage.REQUIRED_REASON_PREFIX]. A
+ *   rule carries the first, a gate the second.
  */
 sealed interface BlocklistRow {
     val label: String
     val description: String
     val lockedReason: String?
 
-    /** True when the user may toggle this row. */
+    /** True when the user can toggle this row. */
     val switchable: Boolean get() = lockedReason == null
 }
 
 /**
- * A blocklist entry, its switch, and why that switch may be inert.
+ * A blocklist entry, its switch, and why that switch can be inert.
  *
- * @property enabled whether the rule is switched on.
- * @property coveredBy the enabled rule that makes this one redundant, if there is one. Non-null
- *   whether or not this rule is itself on: a rule that is off is just as inert when something
- *   else already answers every request it would have answered.
+ * @property enabled Whether the rule is switched on.
+ * @property coveredBy The enabled rule that makes this one redundant, if there is one. Non-null
+ *   whether or not this rule is itself on: a rule that is off is equally redundant when another
+ *   rule already blocks every request it matches.
  */
 data class BlocklistRuleRow(
     val rule: BlocklistRule,
@@ -38,7 +39,7 @@ data class BlocklistRuleRow(
         get() = coveredBy?.let { BlocklistCoverage.coveredReason(it) }
 }
 
-/** One of the interceptor's prefix gates: always applied, and not a choice. */
+/** One of the interceptor's prefix gates: applied to every request, and not switchable. */
 data class BlocklistGateRow(val gate: BlocklistGate) : BlocklistRow {
     override val label: String get() = gate.label
     override val description: String get() = gate.description
@@ -46,16 +47,15 @@ data class BlocklistGateRow(val gate: BlocklistGate) : BlocklistRow {
 }
 
 /**
- * Which blocklist rules are redundant because another enabled rule already answers their
- * requests.
+ * Which blocklist rules are redundant because another enabled rule already blocks their requests.
  *
- * Rules are matched with a plain `contains` and each match answers the request on its own, so a
- * rule only does something if there is a request it blocks that no other enabled rule blocks.
- * [covers] is that test, and [evaluate] applies it to a whole table.
+ * Rules are matched with a plain `contains`, and each matching rule blocks the request by itself,
+ * so a rule changes the outcome only if there is a request it blocks that no other enabled rule
+ * blocks. [covers] performs that test, and [evaluate] applies it to a whole table.
  *
- * Nothing here knows about the selection: it takes "is this rule switched on", so the same call
- * both renders the list and recomputes it after a toggle. Turning a coverer off makes everything
- * it covered live again, with no state to keep in step.
+ * This object does not read the selection: it takes "is this rule switched on" as an argument, so
+ * the same call both renders the list and recomputes it after a toggle. Switching a coverer off
+ * makes every rule it covered switchable again, with no stored state to keep in step.
  */
 object BlocklistCoverage {
 
@@ -68,28 +68,30 @@ object BlocklistCoverage {
     /**
      * The reason a covered rule's switch is inert, naming the rule that covers it.
      *
-     * Phrased for both states of the covered switch, because coverage does not depend on it: a
-     * covered rule that is off would add nothing by being switched on either.
+     * The text applies to both states of the covered switch, because coverage does not depend on
+     * it: switching a covered rule on adds nothing while the covering rule is on.
      */
     fun coveredReason(coverer: BlocklistRule): String =
-        "$COVERED_REASON_PREFIX \"${coverer.pattern}\": every URL this rule matches also contains " +
-            "that pattern, and that rule is switched on, so this switch makes no difference while " +
-            "it stays on."
+        "$COVERED_REASON_PREFIX \"${coverer.pattern}\": every URL this rule matches also " +
+            "contains that pattern, and that rule is switched on, so this switch makes no " +
+            "difference while it stays on."
 
     /**
      * Whether [cover] makes [covered] redundant: every URL containing [covered]'s pattern also
-     * contains [cover]'s, which — matching being a plain `contains` — is exactly [cover]'s
-     * pattern being a substring of [covered]'s.
+     * contains [cover]'s, which, with a plain `contains` match, means [cover]'s pattern is a
+     * substring of [covered]'s.
      *
-     * Position in the table does not come into it. If the coverer is tested first it blocks the
-     * request; if it is tested last, the covered rule blocks it first and the coverer would have
-     * blocked it anyway. Either way switching the covered rule off changes nothing.
+     * Position in the table does not affect the result. If the interceptor tests the coverer
+     * first, it blocks the request; if it tests the covered rule first, that rule blocks the
+     * request, and the request is blocked either way. Switching the covered rule off therefore
+     * changes nothing.
      *
-     * The kind is part of the test because the gates are not symmetric. A host rule is applied to
-     * every URL, so a host rule can cover an API rule: every `/api/` URL is a URL. An API rule
-     * cannot cover a host rule, even when its pattern is a substring — a URL matching the host
-     * rule without containing `/api/` is never tested against the API rule at all, and switching
-     * the host rule off would leave that request unblocked.
+     * The kind is part of the test because the two regimes are not symmetric. A host rule is
+     * applied to every URL, so a host rule can cover an API rule: every URL that contains `/api/`
+     * is also tested against the host rule. An API rule cannot cover a host rule, even when its
+     * pattern is a substring, because a URL that matches the host rule and does not contain
+     * `/api/` is not tested against the API rule, and switching the host rule off leaves that
+     * request unblocked.
      */
     fun covers(cover: BlocklistRule, covered: BlocklistRule): Boolean {
         if (cover.identity == covered.identity) return false
@@ -98,12 +100,11 @@ object BlocklistCoverage {
     }
 
     /**
-     * Every rule as a row, each naming the rule that covers it, or left switchable when none
-     * does.
+     * Every rule as a row, each naming the rule that covers it, or switchable when none does.
      *
-     * Only enabled rules cover, which is what makes this recompute correctly as the user toggles.
-     * When several enabled rules cover the same one, the first in table order is named, so the
-     * reason a row shows stays put instead of changing with map iteration order.
+     * Only enabled rules cover, so the rows change as the user toggles. When several enabled
+     * rules cover the same one, the first in table order is named, so the reason shown for a row
+     * does not change with map iteration order.
      */
     fun evaluate(
         rules: List<BlocklistRule>,
@@ -115,7 +116,7 @@ object BlocklistCoverage {
         BlocklistRuleRow(rule = rule, enabled = isEnabled(rule), coveredBy = coverer)
     }
 
-    /** The switchable rows of [rules], plus the always-on [gates], in table order. */
+    /** The switchable rows of [rules], plus the fixed [gates], in table order. */
     fun rows(
         rules: List<BlocklistRule>,
         gates: List<BlocklistGate>,

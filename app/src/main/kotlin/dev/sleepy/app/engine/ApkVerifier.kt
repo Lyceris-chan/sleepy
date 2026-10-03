@@ -11,23 +11,22 @@ import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
 
 /**
- * Checks a finished APK and reports what genuinely holds.
+ * Checks a finished APK and reports the measured result.
  *
  * The patcher previously asserted `v1/v2/v3SignatureValid = true` and
- * `zipalignPassed = true` as constants without inspecting the artefact. Those claims are
+ * `zipalignPassed = true` as constants without inspecting the artifact. Those claims are
  * what a user relies on when deciding whether to install the result, so they are measured
  * here instead.
  *
- * Both spellings of the check read the same things: [verify] takes the archive in memory and
- * [verify] over a [File] reads it where it lies, which is what the pipeline uses — a finished
- * APK is 131 MB, and loading it again to look at its directory would undo the point of
- * writing it straight to disk.
+ * Both overloads read the same things: one [verify] takes the archive in memory, and the
+ * other reads a [File] in place, which is the one the pipeline uses—a finished APK is
+ * 131 MB, and loading it into memory to read its directory uses that much heap again.
  *
  * One of these checks has three answers rather than two. JAR signing is written into every
- * APK this patcher signs, but it is only ever *read* by platforms below API 24, and the
- * verifier does not look at it for a build that declares a higher `minSdkVersion` — so the
- * honest report for such an APK is "not applicable", not the "not valid" that a bare
- * Boolean made of it. See [Result.v1SignatureValid].
+ * APK this patcher signs, but it is only ever *read* by platforms earlier than API 24, and the
+ * verifier does not read it for a build that declares a higher `minSdkVersion`—so the
+ * report for such an APK is "not applicable" rather than the "not valid" that a bare
+ * Boolean produced. See [Result.v1SignatureValid].
  */
 object ApkVerifier {
 
@@ -38,36 +37,41 @@ object ApkVerifier {
      * The first API level whose platform ignores JAR signatures.
      *
      * JAR signing exists to serve platforms that predate APK Signature Scheme v2, and from
-     * API 24 on the platform consults v2, v3 and the APK Signing Block instead — v1 is not
+     * API 24 on the platform uses v2, v3 and the APK Signing Block instead—v1 is not
      * read there at all. apksig follows the same rule: given an APK whose own
      * `minSdkVersion` reaches this level it does not run the JAR verifier, and reports
      * `isVerifiedUsingV1Scheme = false`.
      */
     private const val FIRST_API_WITHOUT_JAR_SIGNING = 24
 
+    /** The outcome of the checks that [ApkVerifier] runs against one APK. */
     data class Result(
         /**
-         * Whether the JAR signature verified.
+         * Whether the v1 (JAR) signature check passed.
          *
-         * `null` means the scheme does not apply to this APK: JAR signing is only honoured
-         * below API 24, so a build whose `minSdkVersion` is 24 or higher never has it read,
-         * and the verifier does not read it either. That is deliberately not `false` —
+         * `null` means the scheme does not apply to this APK: JAR signing is only honored
+         * earlier than API 24, so a build whose `minSdkVersion` is 24 or higher does not have it
+         * read, and the verifier does not read it either. That is deliberately not `false`—
          * "this scheme does not apply" and "this signature is broken" must not collapse into
-         * the same value, which is exactly what happened when a valid v1 signature was
-         * reported as failing on every modern APK this patcher produces.
+         * the same value, which is what happened when a valid v1 signature was reported as
+         * failing on every modern APK this patcher produces.
          */
         val v1SignatureValid: Boolean?,
+        /** Whether the APK Signature Scheme v2 signature check passed. */
         val v2SignatureValid: Boolean,
+        /** Whether the APK Signature Scheme v3 signature check passed. */
         val v3SignatureValid: Boolean,
         /**
          * Whether every entry that needs alignment has it.
          *
          * `null` means the archive's central directory could not be read, so nothing was
-         * measured. That is deliberately not `false`: "could not tell" and "aligned" must not
+         * measured. That is deliberately not `false`: "not measured" and "aligned" must not
          * collapse into the same value, which is what an empty misaligned list used to do.
          */
         val zipalignPassed: Boolean?,
+        /** Errors reported by the signature verifier. */
         val signatureErrors: List<String>,
+        /** Names of entries whose data offset does not meet the alignment requirement. */
         val misalignedEntries: List<String>,
         /** Why the alignment answer is `null`, for the reader who has to act on it. */
         val directoryError: String?,
@@ -75,15 +79,21 @@ object ApkVerifier {
         val v1NotApplicableReason: String?
     )
 
-    /** Schemes an APK must satisfy: v1 (JAR), v2 (APK Signature Scheme v2), v3. */
+    /**
+     * Checks [apkBytes] against the three schemes an APK must satisfy—v1 (JAR), v2 (APK
+     * Signature Scheme v2), and v3—and against the alignment rule.
+     */
     fun verify(apkBytes: ByteArray): Result =
-        inspect(DataSources.asDataSource(ByteBuffer.wrap(apkBytes)), findMisalignedEntries(apkBytes))
+        inspect(
+            DataSources.asDataSource(ByteBuffer.wrap(apkBytes)),
+            findMisalignedEntries(apkBytes)
+        )
 
     /**
-     * The same checks against an APK on disk.
+     * Runs the same checks against an APK on disk.
      *
      * apksig streams what it verifies through a [FileChannel], and the alignment scan reads
-     * only the archive's own directory, so neither costs the size of the file.
+     * only the archive's own directory, so neither requires the whole file in memory.
      */
     fun verify(apkFile: File): Result =
         FileChannel.open(apkFile.toPath(), StandardOpenOption.READ).use { channel ->
@@ -103,7 +113,9 @@ object ApkVerifier {
             v3 = result.isVerifiedUsingV3Scheme
             for (issue in result.errors) {
                 val params = issue.params?.joinToString(", ") { it.toString() }.orEmpty()
-                errors.add(if (params.isEmpty()) issue.issue.name else "${issue.issue.name} ($params)")
+                errors.add(
+                    if (params.isEmpty()) issue.issue.name else "${issue.issue.name} ($params)"
+                )
             }
         } catch (e: Exception) {
             errors.add("Signature verification could not run: ${e.message}")
@@ -124,13 +136,12 @@ object ApkVerifier {
     }
 
     /**
-     * What the JAR signature's verification means, which is not always a yes or a no.
+     * The meaning of the JAR signature's verification result, which has three possible values.
      *
-     * apksig answers `false` both for a signature that failed and for one it never looked
-     * at, and it never looks at one belonging to an APK whose `minSdkVersion` puts the JAR
-     * format out of reach. [minSdkVersion] is what tells the two apart; when the manifest
-     * cannot be read there is no way to tell, so the verdict is left unknown rather than
-     * assumed to be a failure.
+     * apksig reports `false` both for a signature that failed and for one it did not read,
+     * and it does not read one belonging to an APK whose `minSdkVersion` puts the JAR
+     * format out of reach. [minSdkVersion] distinguishes the two cases; when the manifest
+     * cannot be read, the verdict is left unknown rather than assumed to be a failure.
      */
     private fun v1Verdict(verified: Boolean, minSdkVersion: Int?): Boolean? = when {
         verified -> true
@@ -139,14 +150,18 @@ object ApkVerifier {
         else -> false
     }
 
-    /** Why [v1Verdict] answered `null` and not `false`, in the terms the cause is stated in. */
+    /** The reason [v1Verdict] returned `null` rather than `false`, phrased as the cause. */
     private fun v1NotApplicableReason(verified: Boolean, minSdkVersion: Int?): String? = when {
         verified -> null
-        minSdkVersion == null ->
-            "the APK's AndroidManifest.xml could not be read, so the minSdkVersion that decides whether JAR signing applies is unknown"
-        minSdkVersion >= FIRST_API_WITHOUT_JAR_SIGNING ->
-            "this build declares minSdkVersion $minSdkVersion, and JAR signing is only honoured below API " +
-                "$FIRST_API_WITHOUT_JAR_SIGNING — the signature is present and valid, but no platform that can install this APK reads it"
+        minSdkVersion == null -> {
+            "the APK's AndroidManifest.xml could not be read, so the minSdkVersion that " +
+                "decides whether JAR signing applies is unknown"
+        }
+        minSdkVersion >= FIRST_API_WITHOUT_JAR_SIGNING -> {
+            "this build declares minSdkVersion $minSdkVersion, and JAR signing is only " +
+                "honored below API $FIRST_API_WITHOUT_JAR_SIGNING—the signature is " +
+                "present and valid, but no platform that can install this APK reads it"
+        }
         else -> null
     }
 
@@ -154,9 +169,9 @@ object ApkVerifier {
      * The `minSdkVersion` the APK's own manifest declares, or `null` when it cannot be read.
      *
      * Read through apksig's own manifest reader rather than a second binary-XML parser, and read
-     * from the finished artefact rather than from the source it was built out of: the merge
-     * rewrites this manifest, and it is the rewritten one that decides what the platform does.
-     * The manifest is one ~100 KB entry, so this costs a seek rather than the archive.
+     * from the finished artifact rather than from the source it was built out of: the merge
+     * rewrites this manifest, and the platform reads the rewritten one. The manifest is one
+     * ~100 KB entry, so this reads one entry rather than the whole archive.
      */
     private fun minSdkVersion(source: DataSource): Int? = try {
         ApkUtils.getMinSdkVersionFromBinaryAndroidManifest(ApkUtils.getAndroidManifest(source))
@@ -165,12 +180,12 @@ object ApkVerifier {
     }
 
     /**
-     * Names of entries whose data does not start where [ZipAlignment] requires, or the reason
-     * the directory could not be walked at all.
+     * Finds the entries whose data offset does not meet the [ZipAlignment] requirement, and
+     * collects the reason the directory could not be walked.
      *
      * Only uncompressed entries are checked. Compressed entries have no alignment
-     * requirement — `zipalign -c` marks them "OK - compressed" — so testing `offset % 4`
-     * across every entry reports thousands of failures on a stock, perfectly valid APK.
+     * requirement—`zipalign -c` marks them "OK - compressed"—so testing `offset % 4`
+     * across every entry reports thousands of failures on a stock, valid APK.
      */
     private fun findMisalignedEntries(apkBytes: ByteArray): AlignmentScan {
         val misaligned = mutableListOf<String>()
@@ -195,8 +210,9 @@ object ApkVerifier {
      * The alignment answer, or why there is no answer.
      *
      * [error] separates "the directory was walked and every entry that needs aligning is
-     * aligned" from "the directory could not be walked". Both used to arrive as an empty
-     * list, which is why a ZIP64 archive the file reader could not parse reported as aligned.
+     * aligned" from "the directory could not be walked". Both were previously represented by
+     * an empty list, so a ZIP64 archive that the file reader could not parse reported as
+     * aligned.
      */
     private class AlignmentScan(val misalignedEntries: List<String>, val error: String?)
 
@@ -205,8 +221,8 @@ object ApkVerifier {
      * the local-header-derived data offset, and its compression method.
      *
      * @return `null` when the whole directory was walked, or a one-line reason it could not
-     * be. A caller that treats a returned reason as an empty directory is claiming alignment
-     * for an archive nothing was read out of.
+     * be. A caller that treats a returned reason as an empty directory claims alignment for
+     * an archive that was not read.
      */
     internal fun readCentralDirectory(
         apkBytes: ByteArray,
@@ -223,7 +239,7 @@ object ApkVerifier {
         if (offset == 0xFFFFFFFFL || count == 0xFFFF) {
             val zip64 = findZip64EndOfCentralDirectory(buf, eocdOffset, apkBytes.size.toLong())
                 ?: return "the ZIP64 locator does not name a record that fits in the archive"
-            // The whole file is the buffer here, so the stored file offset is the index too —
+            // The whole file is the buffer here, so the stored file offset is the index too—
             // and the helper has already bounds-tested it against this buffer's capacity.
             val zip64Index = zip64.toInt()
             if (buf.getInt(zip64Index) != 0x06064b50) {
@@ -260,12 +276,12 @@ object ApkVerifier {
     }
 
     /**
-     * The same walk for an APK on disk.
+     * Walks the central directory of [apkFile].
      *
-     * Only what the answer needs is read: the archive's tail — the central directory and the
-     * end-of-central-directory record that gives its position — and then each local header the
-     * directory points at. The entry data itself is never touched, which is the whole reason a
-     * finished 131 MB APK can be checked without a heap to match.
+     * The read covers only what the result requires: the archive's tail—the central
+     * directory and the end-of-central-directory record that gives its position—and then
+     * each local header the directory points at. The entry data itself is not read, which is
+     * why the check of a finished 131 MB APK does not allocate a buffer of that size.
      *
      * @return `null` when the whole directory was walked, or a one-line reason it could not be.
      */
@@ -279,7 +295,8 @@ object ApkVerifier {
             // comment of at most 64 KiB, and the ZIP64 locator sits 20 bytes before that.
             val tailSize = minOf(length, (22 + 0xFFFF + 20).toLong()).toInt()
             if (tailSize < 22) {
-                return "${apkFile.name} is $length bytes, too short to hold an end-of-central-directory record"
+                return "${apkFile.name} is $length bytes, too short to hold an " +
+                    "end-of-central-directory record"
             }
             val tail = ByteArray(tailSize)
             file.seek(length - tailSize)
@@ -297,7 +314,7 @@ object ApkVerifier {
                 // everything else in `buf` is indexed from the start of the *tail*, which
                 // begins `length - tailSize` bytes into the file. The record is therefore read
                 // by seeking to the stored offset in the file rather than by indexing the tail
-                // with it — the two coincide only when the tail happens to be the whole file.
+                // with it—the two coincide only when the tail happens to be the whole file.
                 val zip64 = findZip64EndOfCentralDirectory(buf, eocd, length)
                     ?: return "the ZIP64 locator does not name a record that fits in the archive"
                 val record = ByteArray(ZIP64_RECORD_SIZE)
@@ -320,7 +337,8 @@ object ApkVerifier {
                 return "the central directory is larger than this reader can hold"
             }
             if (directoryOffset > length - directorySize) {
-                return "the central directory at $directoryOffset ($directorySize bytes) lies outside the ${length}-byte archive"
+                return "the central directory at $directoryOffset ($directorySize bytes) " +
+                    "lies outside the ${length}-byte archive"
             }
             val directory = ByteArray(directorySize.toInt())
             file.seek(directoryOffset)
@@ -330,11 +348,13 @@ object ApkVerifier {
             var offset = 0L
             repeat(count) { entry ->
                 if (offset < 0 || offset > directory.size - 46L) {
-                    return "central-directory entry $entry of $count lies outside ${directorySize}-byte directory"
+                    return "central-directory entry $entry of $count lies outside " +
+                        "${directorySize}-byte directory"
                 }
                 val index = offset.toInt()
                 if (directoryBuf.getInt(index) != 0x02014b50) {
-                    return "central-directory entry $entry of $count is not a central-directory header"
+                    return "central-directory entry $entry of $count is not a " +
+                        "central-directory header"
                 }
 
                 val method = directoryBuf.getShort(index + 10).toInt() and 0xFFFF
@@ -355,14 +375,21 @@ object ApkVerifier {
 
     /**
      * An entry count as this reader can use it, or `null` when the archive claims one it
-     * cannot walk. A negative or unrepresentable count is a directory that cannot be read;
-     * truncating it would walk nothing and call the result "aligned".
+     * cannot walk. A negative or unrepresentable count means a directory that cannot be
+     * read; truncating it walks nothing and reports the archive as aligned.
      */
     private fun readableEntryCount(value: Long): Int? =
         if (value in 0..Int.MAX_VALUE.toLong()) value.toInt() else null
 
-    /** Data offset of the entry at [localOffset], i.e. past its local header and extra field. */
-    private fun localHeaderDataOffset(apkBytes: ByteArray, buf: ByteBuffer, localOffset: Long): Long {
+    /**
+     * Data offset of the entry at [localOffset], that is, past its local header and extra
+     * field.
+     */
+    private fun localHeaderDataOffset(
+        apkBytes: ByteArray,
+        buf: ByteBuffer,
+        localOffset: Long
+    ): Long {
         val index = localOffset.toInt()
         if (index < 0 || index + 30 > apkBytes.size) return -1
         if (buf.getInt(index) != 0x04034b50) return -1
@@ -371,7 +398,7 @@ object ApkVerifier {
         return localOffset + 30 + nameLength + extraLength
     }
 
-    /** The same read, against the file the local header actually lives in. */
+    /** The same read against the file that contains the local header. */
     private fun localHeaderDataOffset(file: RandomAccessFile, localOffset: Long): Long {
         if (localOffset < 0 || localOffset + 30 > file.length()) return -1
         val header = ByteArray(30)
@@ -397,14 +424,18 @@ object ApkVerifier {
      * absent, malformed, or names a record that does not fit in a [fileLength]-byte file.
      *
      * The returned offset is **absolute in the file**, because that is what the locator stores
-     * — 4.3.15's "relative offset of the zip64 end of central directory record" is measured
+     * —4.3.15's "relative offset of the zip64 end of central directory record" is measured
      * from the start of the archive, not from whatever window the caller happens to have read.
-     * [buf] is only used to find and read the locator, which always sits 20 bytes before the
+     * [buf] is only used to find and read the locator, which is located 20 bytes before the
      * end-of-central-directory record and therefore inside the same window; the record it
-     * points at may be anywhere in the file. Bounds-testing it against `buf.capacity()` is
-     * what made the file reader refuse every ZIP64 archive whose record lay outside the tail.
+     * points at can be anywhere in the file. Bounds-testing it against `buf.capacity()` is
+     * what made the file reader reject every ZIP64 archive whose record lay outside the tail.
      */
-    private fun findZip64EndOfCentralDirectory(buf: ByteBuffer, eocdOffset: Int, fileLength: Long): Long? {
+    private fun findZip64EndOfCentralDirectory(
+        buf: ByteBuffer,
+        eocdOffset: Int,
+        fileLength: Long
+    ): Long? {
         val locator = eocdOffset - 20
         if (locator < 0 || buf.getInt(locator) != 0x07064b50) return null
         val index = buf.getLong(locator + 8)

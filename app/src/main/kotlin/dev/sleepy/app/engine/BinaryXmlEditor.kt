@@ -9,17 +9,16 @@ import java.nio.ByteOrder
  *
  * Unlike [BinaryXmlModifier], which rewrites the string pool to rename a package, this walks
  * the chunk tree and edits individual `START_TAG` attributes. A split-APK merge needs that:
- * the platform keys Android attributes off their resource ID, not their text, so an
- * attribute can only be neutralised by removing it or rewriting its typed value.
+ * the platform identifies Android attributes by their resource ID, not their text, so an
+ * attribute can only be neutralized by removing it or rewriting its typed value.
  *
  * ## Resolving an attribute's identity
  *
- * An attribute's `name` field is **not** a resource ID — it is an index into the string
+ * An attribute's `name` field is **not** a resource ID—it is an index into the string
  * pool. The resource ID is obtained by looking that index up in the document's
  * `RES_XML_RESOURCE_MAP_TYPE` chunk. Attributes declared outside the `android` namespace
  * (such as `package`) have no entry in the map and therefore no resource ID. Matching on the
- * raw `name` field silently finds nothing; that mistake is why the map is resolved here
- * first.
+ * raw `name` field finds nothing; that mistake is why the map is resolved here first.
  */
 object BinaryXmlEditor {
 
@@ -40,7 +39,7 @@ object BinaryXmlEditor {
     const val ATTR_EXTRACT_NATIVE_LIBS = 0x010104ea
     const val ATTR_APP_COMPONENT_FACTORY = 0x0101057a
 
-    /** The manifest element a declared permission lives in. */
+    /** The manifest element that holds a declared permission. */
     const val ELEMENT_USES_PERMISSION = "uses-permission"
 
     /** The other manifest elements this editor is asked to match. */
@@ -69,19 +68,19 @@ object BinaryXmlEditor {
 
     /**
      * One element to delete from a document: the element's name (matched as a prefix), one
-     * attribute of it that must carry a given string value, and — when that is not enough to
-     * name it — an element it must contain.
+     * attribute of it that must carry a given string value, and—when that is not enough to
+     * name it—an element it must contain.
      *
-     * Matching on the name alone would be wrong for the case this exists for: the manifest
+     * Matching on the name alone does not work for the case this exists for: the manifest
      * declares a permission with `<uses-permission android:name="..."/>`, so the element name is
-     * shared by every permission and only the attribute says which one. The attribute is named by
-     * resource ID rather than by string for the same reason attributes are removed by ID — the
-     * `name` field on the wire is a string-pool index, not an identity.
+     * shared by every permission and only the attribute identifies which one. The attribute is
+     * named by resource ID rather than by string for the same reason attributes are removed by
+     * ID—the `name` field on the wire is a string-pool index, not an identity.
      *
-     * [attributeId] is null for an element the attribute test cannot single out — `<intent>` under
-     * `<queries>` carries no attributes at all, and what tells the AppsFlyer one from the others is
-     * the `<action>` inside it, which is what [contains] is for. A contained selector is matched
-     * anywhere in the element's subtree, so it can itself carry a [contains].
+     * [attributeId] is null for an element the attribute test cannot single out—`<intent>` under
+     * `<queries>` carries no attributes at all, and what distinguishes the AppsFlyer one from the
+     * others is the `<action>` inside it, which is what [contains] is for. A contained selector is
+     * matched anywhere in the element's subtree, so it can itself carry a [contains].
      */
     data class ElementSelector(
         val namePrefix: String,
@@ -103,7 +102,7 @@ object BinaryXmlEditor {
      * One attribute to rewrite on the elements [element] matches, and nowhere else.
      *
      * [edit]'s `booleanOverrides` is keyed by attribute ID alone, which is right when every
-     * occurrence of an attribute should change — `extractNativeLibs` sits on a single
+     * occurrence of an attribute should change—`extractNativeLibs` sits on a single
      * `<application>`. It is wrong when one element out of many should change: `android:exported`
      * appears on dozens of components, and only one of them is being closed off. So this carries
      * the same selector an element removal does, matched the same way.
@@ -115,27 +114,34 @@ object BinaryXmlEditor {
     )
 
     /**
-     * Result of an edit pass, describing what actually changed so the caller can report it
-     * truthfully instead of assuming the edit landed.
+     * Result of an edit pass, describing what actually changed so the caller can report the edit
+     * rather than assume it landed.
      *
-     * [elementsRemoved] and [elementsMissing] are keyed by [ElementSelector.label] — the permission
-     * name, in the case this exists for — because that is the thing the caller asked about and the
+     * [elementsRemoved] and [elementsMissing] are keyed by [ElementSelector.label]—the permission
+     * name, in the case this exists for—because that is the thing the caller asked about and the
      * thing it has to name back to the user. Which selector removed an element is the whole reason
      * the label is reported rather than the element: one pass can carry removals for several
      * unrelated reasons, and the caller reports each of them separately.
      *
-     * [elementOverridesApplied] names, the same way, the selectors in `elementOverrides` that found
-     * the element they name. It says the element was there, not that its attribute changed:
-     * [attributesRewritten] says that, and the two together are what tells a caller "closed it"
+     * [elementOverridesApplied] names, the same way, the selectors in `elementOverrides` that
+     * found the element they name. It records that the element was present, not that its attribute
+     * changed: [attributesRewritten] reports that, and the two together distinguish "closed it"
      * from "it was already closed" from "this build does not declare it".
      */
     data class EditResult(
+        /** The rebuilt document. */
         val bytes: ByteArray,
+        /** IDs of the attributes that were removed. */
         val attributesRemoved: List<Int>,
+        /** IDs of the attributes whose value changed. */
         val attributesRewritten: List<Int>,
+        /** IDs of the requested attributes that no element carried. */
         val missing: List<Int>,
+        /** Labels of the selectors whose element was removed. */
         val elementsRemoved: List<String> = emptyList(),
+        /** Labels of the requested selectors that matched no element. */
         val elementsMissing: List<String> = emptyList(),
+        /** Labels of the override selectors whose element matched. */
         val elementOverridesApplied: List<String> = emptyList()
     )
 
@@ -145,7 +151,7 @@ object BinaryXmlEditor {
      * [removeElements], rebuilding the document with corrected chunk sizes.
      *
      * Attributes that were requested but not found are reported in [EditResult.missing]
-     * rather than silently ignored; elements likewise in [EditResult.elementsMissing].
+     * rather than ignored; elements likewise in [EditResult.elementsMissing].
      */
     fun edit(
         xml: ByteArray,
@@ -172,15 +178,15 @@ object BinaryXmlEditor {
 
         val resourceIds = readResourceMap(buf, xml)
         // Only read the pool when an element is being matched by name or value: it is the one
-        // thing here that has to resolve a string, and a document nothing is matched against
-        // never needs it.
+        // thing here that has to resolve a string, and a document that nothing is matched
+        // against does not need it.
         val strings = if (removeElements.isEmpty() && elementOverrides.isEmpty()) {
             emptyList()
         } else {
             readStringPool(buf, xml)
         }
         val out = ByteArrayOutputStream(xml.size)
-        out.write(ByteArray(ROOT_HEADER_SIZE)) // root header rewritten once the size is known
+        out.write(ByteArray(ROOT_HEADER_SIZE))  // root header rewritten once the size is known
 
         val removed = mutableListOf<Int>()
         val rewritten = mutableListOf<Int>()
@@ -200,7 +206,8 @@ object BinaryXmlEditor {
                 if (selector != null) {
                     // Skip the whole element, children included, by jumping past its END_TAG. A
                     // malformed document where no END_TAG closes it is left alone rather than
-                    // truncated: a manifest that parses is worth more than one edit.
+                    // truncated: leaving it unchanged is preferable to producing a document that
+                    // does not parse.
                     val afterElement = endOfElement(buf, xml, offset, chunkSize)
                     if (afterElement > offset) {
                         elementsRemoved.add(selector.label)
@@ -209,13 +216,15 @@ object BinaryXmlEditor {
                         continue
                     }
                 }
-                // A scoped override wins over a global one: it names the element it belongs to,
-                // and the global map names only an attribute.
+                // A scoped override takes precedence over a global one: it names the element it
+                // belongs to, and the global map names only an attribute.
                 val applicable = if (elementOverrides.isEmpty()) {
                     booleanOverrides
                 } else {
                     val scoped = elementOverrides.filter {
-                        matchElement(buf, xml, offset, resourceIds, strings, listOf(it.element)) != null
+                        matchElement(
+                            buf, xml, offset, resourceIds, strings, listOf(it.element)
+                        ) != null
                     }
                     for (override in scoped) {
                         val label = override.element.label
@@ -265,8 +274,8 @@ object BinaryXmlEditor {
      * extracted at install time instead of being mapped out of the APK.
      *
      * [removeElements] is offered here rather than as a second pass so that a manifest is edited
-     * once, with one corrected root size: two passes would each rewrite the document and the
-     * second would have to re-read what the first produced.
+     * once, with one corrected root size: two passes each rewrite the document, and the second
+     * has to re-read what the first produced.
      */
     fun makeStandaloneManifest(
         manifestBytes: ByteArray,
@@ -285,7 +294,7 @@ object BinaryXmlEditor {
      * document order.
      *
      * This is how a build's own declarations are read rather than assumed: the manifest the user
-     * selected is the authority on what it declares, and a list written down here would be wrong
+     * selected is the authority on what it declares, and a list written down here becomes wrong
      * the first time the app updates.
      */
     fun readElementAttributeValues(
@@ -310,7 +319,9 @@ object BinaryXmlEditor {
             if (type == RES_XML_START_ELEMENT_TYPE &&
                 elementName(buf, xml, offset, strings).startsWith(namePrefix)
             ) {
-                val value = findStringAttribute(buf, xml, offset, chunkSize, resourceIds, strings, attributeId)
+                val value = findStringAttribute(
+                    buf, xml, offset, chunkSize, resourceIds, strings, attributeId
+                )
                 if (value != null) values.add(value)
             }
             offset += chunkSize
@@ -331,7 +342,9 @@ object BinaryXmlEditor {
             val chunkSize = buf.getInt(offset + 4)
             if (chunkSize < CHUNK_HEADER_SIZE || offset + chunkSize > xml.size) return null
             if (type == RES_XML_START_ELEMENT_TYPE) {
-                val found = findAttributeValue(buf, xml, offset, chunkSize, resourceIds, attributeId)
+                val found = findAttributeValue(
+                    buf, xml, offset, chunkSize, resourceIds, attributeId
+                )
                 if (found != null) return found.value
             }
             offset += chunkSize
@@ -368,7 +381,8 @@ object BinaryXmlEditor {
             val attrStart = attributesOffset + i * attributeSize
             if (attrStart + ATTRIBUTE_SIZE > xml.size) return null
             if (attributeIdAt(buf, resourceIds, attrStart) != attributeId) continue
-            // Res_value: size (u16) at +12, res0 (u8) at +14, dataType (u8) at +15, data (u32) at +16.
+            // Res_value: size (u16) at +12, res0 (u8) at +14, dataType (u8) at +15,
+            // data (u32) at +16.
             val dataType = buf.get(attrStart + 15).toInt() and 0xFF
             if (dataType == TYPE_NULL) return AttributeValue(null)
             return AttributeValue(buf.getInt(attrStart + 16))
@@ -396,7 +410,7 @@ object BinaryXmlEditor {
         val attributeCount = buf.getShort(chunkStart + 28).toInt() and 0xFFFF
 
         // `attributeStart` is an offset from the start of ResXMLTree_attrExt, which itself
-        // begins 16 bytes into the chunk — not from the start of the chunk.
+        // begins 16 bytes into the chunk—not from the start of the chunk.
         val attributesOffset = NODE_HEADER_SIZE + attributeStart
         val attributesEnd = attributesOffset + attributeCount * attributeSize
 
@@ -412,7 +426,7 @@ object BinaryXmlEditor {
         var kept = 0
         // Removing an attribute and rewriting one in place are tracked separately: a pure
         // in-place rewrite leaves the count unchanged, and keying the "nothing happened"
-        // check off the count alone would then discard the rewrite.
+        // check off the count alone discards the rewrite.
         var changed = false
 
         for (i in 0 until attributeCount) {
@@ -427,13 +441,14 @@ object BinaryXmlEditor {
                 continue
             }
 
-            val override = if (attributeId == NO_RESOURCE_ID) null else booleanOverrides[attributeId]
+            val override =
+                if (attributeId == NO_RESOURCE_ID) null else booleanOverrides[attributeId]
             if (override != null) {
                 seen.add(attributeId)
                 val previous = buf.getInt(attrStart + 16) != 0
-                attr[12] = 8 // Res_value.size, low byte
-                attr[13] = 0 // Res_value.size, high byte
-                attr[14] = 0 // Res_value.res0
+                attr[12] = 8  // Res_value.size, low byte
+                attr[13] = 0  // Res_value.size, high byte
+                attr[14] = 0  // Res_value.res0
                 attr[15] = TYPE_INT_BOOLEAN.toByte()
                 val data = if (override) 1 else 0
                 attr[16] = data.toByte()
@@ -467,9 +482,9 @@ object BinaryXmlEditor {
     /**
      * The first selector in [selectors] that [chunkStart] matches, or null when none does.
      *
-     * A selector matches on the element's name as a *prefix* — `uses-permission` covers
+     * A selector matches on the element's name as a *prefix*—`uses-permission` covers
      * `uses-permission-sdk-23` and `uses-permission-sdk-m`, the variants the platform reads for
-     * their own SDK ranges — and on the string value of one attribute, which is what tells one
+     * their own SDK ranges—and on the string value of one attribute, which distinguishes one
      * permission declaration from another. A selector with no attribute matches on the name
      * alone; one that also carries a `contains` has to hold that element somewhere inside it.
      */
@@ -490,10 +505,14 @@ object BinaryXmlEditor {
             if (!name.startsWith(selector.namePrefix)) continue
             val attributeId = selector.attributeId
             if (attributeId != null) {
-                val value = findStringAttribute(buf, xml, chunkStart, chunkSize, resourceIds, strings, attributeId)
+                val value = findStringAttribute(
+                    buf, xml, chunkStart, chunkSize, resourceIds, strings, attributeId
+                )
                 if (value != selector.attributeValue) continue
             }
-            if (selector.contains != null && !containsElement(buf, xml, chunkStart, resourceIds, strings, selector)) {
+            if (selector.contains != null &&
+                !containsElement(buf, xml, chunkStart, resourceIds, strings, selector)
+            ) {
                 continue
             }
             return selector
@@ -505,9 +524,9 @@ object BinaryXmlEditor {
      * Whether the element at [chunkStart] holds an element matching the selector's `contains`
      * anywhere below it.
      *
-     * "Anywhere below" rather than "as a direct child": how deeply a producer nests an element is
-     * its own business, and a selector that had to say which depth it meant would break the first
-     * time that changed. The walk stops at the element's own `END_TAG`, so an element matched
+     * "Anywhere below" rather than "as a direct child": the producer determines how deeply it
+     * nests an element, and a selector that had to state a depth breaks the first time the
+     * nesting changes. The walk stops at the element's own `END_TAG`, so an element matched
      * inside a *sibling* cannot satisfy it.
      */
     private fun containsElement(
@@ -539,15 +558,20 @@ object BinaryXmlEditor {
     }
 
     /**
-     * The offset just past the `END_TAG` that closes the element starting at [chunkStart], or -1
-     * when nothing closes it.
+     * The offset immediately past the `END_TAG` that closes the element starting at [chunkStart],
+     * or -1 when nothing closes it.
      *
-     * Android writes a self-closing `<x/>` as `START_TAG` immediately followed by `END_TAG` — which
-     * is what every `<uses-permission/>` in the manifests this was written against looks like — so
-     * the loop below usually runs once. It counts depth rather than assuming that, because the
+     * Android writes a self-closing `<x/>` as `START_TAG` immediately followed by `END_TAG`—which
+     * is what every `<uses-permission/>` in the manifests this was written against looks like—so
+     * the following loop usually runs once. It counts depth rather than assuming that, because the
      * format does allow children and a document where it does must not be cut in half.
      */
-    private fun endOfElement(buf: ByteBuffer, xml: ByteArray, chunkStart: Int, chunkSize: Int): Int {
+    private fun endOfElement(
+        buf: ByteBuffer,
+        xml: ByteArray,
+        chunkStart: Int,
+        chunkSize: Int
+    ): Int {
         var depth = 1
         var cursor = chunkStart + chunkSize
         while (cursor + CHUNK_HEADER_SIZE <= xml.size) {
@@ -567,7 +591,12 @@ object BinaryXmlEditor {
     }
 
     /** The name of the element whose `START_TAG` begins at [chunkStart], or "" when unreadable. */
-    private fun elementName(buf: ByteBuffer, xml: ByteArray, chunkStart: Int, strings: List<String>): String {
+    private fun elementName(
+        buf: ByteBuffer,
+        xml: ByteArray,
+        chunkStart: Int,
+        strings: List<String>
+    ): String {
         if (chunkStart + ELEMENT_NAME_OFFSET + 4 > xml.size) return ""
         val index = buf.getInt(chunkStart + ELEMENT_NAME_OFFSET)
         if (index < 0 || index >= strings.size) return ""
@@ -578,9 +607,9 @@ object BinaryXmlEditor {
      * The string value of [attributeId] on the element at [chunkStart], or null when the element
      * has no such attribute or it does not hold a string.
      *
-     * Only `TYPE_STRING` counts. A `name` attribute written as anything else — a reference, a raw
-     * integer — is not the literal the caller is comparing against, and reading its `data` field as
-     * a pool index would compare a number to a permission name.
+     * Only `TYPE_STRING` counts. A `name` attribute written as anything else—a reference, a raw
+     * integer—is not the literal the caller is comparing against, and reading its `data` field
+     * as a pool index compares a number to a permission name.
      */
     private fun findStringAttribute(
         buf: ByteBuffer,
@@ -616,8 +645,8 @@ object BinaryXmlEditor {
      * reference in the document indexes it.
      *
      * Both encodings are handled: the platform writes UTF-8 pools (the flag whose absence means
-     * UTF-16), and an aapt2 build can be told to write either. Length prefixes are variable-width
-     * in both, and out-of-range entries are left empty rather than throwing — this runs over a file
+     * UTF-16), and an aapt2 build can produce either. Length prefixes are variable-width
+     * in both, and out-of-range entries are left empty rather than throwing—this runs over a file
      * someone else produced, and a mis-sized pool must not take the patch run down with it.
      *
      * Shared with `BinaryXmlModifier`, which rewrites the package name: it reads the same pool this
@@ -669,11 +698,15 @@ object BinaryXmlEditor {
                 val charCount = readPoolLength16(buf, xml, start) ?: return ""
                 val byteCount = charCount.first * 2
                 val end = charCount.second + byteCount
-                if (end > xml.size) "" else String(xml, charCount.second, byteCount, Charsets.UTF_16LE)
+                if (end > xml.size) {
+                    ""
+                } else {
+                    String(xml, charCount.second, byteCount, Charsets.UTF_16LE)
+                }
             }
         } catch (e: IndexOutOfBoundsException) {
-            // A pool whose offsets run past the chunk is not one this editor can reason about; the
-            // element it would have named simply reads as unnamed and is left where it is.
+            // A pool whose offsets run past the chunk is not one this editor can read; the element
+            // it names reads as unnamed, and the caller receives no match.
             ""
         }
     }
@@ -691,7 +724,7 @@ object BinaryXmlEditor {
      * A UTF-16 pool's leading length: one 16-bit unit, or two when its high bit is set.
      *
      * The pool is little-endian on every platform this runs on, so the units are read through the
-     * buffer's own byte order rather than assembled by hand.
+     * buffer's own byte order rather than assembled manually.
      */
     private fun readPoolLength16(buf: ByteBuffer, xml: ByteArray, start: Int): Pair<Int, Int>? {
         if (start + 2 > xml.size) return null

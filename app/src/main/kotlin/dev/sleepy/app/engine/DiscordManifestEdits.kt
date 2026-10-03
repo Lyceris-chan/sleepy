@@ -4,83 +4,94 @@ import dev.sleepy.app.patches.DiscordNativePatches
 import dev.sleepy.app.patches.DiscordPatches
 
 /**
- * Which `AndroidManifest.xml` edits a Discord run asks for, decided from what the run is doing
+ * The `AndroidManifest.xml` edits that a Discord run requests, selected from what the run does
  * rather than from a fixed list.
  *
  * The reference suite rewrites the manifest as text, in a script that runs once against one
- * release. This is the same set of edits expressed as selectors against the compiled document — a
- * patcher on a phone never has the text form — and every one of them is decided here rather than
- * applied unconditionally, because the edits are not all the same kind of thing:
+ * release. This object expresses the same set of edits as selectors against the compiled
+ * document—a patcher on a phone does not have the text form—and it selects each of them
+ * rather than applying them unconditionally, because the edits fall into several groups:
  *
  * - The Sentry providers, the Play split markers and the attribution query each belong to
  *   something the user switched on or off. Removing a component whose code is still being
- *   installed, or leaving one whose code has been stubbed out, are both wrong, so each is tied to
- *   the switch it goes with.
+ *   installed, or keeping one whose code has been stubbed out, leaves the manifest and the code
+ *   out of step, so each edit is tied to the switch it belongs to.
  * - The dead permissions and the inert Google Analytics components are not decisions about a run
- *   at all — no switch makes either of them true or false — so they are asked for on every run
- *   against the build they were read from, and on no other.
- * - Closing the RPC service is not a preference. [Plan.rpcService] carries it and says why.
+ *   at all—no switch makes either of them true or false—so the plan requests them on every
+ *   run against the build they were read from, and on no other.
+ * - Closing the RPC service is not a preference. [Plan.rpcService] carries it and records the
+ *   reason.
  *
- * Keeping the decision in one pure function is what makes it checkable: the pipeline applies the
- * plan and reports it, and a test can assert the plan for a given run without a device, an APK or
- * a manifest.
+ * Keeping the decision in one pure function makes it checkable: the pipeline applies the plan and
+ * reports it, and a test can assert the plan for a given run without a device, an APK or a
+ * manifest.
  */
 object DiscordManifestEdits {
 
     /**
      * The application these edits were written for.
      *
-     * The edits with no switch behind them run on every job, so a job against another app has to
-     * be able to tell that the edit was never about it: this is that answer. It is what keeps an
-     * OctoGram job from reporting on a component it has never declared — and what keeps the two
-     * edits that name a list read off this build from landing on a build nothing was read from.
+     * The edits with no switch behind them run on every job, so a job against another app needs a
+     * way to determine that the edit was not written for it: this constant provides that answer.
+     * It keeps an OctoGram job from reporting on a component that the build does not declare, and
+     * it keeps the two edits that name a list read from this build from being applied to a build
+     * that the list did not come from.
      */
     const val PACKAGE_NAME = "com.discord"
 
     /**
      * The declarations a job against [packageName] removes without a switch behind them.
      *
-     * This is the one answer to "which of this build's permissions does sleepy take out anyway",
-     * and it is a function rather than a list because the answer is about the build and not about
-     * the list: [plan] edits the manifest with it, and the permission list asks the same question
-     * so a row can say that its switch is not what decides. Two places deciding it separately is
-     * how a switch ends up describing a build it does not produce.
+     * This function is the single source for the question "which of this build's permissions does
+     * the patcher remove regardless", and it is a function rather than a list because the answer
+     * is about the build and not about the list: [plan] edits the manifest with it, and the
+     * permission list calls the same function so a row can report that its switch is not what
+     * determines the removal. A second implementation lets a switch describe a build that it
+     * does not produce.
      *
-     * Asked for on the build these names were read from and on no other. Each was checked against
-     * Discord's patched tree, and a list of names does not travel: OctoGram declares
-     * READ_CONTACTS and syncs the address book through it, so an edit carried across to another app
-     * would take away a permission that app is using.
+     * The result applies to the build these names were read from and to no other build. Each name
+     * was checked against Discord's patched tree, and the list does not apply to other apps:
+     * OctoGram declares READ_CONTACTS and syncs the address book through it, so an edit carried
+     * across to another app removes a permission that the app uses.
      */
     fun deadPermissionsIn(packageName: String?): List<String> =
         if (packageName == PACKAGE_NAME) DiscordPatches.DEAD_PERMISSIONS else emptyList()
 
     /**
-     * What one run asks the manifest pass to do, with the removals kept in the groups they were
-     * decided in.
+     * The work that one run requests from the manifest pass, with removals kept in the groups
+     * that determined them.
      *
      * Grouped rather than pooled because each group has its own reason and its own switch, and the
-     * step log reports each of them against the count it actually removed: one pass carries them
-     * all, so a count taken from [removals] would credit every group with the others' work.
+     * step log reports each of them against the count it removed: one pass carries them all, so a
+     * count taken from [removals] cannot be attributed to a single group.
      */
     data class Plan(
+        /** Selectors for the declarations that the build does not use. */
         val deadPermissions: List<BinaryXmlEditor.ElementSelector>,
+        /** Selectors for the declarations that the user switched off. */
         val permissions: List<BinaryXmlEditor.ElementSelector>,
+        /** Selectors for the crash reporter's providers, when its patch set is active. */
         val sentryProviders: List<BinaryXmlEditor.ElementSelector>,
+        /** Selectors for the markers that Play's split installer writes, when libraries merge. */
         val playSplitMarkers: List<BinaryXmlEditor.ElementSelector>,
+        /** Selectors for the AppsFlyer package-visibility query, when its patch set is active. */
         val attributionQuery: List<BinaryXmlEditor.ElementSelector>,
+        /** The override that closes the RPC service. */
         val rpcService: BinaryXmlEditor.AttributeOverride,
+        /** Overrides that disable the inert Google Analytics components. */
         val googleAnalytics: List<BinaryXmlEditor.AttributeOverride>
     ) {
-        /** Every element this plan removes, in the order it was decided. */
+        /** Every element this plan removes, in the order of the preceding groups. */
         val removals: List<BinaryXmlEditor.ElementSelector>
-            get() = deadPermissions + permissions + sentryProviders + playSplitMarkers + attributionQuery
+            get() = deadPermissions + permissions + sentryProviders + playSplitMarkers +
+                attributionQuery
 
         /**
-         * Every attribute this plan rewrites, in the order it was decided.
+         * Every attribute this plan rewrites, in the order of the preceding groups.
          *
          * [rpcService] is held apart from [googleAnalytics] for the same reason the removals are
-         * grouped: the two are reported separately, and a caller reaching for "the override" by
-         * position would be reading a Google component the day another one is added in front of it.
+         * grouped: the two are reported separately, and a caller that selects the override by
+         * position reads a Google component when another override is added first.
          */
         val overrides: List<BinaryXmlEditor.AttributeOverride>
             get() = listOf(rpcService) + googleAnalytics
@@ -90,18 +101,19 @@ object DiscordManifestEdits {
     }
 
     /**
-     * The plan for a run against [packageName], where [activePatchIds] are the patch sets that will
-     * actually run, [mergedLibraries] is how many native libraries the split merge brought in, and
-     * [removedPermissions] are the declarations the user switched off.
+     * Builds the manifest-edit plan for a run against [packageName].
      *
-     * [packageName] is the application the source manifest belongs to — the one the job was pointed
-     * at, not the name a clone build renames it to, because the edits are made before that rename.
-     * It decides the two groups that are facts about one build rather than choices about a run.
-     *
-     * [activePatchIds] is the set of sets that survived selection, so an id is present only when
-     * something in its set is going to run: a user who turned every item of a set off has the set
-     * treated as absent, which is what keeps a component from being deleted while its code is
-     * still being installed.
+     * @param packageName the application the source manifest belongs to—the one the job was
+     *     pointed at, not the name a clone build renames it to, because the edits are made before
+     *     that rename. It determines the two groups that are facts about one build rather than
+     *     choices about a run.
+     * @param activePatchIds the patch sets that are going to run, so an id is present only when
+     *     something in its set runs: a user who turned every item of a set off has the set treated
+     *     as absent, which keeps a component from being deleted while its code is still being
+     *     installed.
+     * @param mergedLibraries the number of native libraries that the split merge brought in.
+     * @param removedPermissions the declarations that the user switched off.
+     * @return the plan for the run.
      */
     fun plan(
         packageName: String?,
@@ -109,18 +121,18 @@ object DiscordManifestEdits {
         mergedLibraries: Int,
         removedPermissions: List<String>
     ): Plan {
-        // The two groups below are read off this build rather than chosen about it, so they are
-        // asked for only when the job is about it.
+        // The two following groups are facts about this build rather than choices about the run, so
+        // the plan requests them only when the job targets this build.
         val isDiscordBuild = packageName == PACKAGE_NAME
 
-        // The declarations this build has no code behind. No switch reaches this group: nothing in
-        // the app makes one of these permissions live again, so unlike the Sentry providers and the
-        // attribution query there is no second position for a run to hold — the reference strips
-        // them from every build it makes.
+        // The declarations that this build does not use. No switch controls this group: the app
+        // does not use these permissions under any setting, so unlike the Sentry providers and the
+        // attribution query there is no alternative state for a run to choose—the reference
+        // removes them from every build it makes.
         //
-        // The list is asked for rather than spelled out here, because it is also what the permission
-        // list marks its rows with: a permission section that offered a switch over one of these
-        // would be describing a manifest this pass is about to edit.
+        // The list comes from a function rather than a literal here, because it is also what the
+        // permission list marks its rows with: a permission section that offers a switch for one
+        // of these describes a manifest that this pass is about to edit.
         val deadPermissionSelectors = deadPermissionsIn(packageName).map { permission ->
             BinaryXmlEditor.ElementSelector(
                 namePrefix = BinaryXmlEditor.ELEMENT_USES_PERMISSION,
@@ -138,10 +150,10 @@ object DiscordManifestEdits {
         }
 
         // The crash reporter's own `<provider>`s, on the same switch that drops its native
-        // artefacts. The platform instantiates a declared provider while the process starts,
+        // artifacts. The platform instantiates a declared provider while the process starts,
         // before any of the stubbed entry points is reached, so stubbing the SDK's Java without
-        // removing the declaration leaves the reporter starting and then discarding what it
-        // collects — which is not the same thing as it not running.
+        // removing the declaration still makes the platform instantiate the reporter, which then
+        // discards what it collects.
         val sentryProviderSelectors = if (DiscordPatches.SENTRY.id in activePatchIds) {
             DiscordPatches.SENTRY_PROVIDERS.map { provider ->
                 BinaryXmlEditor.ElementSelector(
@@ -155,8 +167,8 @@ object DiscordManifestEdits {
         }
 
         // The markers Play's split installer writes. They describe an APK that is one split of an
-        // App Bundle, which is only what this file was before the merge: an APK with the splits'
-        // libraries inside it is not a split and must not claim to be one, and
+        // App Bundle, which describes this file only before the merge: an APK with the splits'
+        // libraries inside it is not a split, so the marker does not apply, and
         // `com.android.vending.splits.required` is read by the Play Store as an assertion that the
         // app is missing the rest of its splits.
         val playSplitSelectors = if (mergedLibraries > 0) {
@@ -172,13 +184,13 @@ object DiscordManifestEdits {
         }
 
         // The AppsFlyer package-visibility query, tied to the switch that no-ops that SDK's only
-        // initialiser. The query is how the app asks the platform whether the install-referrer
-        // provider is present; with the initialiser stubbed the answer goes nowhere, and a
-        // visibility declaration left behind is a capability the app no longer has a use for. A
-        // build still running the initialiser keeps the query it still uses.
+        // initializer. The query is how the app asks the platform whether the install-referrer
+        // provider is present; with the initializer stubbed, no caller reads the answer, and a
+        // visibility declaration left behind is a capability that the app does not use. A build
+        // that still runs the initializer keeps the query.
         //
-        // `<intent>` carries no attributes of its own, so what tells this one from the others is
-        // the `<action>` inside it.
+        // `<intent>` carries no attributes of its own, so the `<action>` inside it is what
+        // distinguishes this one from the others.
         val attributionQuerySelectors = if (DiscordNativePatches.DEEP_LINKS.id in activePatchIds) {
             listOf(
                 BinaryXmlEditor.ElementSelector(
@@ -195,11 +207,12 @@ object DiscordManifestEdits {
         }
 
         // Google Analytics: inert in this build, and switched off the way the reference switches it
-        // off. The declarations stay — the SDK's classes are still in the dex and the manifest
-        // still describes them — but the platform never instantiates a component whose
-        // `android:enabled` is false, so the receiver never sees a broadcast and the JobService is
-        // never bound. Deleting the elements instead would be a claim about the code the app holds;
-        // this is a claim about what the app does, and it is the one the reference makes.
+        // off. The declarations stay—the SDK's classes are still in the dex and the manifest
+        // still describes them—but the platform does not instantiate a component whose
+        // `android:enabled` is false, so the receiver does not receive a broadcast and the
+        // JobService is not bound. Deleting the elements instead makes a claim about the code the
+        // app contains; this makes a claim about what the app does, and it is the one the
+        // reference makes.
         val analyticsOverrides = if (isDiscordBuild) {
             DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS.map { component ->
                 BinaryXmlEditor.AttributeOverride(
@@ -216,13 +229,13 @@ object DiscordManifestEdits {
             emptyList()
         }
 
-        // Closing the RPC service carries no switch either, and that is the point of it. The
-        // service is exported, requires no permission and checks nothing about its caller, so any
-        // application on the device can bind it and publish presence frames as the user. The other
-        // position of a switch over it would be "leave that open", which is a choice to make the
-        // user less safe rather than a preference about how the app works, and this patcher does
-        // not offer those. It is reported either way, so a build that no longer declares the
-        // service says so instead of passing quietly.
+        // Closing the RPC service carries no switch either. The service is exported, requires no
+        // permission and checks nothing about its caller, so any application on the device can
+        // bind it and publish presence frames as the user. The other position of a switch over it
+        // is "leave that open", which exposes the service to any app on the device rather than
+        // changing how the app works, and this patcher does not offer such switches. The edit is
+        // reported either way, so a build that does not declare the service produces a report
+        // rather than no output.
         val rpcServiceOverride = BinaryXmlEditor.AttributeOverride(
             element = BinaryXmlEditor.ElementSelector(
                 namePrefix = BinaryXmlEditor.ELEMENT_SERVICE,

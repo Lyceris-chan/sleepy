@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  The roots this app provides URIs for. The finished APK is written into the cache directory and
+  that is the only file granted to another app, so the cache directory is the only root declared.
+  The signing key lives in the Android keystore rather than in app storage, and no file under the
+  files directory is shared.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="apk_cache" path="." />
-    <files-path name="apk_files" path="." />
 </paths>

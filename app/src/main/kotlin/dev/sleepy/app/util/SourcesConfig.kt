@@ -3,11 +3,16 @@ package dev.sleepy.app.util
 import android.content.Context
 import dev.sleepy.app.model.ApkType
 import dev.sleepy.app.model.AppSource
-import org.json.JSONObject
 import java.io.InputStreamReader
+import org.json.JSONObject
 
+/** Reads the list of downloadable sources from the bundled `sources.json` asset. */
 object SourcesConfig {
 
+    /**
+     * Returns the sources declared in the bundled `sources.json` asset, or an empty list when the
+     * asset cannot be read or parsed.
+     */
     fun load(context: Context): List<AppSource> {
         return try {
             val jsonString = context.assets.open("sources.json").use { stream ->
@@ -19,6 +24,9 @@ object SourcesConfig {
         }
     }
 
+    /**
+     * Parses [jsonString] as a sources document and returns the sources it declares.
+     */
     fun parseJson(jsonString: String): List<AppSource> {
         val root = JSONObject(jsonString)
         val array = root.getJSONArray("sources")
@@ -56,9 +64,10 @@ object SourcesConfig {
                     versionCode = obj.getInt("version_code"),
                     url = obj.getString("url"),
                     apkType = apkType,
-                    sha256Expected = if (obj.has("sha256_expected") && !obj.isNull("sha256_expected")) {
-                        obj.getString("sha256_expected")
-                    } else null,
+                    sha256Expected =
+                        if (obj.has("sha256_expected") && !obj.isNull("sha256_expected")) {
+                            obj.getString("sha256_expected")
+                        } else null,
                     description = obj.getString("description"),
                     changelogUrl = obj.optString("changelog_url", ""),
                     patchIds = patchIds,
