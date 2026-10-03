@@ -398,9 +398,9 @@ private fun ArchitectureCard() {
             ArchitectureRow(
                 icon = Icons.Default.Key,
                 title = "On-device signing key (v1 + v2 + v3)",
-                body = "An EC P-256 key held in the Android keystore, where the device's secure " +
-                    "hardware protects it. The key is not written to disk, and signing uses " +
-                    "Google's apksig engine"
+                body = "An EC P-256 key held in the Android keystore, which the device backs " +
+                    "with secure hardware where one is available. The key is not written to " +
+                    "disk, and signing uses Google's apksig engine"
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

@@ -84,7 +84,7 @@ class PatchingPipelineHarnessTest {
         )
 
         /**
-         * `sources.json` -> `discord_348205 -> split_urls`, as the local files it names: the
+         * `sources.json` -> `discord_348205 -> splits`, as the local files its URLs name: the
          * ABI split first, then the density and language splits, in the declared order. The
          * x86_64 and armeabi-v7a splits that sit beside them are *not* merged, because the source
          * does not list them.

@@ -10,6 +10,21 @@ enum class ApkType {
 }
 
 /**
+ * One configuration split offered for a source, with the integrity data published for it.
+ *
+ * @property url The URL the split is downloaded from.
+ * @property sha256Expected The SHA-256 the configuration publishes for the split, or null when
+ *   it publishes no hash.
+ * @property sizeBytes The size the configuration publishes for the split in bytes, or null when
+ *   it publishes no size.
+ */
+data class SplitSource(
+    val url: String,
+    val sha256Expected: String?,
+    val sizeBytes: Long?
+)
+
+/**
  * One downloadable build of an app, as the app's asset configuration declares it.
  *
  * @property id The identifier the configuration uses for this source.
@@ -24,7 +39,7 @@ enum class ApkType {
  * @property description A description of the source.
  * @property changelogUrl The URL of the release notes, or an empty string when there are none.
  * @property patchIds The patch set ids selected for this source by default.
- * @property splitUrls The URLs of the configuration splits, empty for a universal APK.
+ * @property splits The configuration splits, empty for a universal APK.
  */
 data class AppSource(
     val id: String,
@@ -38,5 +53,5 @@ data class AppSource(
     val description: String,
     val changelogUrl: String,
     val patchIds: List<String>,
-    val splitUrls: List<String> = emptyList()
+    val splits: List<SplitSource> = emptyList()
 )

@@ -28,7 +28,7 @@ import dev.sleepy.app.model.AppSource
  * @return The distinct non-blank hosts of those URLs, in the order they first appear.
  */
 fun downloadHosts(source: AppSource): List<String> =
-    (listOf(source.url) + source.splitUrls)
+    (listOf(source.url) + source.splits.map { it.url })
         .mapNotNull { url -> Uri.parse(url).host?.takeIf { host -> host.isNotBlank() } }
         .distinct()
 

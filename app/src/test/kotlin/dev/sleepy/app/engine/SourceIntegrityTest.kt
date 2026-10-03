@@ -1,5 +1,6 @@
 package dev.sleepy.app.engine
 
+import dev.sleepy.app.model.SplitSource
 import dev.sleepy.app.util.HashUtils
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -12,7 +13,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 /**
- * The verdict the pipeline records for a source download.
+ * The verdict the pipeline records for a source download and for each configuration split.
  *
  * The flag comes from a comparison against the bytes that arrived, never from the presence of a
  * hash field: a source that publishes no hash reports null, a published hash that matches reports
@@ -77,5 +78,69 @@ class SourceIntegrityTest {
             "a download that failed its integrity check must not be written for patching",
             destination.exists()
         )
+    }
+
+    /** A split record for the fixture URL, with the integrity data its source publishes. */
+    private fun split(url: String, sha256: String? = null, sizeBytes: Long? = null) =
+        SplitSource(url = url, sha256Expected = sha256, sizeBytes = sizeBytes)
+
+    @Test
+    fun aSplitThatMatchesItsPublishedHashAndSizeIsDelivered() = runBlocking {
+        val (_, url) = servedFixture()
+        val destination = File(tempFolder.root, "split.apk")
+
+        val integrity = fetchSplitApk(
+            split(url, sha256 = HashUtils.sha256Hex(payload), sizeBytes = payload.size.toLong()),
+            destination
+        )
+
+        assertEquals(true, integrity.verified)
+        assertEquals(true, integrity.sizeMatches)
+        assertTrue("a matching split is delivered for merging", destination.isFile)
+    }
+
+    @Test
+    fun aSplitThatDoesNotMatchItsPublishedHashIsNotDelivered() = runBlocking {
+        val (_, url) = servedFixture()
+        val destination = File(tempFolder.root, "split.apk")
+        val otherSplit = HashUtils.sha256Hex("a different split".toByteArray())
+
+        val integrity = fetchSplitApk(split(url, sha256 = otherSplit), destination)
+
+        assertEquals(false, integrity.verified)
+        assertFalse(
+            "a split that failed its integrity check must not be written for merging",
+            destination.exists()
+        )
+    }
+
+    @Test
+    fun aSplitWhoseSizeDiffersFromThePublishedSizeIsNotDelivered() = runBlocking {
+        val (_, url) = servedFixture()
+        val destination = File(tempFolder.root, "split.apk")
+
+        val integrity = fetchSplitApk(
+            split(url, sizeBytes = payload.size + 1L),
+            destination
+        )
+
+        assertEquals(false, integrity.sizeMatches)
+        assertNull("no hash was published, so no hash verdict exists", integrity.verified)
+        assertFalse(
+            "a split whose size differs from the published size must not be written for merging",
+            destination.exists()
+        )
+    }
+
+    @Test
+    fun aSplitWithNoPublishedIntegrityDataIsDeliveredUnchecked() = runBlocking {
+        val (_, url) = servedFixture()
+        val destination = File(tempFolder.root, "split.apk")
+
+        val integrity = fetchSplitApk(split(url), destination)
+
+        assertNull(integrity.verified)
+        assertNull(integrity.sizeMatches)
+        assertTrue("a split with no published hash still delivers its bytes", destination.isFile)
     }
 }

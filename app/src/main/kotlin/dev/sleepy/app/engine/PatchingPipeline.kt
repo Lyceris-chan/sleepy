@@ -9,6 +9,7 @@ import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.PermissionCheck
 import dev.sleepy.app.model.SelectivePatchGenerator
 import dev.sleepy.app.model.SmaliPatch
+import dev.sleepy.app.model.SplitSource
 import dev.sleepy.app.model.StepResult
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.model.TargetApk
@@ -85,7 +86,7 @@ class PatchingPipeline(private val context: Context) {
         customPackageName: String? = null,
         selectedPatchIds: List<String>,
         selection: PatchSelection? = null,
-        splitUrls: List<String> = emptyList(),
+        splits: List<SplitSource> = emptyList(),
         expectedSha256: String? = null,
         scope: CoroutineScope
     ) {
@@ -100,7 +101,7 @@ class PatchingPipeline(private val context: Context) {
             try {
                 execute(
                     sourceUrl, originalPackageName, customPackageName, selectedPatchIds,
-                    selection, splitUrls, expectedSha256, workDir
+                    selection, splits, expectedSha256, workDir
                 )
             } catch (e: CancellationException) {
                 _progress.value = PatchProgress.Idle
@@ -169,7 +170,7 @@ class PatchingPipeline(private val context: Context) {
         customPackageName: String?,
         selectedPatchIds: List<String>,
         selection: PatchSelection?,
-        splitUrls: List<String>,
+        splits: List<SplitSource>,
         expectedSha256: String?,
         workDir: File
     ) {
@@ -204,21 +205,21 @@ class PatchingPipeline(private val context: Context) {
         var droppedSplitMetadata: Set<String> = emptySet()
         val splitResourceTables = mutableListOf<ByteArray>()
         val mergedSplitEntries = linkedMapOf<String, ZipRepacker.AdditionalEntry>()
-        if (splitUrls.isNotEmpty()) {
+        if (splits.isNotEmpty()) {
             _progress.value =
                 PatchProgress.MergingSplits("Fetching configuration splits", 0, emptyList())
             val abis = linkedSetOf<String>()
-            for ((index, splitUrl) in splitUrls.withIndex()) {
+            for ((index, split) in splits.withIndex()) {
                 currentCoroutineContext().ensureActive()
                 _progress.value = PatchProgress.MergingSplits(
-                    step = "Fetching split ${index + 1} of ${splitUrls.size}",
+                    step = "Fetching split ${index + 1} of ${splits.size}",
                     librariesMerged = mergedLibraries,
                     abis = abis.toList()
                 )
                 // Each entry is merged straight to a file, and the map holds where each one
                 // is rather than its size: the entries themselves are what the repack streams
                 // in, so the 74 MB of an ABI split does not have to be held as bytes.
-                val fetched = fetchSplit(splitUrl, index, workDir)
+                val fetched = fetchSplit(split, index, workDir)
                 val report = fetched.report
                 // A split's own table is the only part of it a file copy cannot carry across,
                 // and the split file it came out of is deleted before this loop ends, so it is
@@ -262,7 +263,7 @@ class PatchingPipeline(private val context: Context) {
                         title = "No native libraries found in the configuration splits",
                         explanation = "The splits were downloaded but contained no lib/ " +
                             "entries, so the merged APK may still be missing native code.",
-                        technicalTarget = splitUrls.joinToString(", "),
+                        technicalTarget = splits.joinToString(", ") { it.url },
                         status = StepStatus.SKIP
                     )
                 )
@@ -1351,17 +1352,31 @@ class PatchingPipeline(private val context: Context) {
     )
 
     /**
-     * Downloads configuration split [index] and merges its native libraries into [workDir].
+     * Downloads configuration split [split], checks it against the integrity data the source
+     * publishes for it, and merges its native libraries into [workDir].
      *
-     * The split itself is a file for the length of the merge and then deleted: it is another
-     * tens of megabytes, and only the libraries inside it are wanted. As with
-     * [downloadSource], the split's bytes do not become a local of [execute]—only its resource
-     * table does, and a split's table is a few hundred kilobytes rather than tens of megabytes.
+     * The check runs before anything reads the split: a comparison that fails is reported in the
+     * step log and stops the run, so a file the source does not describe never reaches the merge.
+     * The split is a file for the length of the merge and then deleted: it is another tens of
+     * megabytes, and only the libraries inside it are wanted. As with [downloadSource], the
+     * split's bytes do not become a local of [execute]; only its resource table does, and a
+     * split's table is a few hundred kilobytes rather than tens of megabytes.
      */
-    private suspend fun fetchSplit(url: String, index: Int, workDir: File): FetchedSplit {
+    private suspend fun fetchSplit(split: SplitSource, index: Int, workDir: File): FetchedSplit {
         val splitApk = File(workDir, "split_$index.apk")
         try {
-            splitApk.writeBytes(Downloader.download(url) { _, _ -> })
+            val integrity = fetchSplitApk(split, splitApk)
+            logSplitIntegrity(split, index, integrity)
+            check(integrity.verified != false) {
+                "Split ${index + 1} failed its integrity check: expected SHA-256 " +
+                    "${integrity.expectedSha256} but the downloaded file hashes to " +
+                    "${integrity.actualSha256}, so nothing was merged."
+            }
+            check(integrity.sizeMatches != false) {
+                "Split ${index + 1} failed its integrity check: the source publishes " +
+                    "${integrity.expectedSizeBytes} bytes but the downloaded file is " +
+                    "${integrity.sizeBytes} bytes, so nothing was merged."
+            }
             // Read before the merge rather than after: the merge writes the split's entries out
             // as files and the split itself is deleted on the way out of this call, so a table
             // not read here has to be downloaded again.
@@ -1369,6 +1384,64 @@ class PatchingPipeline(private val context: Context) {
             return FetchedSplit(SplitMerger.mergeSplitToDir(splitApk, workDir), table)
         } finally {
             splitApk.delete()
+        }
+    }
+
+    /**
+     * Records what the integrity comparison for split [index] found.
+     *
+     * A mismatch is logged as a failure before the caller stops the run, so the step log names
+     * the split and both values the way a base APK mismatch is reported. A split whose source
+     * publishes no hash reports that instead: the run still merges it, and the log does not
+     * claim a check that did not run.
+     */
+    private fun logSplitIntegrity(split: SplitSource, index: Int, integrity: SourceIntegrity) {
+        val label = "split ${index + 1}"
+        when {
+            integrity.verified == true -> log(
+                StepResult(
+                    title = "Verified $label against its published SHA-256",
+                    explanation = "Confirmed the split is byte-for-byte the file the source " +
+                        "publishes, so nothing unexpected entered the merge.",
+                    technicalTarget = "${split.url}; SHA-256 ${integrity.actualSha256}",
+                    status = StepStatus.OK
+                )
+            )
+
+            integrity.verified == false -> log(
+                StepResult(
+                    title = "$label does not match its published SHA-256",
+                    explanation = "The bytes that arrived do not hash to the value the source " +
+                        "publishes, so this is not the split the source describes. The run " +
+                        "stops without merging it.",
+                    technicalTarget = "expected ${integrity.expectedSha256}, " +
+                        "got ${integrity.actualSha256}",
+                    status = StepStatus.FAIL
+                )
+            )
+
+            integrity.sizeMatches == false -> log(
+                StepResult(
+                    title = "$label does not match its published size",
+                    explanation = "The downloaded file is not the size the source publishes " +
+                        "for this split, so it is not the file the source describes. The run " +
+                        "stops without merging it.",
+                    technicalTarget = "expected ${integrity.expectedSizeBytes} bytes, " +
+                        "got ${integrity.sizeBytes}",
+                    status = StepStatus.FAIL
+                )
+            )
+
+            else -> log(
+                StepResult(
+                    title = "No published hash to verify $label against",
+                    explanation = "The source publishes no SHA-256 for this split, so the " +
+                        "download could not be checked. The merge below reports what it " +
+                        "took from it.",
+                    technicalTarget = split.url,
+                    status = StepStatus.SKIP
+                )
+            )
         }
     }
 

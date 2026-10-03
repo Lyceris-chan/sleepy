@@ -119,9 +119,16 @@ def source_hosts(source):
 
     A source can be a base APK plus split configuration files, and those can sit on different
     hosts; every one is listed so a reader can see the full set of servers a build contacts.
+    A split is an object under `splits`, and the earlier schema's plain URL strings under
+    `split_urls` are read too, because a dispatch can run this script against an older tag.
     """
+    splits = source.get("splits")
+    if splits is None:
+        splits = source.get("split_urls", [])
+    split_urls = [split["url"] if isinstance(split, dict) else split for split in splits]
+
     hosts = []
-    for url in [source.get("url", "")] + source.get("split_urls", []):
+    for url in [source.get("url", "")] + split_urls:
         host = urlsplit(url).hostname
         if host and host not in hosts:
             hosts.append(host)

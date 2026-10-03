@@ -112,8 +112,8 @@ fun HomeScreen(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "Select a verified target APK to download, decompile, patch, and " +
-                            "sign entirely on-device.",
+                        text = "Select a target app to download, decompile, patch, and sign " +
+                            "entirely on-device.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "app_name": "sleepy",
   "manifest_url": "https://raw.githubusercontent.com/Lyceris-chan/sleepy/main/sources.json",
   "project_url": "https://github.com/Lyceris-chan/sleepy",
@@ -29,14 +29,8 @@
       "version_name": "348.5 Alpha",
       "version_code": 348205,
       "url": "https://tracker.vendetta.rocks/tracker/download/348205/base",
-      "split_urls": [
-        "https://tracker.vendetta.rocks/tracker/download/348205/config.arm64_v8a",
-        "https://tracker.vendetta.rocks/tracker/download/348205/config.hdpi",
-        "https://tracker.vendetta.rocks/tracker/download/348205/config.de",
-        "https://tracker.vendetta.rocks/tracker/download/348205/config.en"
-      ],
       "apk_type": "split_base",
-      "sha256_expected": null,
+      "sha256_expected": "6ad4e69e160fe331b213b69e01ba3107c98b2ff193774a527e5f480458f8a12e",
       "description": "Discord Alpha from Vendetta tracker. Automatically merges ARM64 native shared libraries and the density and language splits' resources into a universal APK and rebuilds the resource table around them, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, and locks the patched JS bundle.",
       "changelog_url": "https://discord.com/blog",
       "patch_ids": [
@@ -62,6 +56,28 @@
         "discord_native_foreground_service",
         "discord_native_experiments",
         "discord_native_blocklist"
+      ],
+      "splits": [
+        {
+          "url": "https://tracker.vendetta.rocks/tracker/download/348205/config.arm64_v8a",
+          "sha256_expected": "9abde1bccb59f8186b54187f3a1a14334504fb62ba9d0766b520511c2523aefc",
+          "size_bytes": 73842363
+        },
+        {
+          "url": "https://tracker.vendetta.rocks/tracker/download/348205/config.hdpi",
+          "sha256_expected": "cea656adcb75f0e872ca1c73872e7517b48a3268828ca131f7c072d3cb9c37d1",
+          "size_bytes": 7147392
+        },
+        {
+          "url": "https://tracker.vendetta.rocks/tracker/download/348205/config.de",
+          "sha256_expected": "1d7bd6536e482705f7a02b8f0c47fb91be937f5a1b36563403ddda25294f6112",
+          "size_bytes": 37273
+        },
+        {
+          "url": "https://tracker.vendetta.rocks/tracker/download/348205/config.en",
+          "sha256_expected": "08f4acb69828fefd4d66540d2c5edc000f53d8d33f7463fab9f0a3d33d52d6ee",
+          "size_bytes": 70041
+        }
       ]
     },
     {
@@ -89,7 +105,8 @@
         "octogram_firebase_datatransport",
         "octogram_crash_reporter",
         "octogram_premium_settings"
-      ]
+      ],
+      "splits": []
     }
   ]
 }

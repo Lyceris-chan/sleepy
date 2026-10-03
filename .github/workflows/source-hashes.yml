@@ -1,0 +1,126 @@
+name: Source hashes
+
+# Refreshes the SHA-256 values published in sources.json from the files the sources
+# actually serve. Every download is checked against the package name and version its
+# source declares, and a split is checked for the content its configuration implies, so
+# a tracker that starts serving another build fails this run instead of having that
+# file's hash published.
+#
+# A refresh reaches the app through a pull request rather than a direct commit. The
+# checks tell a different package or version from the configured one, but no file on
+# disk distinguishes a rebuilt APK that keeps the same package and version from the real
+# one, and a workflow that commits its own result would bless exactly that file. The
+# pull request puts the old and new hashes in front of a person before the app trusts
+# them.
+
+on:
+  schedule:
+    # Daily. A tracker that replaces a file with a different build is noticed within a
+    # day rather than when someone happens to run this by hand.
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+# The top level grants read access and nothing else. The job that opens the pull request
+# declares the permissions it needs; the job that downloads and hashes has no repository
+# state to change.
+permissions:
+  contents: read
+
+concurrency:
+  group: source-hashes
+  cancel-in-progress: false
+
+jobs:
+  hash:
+    name: Download and hash
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.refresh.outputs.changed }}
+    steps:
+      # Every action is pinned to the commit its release tag named, so a moved tag
+      # cannot change what runs here.
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+      - name: Install the build tools that carry aapt2
+        run: sdkmanager --install "build-tools;37.0.0"
+      - name: Refresh the published hashes
+        id: refresh
+        run: |
+          set -euo pipefail
+          AAPT2="$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -V | tail -n 1)"
+          if [ -z "$AAPT2" ]; then
+            echo "::error::aapt2 not found under $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          echo "Using $AAPT2"
+          python3 .github/scripts/update_source_hashes.py --repo-root . --aapt2 "$AAPT2"
+          if git diff --quiet -- sources.json app/src/main/assets/sources.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Every published hash already matches the file its source serves."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- sources.json app/src/main/assets/sources.json
+          fi
+      - name: Upload the refreshed manifest
+        if: steps.refresh.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sources-json
+          path: |
+            sources.json
+            app/src/main/assets/sources.json
+          if-no-files-found: error
+
+  publish:
+    name: Open a pull request
+    needs: hash
+    if: needs.hash.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Download the refreshed manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sources-json
+      - name: Open a pull request with the refreshed hashes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          open="$(gh pr list --state open --json headRefName \
+            --jq '.[] | select(.headRefName | startswith("source-hashes/")) | .headRefName')"
+          if [ -n "$open" ]; then
+            echo "A pull request already proposes refreshed hashes ($open); leaving it in place."
+            exit 0
+          fi
+
+          branch="source-hashes/$RUN_ID"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add sources.json app/src/main/assets/sources.json
+          git commit -m "chore: refresh the published source hashes"
+          git push --set-upstream origin "$branch"
+
+          {
+            echo "The scheduled source check found that a file a source serves no longer matches the hash published for it."
+            echo
+            echo "Each file was downloaded, checked against its source's package name and version, and hashed. Merging this updates what the app verifies downloads against; each line below pairs an old value with the new one."
+            echo
+            echo '```diff'
+            git diff HEAD~1 -- sources.json app/src/main/assets/sources.json
+            echo '```'
+          } > pr-body.md
+
+          gh pr create \
+            --title "Refresh the published source hashes" \
+            --body-file pr-body.md

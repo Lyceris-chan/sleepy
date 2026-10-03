@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-03
+
+### Added
+
+- **Downloads are checked against published hashes.** Every file sleepy fetches now has a SHA-256 recorded in the manifest, and a file whose contents or size do not match is refused rather than patched. Previously the manifest carried no hash for the app or for any of its splits, so nothing was verified and the result screen could only report the check as not performed.
+
+  Each split's hash covers that split alone, so a substituted split is caught even when the rest of the download is genuine. A split is checked for the content its configuration implies as well: an ABI split must carry native libraries, a density split must carry resources, and a language split must carry a resource table.
+
+- A scheduled workflow refreshes those hashes from the source. It downloads every file, verifies that each one is the app and version the manifest claims, and opens a pull request with the changes. It refuses to publish a hash for a file it cannot identify, so a source serving something other than the expected build fails the run instead of being recorded as correct.
+
+  The change arrives as a pull request rather than a direct commit: the identity checks cannot tell a rebuilt APK that keeps the same package name and version from the genuine one, so a workflow that committed its own result would record a hash for exactly that file. A person sees the old and new hashes before the app trusts them.
+
+### Changed
+
+- The manifest records each split as an object carrying its URL, hash and size, rather than as a bare URL. Manifests written in the older form still load.
+
+### Security
+
+- The workflow that refreshes the hashes holds write permission only in the job that opens the pull request; the job that downloads and hashes has read-only access.
+
 ## [2.0.0] - 2026-10-03
 
 ### Changed
@@ -191,7 +211,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript changes are checked against the app's code before they are written, so a change that does not match is not applied.
 - OctoGram changes that matched more than one place in the code are resolved, and each change now applies only to the app version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/Lyceris-chan/sleepy/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.7.0...v2.0.0
 [1.7.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/Lyceris-chan/sleepy/compare/v1.5.0...v1.6.0
