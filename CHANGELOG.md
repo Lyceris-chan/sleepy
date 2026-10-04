@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-10-04
+
+### Changed
+
+- A release is built on a named Ubuntu image rather than the `ubuntu-latest` label, which moves whenever GitHub promotes a new Ubuntu release. The environment a build runs in can no longer change without a change in this repository.
+- One dependency used only by the tests is updated to its current version.
+- **Release notes no longer reproduce every known limitation.** They carried the same twelve long paragraphs under every version, which buried the entry for the release itself. A gap belongs to the build being patched rather than to the release that mentions it, so the notes now give the count and a link, and the limitations are written in full in the README and in the manifest each release attaches.
+
+No part of the app changed in this release. It carries three build changes, and exists so the published build includes them.
+
 ## [3.3.0] - 2026-10-04
 
 ### Changed
@@ -243,7 +253,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.1...HEAD
+[3.3.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.0.0...v3.1.0

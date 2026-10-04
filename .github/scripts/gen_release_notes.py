@@ -218,29 +218,30 @@ def build_body(tag, data, section):
         "repository of this patcher and of no app it patches.",
     ])
 
-    # Limitations are stated per source, from the manifest, and none are omitted: an unstated
-    # gap can be mistaken for full coverage.
+    # Limitations are named here and stated in full elsewhere. They used to be reproduced in
+    # every release body, which put the same twelve long paragraphs under every version and made
+    # the notes unreadable: a limitation is a property of the build being patched rather than of
+    # the release that mentions it, so it is written once, in the places that are about the
+    # build—the README section and the manifest, which ships as an asset of this release.
     if limitations:
-        by_id = {source.get("id"): source for source in sources}
+        counted = sum(len(items) for items in limitations.values())
         lines.extend([
             "",
             "## Known limitations",
             "",
-            "These builds do not do everything the reference patch suites do. The following "
-            "sections list the limitations in full.",
+            f"These builds do not do everything the reference patch suites do, and the {counted} "
+            "gaps are stated rather than left out. They belong to the builds rather than to this "
+            f"release, so they are written once: in the "
+            f"[README]({project_url}#known-limitations), and per source in the `sources.json` "
+            "attached below.",
         ])
-        for source_id, items in limitations.items():
-            source = by_id.get(source_id)
-            title = source["display_name"] if source else source_id
-            lines.append("")
-            lines.append(f"**{title}**")
-            lines.extend(f"- {item}" for item in items)
 
     lines.extend([
         "",
         "## Release assets",
         f"- **`sleepy-{tag}.apk`**: the signed, installable patcher",
-        f"- **`{SOURCES_NAME}`**: the manifest embedded in this build, including the limitations above",
+        f"- **`{SOURCES_NAME}`**: the manifest embedded in this build, including the known "
+        "limitations in full, one section per source",
         "- **`sha256.txt`**: the SHA-256 of the signed release, as published",
         "",
         "The patched apps are not distributed here. "
