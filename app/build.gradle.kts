@@ -204,5 +204,5 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // The unit tests read sources.json with org.json. The Android platform's copy is a stub on a
     // JVM test classpath, so the real library stands in for it here.
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260814")
 }

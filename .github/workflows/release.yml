@@ -17,10 +17,15 @@ on:
 permissions:
   contents: read
 
-# Runs on the GitHub-hosted Ubuntu image. An Alpine container was tried and rejected:
-# GitHub provides no Alpine runner, and Android's build tools—aapt2, d8, apksigner—are
-# glibc-linked binaries, so running the build under musl depends on a compatibility shim
-# that is not worth the risk to a release pipeline.
+# Runs on the GitHub-hosted Ubuntu image, named by version rather than as `ubuntu-latest`.
+# The label moves to a new Ubuntu release when GitHub promotes one, which would change the
+# image every job builds on without a line of this repository changing, and a release that
+# fails for a reason unrelated to its own commit is the thing this pipeline exists to avoid.
+# Pinning costs nothing today: `ubuntu-latest` resolves to this image.
+#
+# An Alpine container was tried and rejected: GitHub provides no Alpine runner, and Android's
+# build tools—aapt2, d8, apksigner—are glibc-linked binaries, so running the build under musl
+# depends on a compatibility shim that is not worth the risk to a release pipeline.
 #
 # The jobs are shaped so the clock is paid once. Building and testing do not depend on each
 # other—only publishing depends on the test result—so they run at the same time, and the
@@ -31,7 +36,7 @@ permissions:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -75,7 +80,7 @@ jobs:
   # run at the same time and only the release job below waits for both.
   build:
     name: Build & Sign
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -177,7 +182,7 @@ jobs:
   publish:
     name: Publish Release
     needs: [test, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The only job that writes. It runs no build tooling and holds no signing key.
     permissions:
       contents: write

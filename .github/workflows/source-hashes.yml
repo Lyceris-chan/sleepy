@@ -6,6 +6,9 @@ name: Source hashes
 # a tracker that starts serving another build fails this run instead of having that
 # file's hash published.
 #
+# The runner is named by Ubuntu version rather than as `ubuntu-latest`, so the image this
+# hashes on does not change under it when GitHub moves that label to a new release.
+#
 # A refresh reaches the app through a pull request rather than a direct commit. The
 # checks tell a different package or version from the configured one, but no file on
 # disk distinguishes a rebuilt APK that keeps the same package and version from the real
@@ -33,7 +36,7 @@ concurrency:
 jobs:
   hash:
     name: Download and hash
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -79,7 +82,7 @@ jobs:
     name: Open a pull request
     needs: hash
     if: needs.hash.outputs.changed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       pull-requests: write
