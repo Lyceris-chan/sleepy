@@ -3,6 +3,7 @@ package dev.sleepy.app.engine
 import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
+import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.testing.ReferenceApks
 import dev.sleepy.app.testing.bundleOf
 import dev.sleepy.app.testing.firstDifference
@@ -31,10 +32,25 @@ class HermesSubsetParityTest {
     private val fileLengthOffset = 32
     private val sha1FooterSize = 20
 
-    /** Three functions the whole-table path patches in place: a gift button, a predicate, a log. */
-    private val chosen = listOf(62908, 68593, 79600)
+    /**
+     * Two features a subset selection can name.
+     *
+     * The unit of selection is a feature, not a function, so a subset is now "these things" rather
+     * than "these ids": the functions come from the features, and one function cannot be selected
+     * out of the feature it belongs to.
+     *
+     * Both are features whose functions all fit where they are. A feature holding one of the two
+     * functions that share a body with another would relocate a function rather than write it in
+     * place, which is a different case and is covered by the whole-table parity test.
+     */
+    private val chosenFeatures = listOf("gift_buttons", "analytics_events")
 
-    /** Patched by the whole-table path, and next to a chosen function in the table. */
+    /** The functions those features cover, in the table's own order. */
+    private val chosen = DiscordHermesBundlePatch.PATCHES
+        .map { it.functionId }
+        .filter { DiscordHermesFunctionCatalog.featureOf(it)?.slug in chosenFeatures }
+
+    /** Patched by the whole-table path, and in a feature the selection does not name. */
     private val leftAlone = 79601
 
     private fun bundleName(chosen: Boolean) = if (chosen) "reference" else "base"
@@ -48,7 +64,8 @@ class HermesSubsetParityTest {
         )
 
         val selection = PatchSelection.ofKeys(
-            *chosen.reversed().map { DiscordHermesFunctionCatalog.itemKeyOf(it) }.toTypedArray()
+            *chosenFeatures.reversed().map { DiscordHermesFunctionCatalog.itemKeyOf(it) }
+                .toTypedArray()
         )
         val patches = DiscordHermesFunctionCatalog.selectPatches(selection)
 
@@ -59,10 +76,22 @@ class HermesSubsetParityTest {
             patches.map { it.functionId }
         )
         assertEquals(
-            "a key that names no patched function selects nothing",
+            "a key that names no feature and no function selects nothing",
             emptyList<Int>(),
             DiscordHermesFunctionCatalog
                 .selectPatches(PatchSelection.ofKeys("discord_hermes:fn999999"))
+                .map { it.functionId }
+        )
+        // A selection saved by 3.2.0 names one function per key, so reading it has to turn each
+        // into the feature that now covers that function rather than keeping a key that would
+        // match nothing.
+        assertEquals(
+            "a key saved before features existed selects the feature that now covers it",
+            DiscordHermesFunctionCatalog.featureOf(62908)?.functionIds,
+            DiscordHermesFunctionCatalog
+                .selectPatches(
+                    PatchSelection.fromSavedIds(listOf("discord_hermes:fn62908"), PatchItemCatalog)
+                )
                 .map { it.functionId }
         )
         assertEquals(

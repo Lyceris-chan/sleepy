@@ -28,12 +28,19 @@ class PatchItemContentTest {
             DiscordHermesFunctionCatalog.ENTRIES.map { it.functionId }
         )
 
-        val incomplete = DiscordHermesFunctionCatalog.ENTRIES
-            .filter { it.group.isBlank() || it.description.isBlank() }
+        val incomplete = DiscordHermesFunctionCatalog.ENTRIES.filter { it.description.isBlank() }
         assertEquals(
-            "every function needs a group and a description",
+            "every function needs a description",
             emptyList<Int>(),
             incomplete.map { it.functionId }
+        )
+
+        val thin = DiscordHermesFunctionCatalog.FEATURES
+            .filter { it.label.isBlank() || it.group.isBlank() || it.description.isBlank() }
+        assertEquals(
+            "every feature needs a label, a group and a description",
+            emptyList<String>(),
+            thin.map { it.slug }
         )
 
         assertEquals(
@@ -53,6 +60,41 @@ class PatchItemContentTest {
             "a group label must name one feature, not be reused for a second",
             DiscordHermesFunctionCatalog.GROUPS.size,
             DiscordHermesFunctionCatalog.GROUPS.distinct().size
+        )
+    }
+
+    /**
+     * The two halves of a feature have to line up exactly.
+     *
+     * A function in no feature can never be switched on, so it would ship as code no user can
+     * reach; one in two features would be patched by either of them, so switching the wrong one
+     * on would patch it while the row looked off.
+     */
+    @Test
+    fun everyPatchedFunctionBelongsToExactlyOneFeature() {
+        val claimed: List<Pair<Int, String>> = DiscordHermesFunctionCatalog.FEATURES
+            .flatMap { feature -> feature.functionIds.map { it to feature.slug } }
+
+        val twice = claimed.groupBy({ it.first }, { it.second }).filterValues { it.size > 1 }
+        assertEquals(
+            "a function named by two features would be patched by either of them",
+            emptyMap<Int, List<String>>(),
+            twice
+        )
+
+        val known = claimed.map { it.first }.toSet()
+        val unclaimed = DiscordHermesFunctionCatalog.ENTRIES
+            .map { it.functionId }
+            .filterNot { it in known }
+        assertEquals(
+            "a function no feature names could never be switched on",
+            emptyList<Int>(),
+            unclaimed
+        )
+        assertEquals(
+            "and a feature must not name a function the table does not patch",
+            emptyList<Int>(),
+            (known - DiscordHermesFunctionCatalog.ENTRIES.map { it.functionId }.toSet()).toList()
         )
     }
 
@@ -79,7 +121,7 @@ class PatchItemContentTest {
     @Test
     fun everyItemHasAKeyThatDoesNotDependOnItsPosition() {
         val items = DiscordHermesFunctionCatalog.items()
-        assertEquals(204, items.size)
+        assertEquals(37, items.size)
         assertEquals(
             "two items that share a key are one item as far as a saved selection is concerned",
             items.size,
@@ -96,10 +138,13 @@ class PatchItemContentTest {
             items.map { it.setId }.toSet()
         )
 
-        // The scheme, stated: the set id, then an identity that is the function id—because the
-        // names are neither unique nor stable. Ninety-five functions here have no name, and seven
-        // names each cover more than one function.
-        assertEquals("discord_hermes:fn68593", DiscordHermesFunctionCatalog.itemKeyOf(68593))
+        // The scheme, stated: the set id, then the feature's slug. A slug rather than a function
+        // id, because the item is the thing a user chooses between and a function is no longer
+        // one: the names are neither unique nor stable, so they were never the identity either.
+        assertEquals(
+            "discord_hermes:guild_tags",
+            DiscordHermesFunctionCatalog.itemKeyOf("guild_tags")
+        )
         val typing = DiscordBlocklistRules.API_RULES.first { it.pattern == "/typing" }
         assertEquals(
             "discord_native_blocklist:api:/typing",

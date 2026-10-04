@@ -32,8 +32,8 @@ class PatchSelectionTest {
             source = PatchItemCatalog
         )
 
-        assertEquals("both sets in full", 204 + 81, selection.keys.size)
-        assertEquals(204, selection.selected(hermesItems).size)
+        assertEquals("both sets in full", 37 + 81, selection.keys.size)
+        assertEquals(37, selection.selected(hermesItems).size)
         assertEquals(81, selection.selected(blocklistItems).size)
 
         val untouched = PatchRegistry.all
@@ -51,8 +51,17 @@ class PatchSelectionTest {
 
     @Test
     fun anItemKeyRoundTripsAndAnUnknownIdIsKeptRatherThanCrashing() {
+        // An item key written by this version is its own identity, so it round-trips unchanged.
+        val current = DiscordHermesFunctionCatalog.itemKeyOf("analytics_events")
         assertEquals(
-            setOf("discord_hermes:fn83581"),
+            setOf(current),
+            PatchSelection.fromSavedIds(listOf(current), PatchItemCatalog).keys
+        )
+        // A key written by 3.2.0 names one function; an item is a feature now, so reading it
+        // resolves to the feature that covers that function instead of matching nothing.
+        assertEquals(
+            "a selection saved before items were features still means the same choice",
+            setOf(current),
             PatchSelection.fromSavedIds(listOf("discord_hermes:fn83581"), PatchItemCatalog).keys
         )
         assertEquals(
@@ -72,12 +81,12 @@ class PatchSelectionTest {
     fun aSetSwitchSelectsAndDeselectsEveryItemOfTheSet() {
         var selection = PatchSelection()
         selection = selection.setEnabled(hermesItems, true)
-        assertEquals(204, selection.selected(hermesItems).size)
+        assertEquals(37, selection.selected(hermesItems).size)
 
         selection = selection.toggle(hermesItems.first())
         assertEquals(
             "the set switch is not the last item state",
-            203,
+            36,
             selection.selected(hermesItems).size
         )
 
@@ -87,7 +96,7 @@ class PatchSelectionTest {
         selection = selection.setEnabled(hermesItems, true)
         assertEquals(
             "switching the set back on restores the whole set",
-            204,
+            37,
             selection.selected(hermesItems).size
         )
     }

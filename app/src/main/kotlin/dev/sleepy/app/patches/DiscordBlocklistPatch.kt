@@ -59,7 +59,7 @@ object DiscordBlocklistPatch {
      */
     val NETWORK_BLOCKLIST = PatchSet(
         id = "discord_native_blocklist",
-        label = "Block Tracking, Advertising and Monetization Endpoints",
+        label = "Block tracking and advertising",
         description = "Rebuilds Discord's shared OkHttp interceptor so requests to tracking, advertising, survey and monetization endpoints are answered " +
             "with an empty HTTP 204 instead of being sent, covering ${DiscordBlocklistRules.HOST_RULES.size} host rules and " +
             "${DiscordBlocklistRules.API_RULES.size} API path rules. The three obfuscated OkHttp names the method has to spell out are read from the " +

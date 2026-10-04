@@ -233,6 +233,17 @@ class PatchViewModel(application: Application) : AndroidViewModel(application) {
         _selection.value = _selection.value.setEnabled(PatchItemCatalog.itemsOf(setId), enabled)
     }
 
+    /**
+     * Turns a list of items on or off at once—the switch a feature group carries.
+     *
+     * Takes the items rather than a group's name: a group is a presentation of the catalog's own
+     * ordering, and the screen already holds the rows, so resolving a name here would be a second
+     * way to ask a question the rows have already answered.
+     */
+    fun setItemsEnabled(items: List<PatchItem>, enabled: Boolean) {
+        _selection.value = _selection.value.setEnabled(items, enabled)
+    }
+
     /** Starts a run for the selected source and the current selection. */
     fun startPatch() {
         val source = _selectedSource.value ?: return

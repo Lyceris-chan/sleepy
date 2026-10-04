@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.AppSource
 
@@ -75,6 +76,14 @@ fun SourceCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    // The weight is what keeps the chevron its own size. Row measures children
+                    // without a weight first and hands each what the ones before it left, so a
+                    // long name—OctoGram's carries its build number—took the whole width and the
+                    // chevron was measured into the remainder. Material sizes an icon with
+                    // Modifier.size, which clamps to the constraint it is given, so the remainder
+                    // was the size it got. Weighted, this Row is measured last, against what the
+                    // chevron leaves, and the names ellipsize instead.
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -96,12 +105,16 @@ fun SourceCard(
                             text = source.displayName,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "${source.versionName} • ${source.packageName}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -109,7 +122,8 @@ fun SourceCard(
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
                 )
             }
 

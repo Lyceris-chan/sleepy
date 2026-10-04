@@ -19,10 +19,10 @@ import dev.sleepy.app.model.SmaliPatch
  * means selecting the set. It also answers what "all items of this set" means for a set that has
  * no items, which is what expanding a saved set id needs.
  *
- * A set is split where a per-item choice is useful: the Hermes set's 145 functions, the
- * blocklist's 81 rules, and every OctoGram set, whose items are the named decisions behind its one
- * switch. A Discord static set whose patches are one edit has nothing to choose between, and keeps
- * its whole-set item.
+ * A set is split where a per-item choice is useful: the Hermes set's features, each standing for
+ * one or more of the 204 functions it patches; the blocklist's 81 rules; and every OctoGram set,
+ * whose items are the named decisions behind its one switch. A Discord static set whose patches
+ * are one edit has nothing to choose between, and keeps its whole-set item.
  */
 object PatchItemCatalog : PatchItemSource {
 
@@ -54,6 +54,7 @@ object PatchItemCatalog : PatchItemSource {
     override fun itemsOf(setId: String): List<PatchItem> =
         SPLIT_SETS[setId]?.invoke(setId)
             ?: PatchRegistry.get(setId)?.let { listOf(wholeSetItem(it)) }
+            ?: DiscordHermesFunctionCatalog.itemsOfLegacyKey(setId)
             ?: emptyList()
 
     /**

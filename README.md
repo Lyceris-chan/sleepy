@@ -45,6 +45,7 @@ Each of the following changes has its own switch, so you can apply all of them, 
 The patch screen lists a set for each part of the app. Expand a set to see the individual changes inside it.
 
 - Each change has its own switch. Turn it on or off on its own.
+- Each feature group inside a set has a switch of its own, which turns everything under that heading on or off at once. It reports whether none, some or all of them are selected, the same way a set's switch does.
 - A set's own switch reports whether none, some or all of its changes are selected. If you select a few changes inside a set, the set's switch shows that rather than rounding up or down.
 - Tapping a partly selected set selects every change inside it. Tapping a fully selected set clears it.
 - Some switches are unavailable, with the reason shown. Two reasons appear:
@@ -56,7 +57,7 @@ The patch screen lists a set for each part of the app. Expand a set to see the i
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-The 204 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
+The JavaScript changes are grouped into the features they affect—37 switches over 204 functions, such as gift buttons, guild tags or quests—so you can see what each one does before you switch it on. Each heading is a switch over its whole group, so getting all of the decorations, or none of them, is one tap.
 
 ## Install and use sleepy
 
@@ -114,7 +115,7 @@ The builds this version supports have the limitations listed in the following se
 - The blocklist is built from the APK you selected rather than shipped as fixed text, because three of the names it needs are renamed by the app's own obfuscation on every release. A build where these cannot be found is skipped, with the reason shown, instead of being patched with names from another release.
 - Every manifest edit the desktop suite makes is applied. The split declarations, the native library setting, any permission you switch off, the six declarations sleepy removes on its own, the crash reporter's two providers, the three Play split metadata entries, the AppsFlyer link query and the three Google Analytics components are all edited into the compiled manifest. The RPC service is closed to other apps on every build, because it is exported with no permission on it and no check on its caller. The Analytics components are marked `android:enabled="false"` rather than deleted, which is the edit the suite makes: their classes are still in the app's code, and the platform does not start a component declared that way.
 - New entries cannot be added to the app's resource table, only carried across from a split. The desktop build adds some video player image aliases that sleepy cannot add. Discord's own APK ships without them and runs, so this matches what Discord itself ships.
-- Four media changes from the reference build stay switched off, for the reasons recorded for that build: they crash the camera, shrink recorded video below the encoder's minimum, remove a string that is still in use, or pass a value that is not documented for the media engine.
+- Three media changes from the reference build stay switched off, for the reasons recorded for that build: one crashes the camera as soon as it opens and cannot be reverted without breaking a string other code reuses, one records video below the encoder's minimum, and one passes a value the media engine does not document.
 - Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it does not receive official updates.
 
 **OctoGram**

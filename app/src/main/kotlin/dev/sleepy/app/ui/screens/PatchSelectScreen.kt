@@ -21,6 +21,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
@@ -68,6 +69,7 @@ import dev.sleepy.app.ui.components.PatchItemRow
 import dev.sleepy.app.ui.components.PatchSetCard
 import dev.sleepy.app.ui.state.PatchRow
 import dev.sleepy.app.ui.state.PatchRows
+import dev.sleepy.app.ui.state.TriState
 import dev.sleepy.app.viewmodel.PatchViewModel
 
 /**
@@ -274,7 +276,8 @@ fun PatchSelectScreen(
                 item(key = PatchRows.permissionGroupKey(), contentType = "group") {
                     GroupHeading(
                         label = PermissionCatalog.DECLARED_GROUP,
-                        itemCount = permissionRows.size
+                        rows = permissionRows,
+                        onToggle = null
                     )
                 }
                 items(
@@ -344,7 +347,16 @@ fun PatchSelectScreen(
                             key = PatchRows.groupKey(patchSet.id, group.label),
                             contentType = "group"
                         ) {
-                            GroupHeading(label = group.label, itemCount = group.rows.size)
+                            GroupHeading(
+                                label = group.label,
+                                rows = group.rows,
+                                onToggle = { enabled ->
+                                    viewModel.setItemsEnabled(
+                                        group.rows.mapNotNull { it.item },
+                                        enabled
+                                    )
+                                }
+                            )
                         }
                         items(
                             items = group.rows,
@@ -760,25 +772,52 @@ private fun selectionSummary(selectedItems: Int, totalItems: Int): String {
 }
 
 /**
- * The heading of one feature group inside an expanded set.
+ * The heading of one feature group inside an expanded set, and the switch for the whole group.
  *
- * It names the feature rather than the set, so a hundred and forty-two functions appear as
- * eighteen things the app does—analytics, quests, gift buttons—instead of as one
- * undifferentiated list.
+ * It names the feature rather than the set, so the patched functions appear as things the app
+ * does—analytics, quests, guild tags—instead of as one undifferentiated list. Making the heading
+ * a switch is what turns "all of the decorations" or "none of them" into one tap.
+ *
+ * [onToggle] is null for a section that is not a choice. The permission list is one: its rows
+ * include declarations the build removes whatever you do, and a switch over those would offer a
+ * decision that does not exist.
  */
 @Composable
-private fun GroupHeading(label: String, itemCount: Int) {
+private fun GroupHeading(
+    label: String,
+    rows: List<PatchRow>,
+    onToggle: ((Boolean) -> Unit)?
+) {
+    val state = PatchRows.triStateOfRows(rows)
+    val switchable = rows.count { it.switchable }
+    val selected = rows.count { it.switchable && it.enabled }
+    val headings = Modifier
+        .fillMaxWidth()
+        .padding(start = 8.dp, end = 8.dp)
+
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp, top = 6.dp, end = 8.dp),
+        modifier = if (onToggle == null) {
+            headings
+        } else {
+            headings
+                .heightIn(min = 48.dp)
+                .toggleable(
+                    value = PatchRows.headerChecked(state),
+                    role = Role.Switch,
+                    onValueChange = onToggle
+                )
+        },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.Tune,
+            imageVector = if (state == TriState.NONE) Icons.Default.Tune else Icons.Default.Check,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (state == TriState.NONE) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
             modifier = Modifier.size(14.dp)
         )
         Text(
@@ -788,8 +827,10 @@ private fun GroupHeading(label: String, itemCount: Int) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.weight(1f))
+        // The count is of what can be switched, and it says how much of it is on, so a heading
+        // reads the same way as the set switch above it.
         Text(
-            text = "$itemCount",
+            text = if (state == TriState.NONE) "$switchable" else "$selected of $switchable",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

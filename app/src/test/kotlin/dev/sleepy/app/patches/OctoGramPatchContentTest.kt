@@ -2,6 +2,7 @@ package dev.sleepy.app.patches
 
 import dev.sleepy.app.model.SmaliPatch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -301,25 +302,32 @@ class OctoGramPatchContentTest {
     }
 
     @Test
-    fun thePaywallRemovalSaysItIsPartial() {
+    fun thePaywallRemovalSaysWhatItLeavesAndWhoLosesSomething() {
         val premium = OctoGramPatches.PREMIUM_UPSELL
-        assertTrue(
-            "the label is what the user decides on: ${premium.label}",
-            premium.label.contains("partial")
-        )
-
         val description = premium.description
-        assertTrue(
-            "the reference's own count belongs in the description: $description",
-            description.contains("53") && description.contains("61")
+
+        assertTrue("the label is what the user decides on", premium.label.isNotBlank())
+
+        // The three switches together close every way the screen can open, so a description that
+        // says the removal is partial on its own tells the user something untrue about the build.
+        // This test used to require the opposite, which is what kept the claim in place.
+        assertFalse(
+            "the sheets are closed by a sibling switch that ships switched on, so this must not " +
+                "say they still open: $description",
+            description.contains("still open")
         )
         assertTrue(
-            "and so does what still renders, or the description implies a completeness it lacks",
-            description.contains("PremiumFeatureCell") && description.contains("LimitPreviewView")
+            "what the three switches cover together has to be named: $description",
+            description.contains("sheets") && description.contains("rows")
+        )
+        assertTrue(
+            "so does what still renders, or the description implies a completeness it lacks: " +
+                description,
+            description.contains("feature cells") && description.contains("usage-limit")
         )
         assertTrue(
             "a subscriber loses the screen where they manage their subscription, which they " +
-                "have to be told",
+                "have to be told: $description",
             description.contains("subscription")
         )
     }

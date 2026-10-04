@@ -50,7 +50,6 @@ object BinaryXmlModifier {
 
     private const val ROOT_HEADER_SIZE = 8
     private const val CHUNK_HEADER_SIZE = 8
-    private const val POOL_HEADER_SIZE = 28
     private const val NODE_HEADER_SIZE = 16
 
     /** Where `ResXMLTree_node.name` sits: the node header, then the namespace. */

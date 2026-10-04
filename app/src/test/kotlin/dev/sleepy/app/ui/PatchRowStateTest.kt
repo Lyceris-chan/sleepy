@@ -43,25 +43,29 @@ class PatchRowStateTest {
     fun theSetSwitchIsTriStateAndCountsItemsRatherThanSets() {
         val off = PatchRows.of(hermes, PatchSelection())
         assertEquals("nothing selected is off", TriState.NONE, off.triState)
-        assertEquals(204, off.itemCount)
+        assertEquals(37, off.itemCount)
         assertEquals(0, off.selectedItemCount)
 
         val everything = PatchSelection().setEnabled(hermesItems, true)
         assertEquals(TriState.ALL, PatchRows.of(hermes, everything).triState)
-        assertEquals(204, PatchRows.of(hermes, everything).selectedItemCount)
+        assertEquals(37, PatchRows.of(hermes, everything).selectedItemCount)
 
-        // The case the whole per-item split exists for: the gift button on and everything else off
-        // reads as partly on, not as on and not as off.
-        val giftOnly = PatchSelection().with(hermesItems.filter { it.group == GIFT_GROUP })
+        // The case the whole per-item split exists for: one feature on and everything else off
+        // reads as partly on, not as on and not as off. The group is one with several items in
+        // it, so the selection is a real part of the set rather than a single row.
+        val giftOnly = PatchSelection().with(hermesItems.filter { it.group == MULTI_ITEM_GROUP })
         val partial = PatchRows.of(hermes, giftOnly)
-        assertTrue("the gift buttons have to be a real group of their own", giftOnly.keys.size >= 2)
+        assertTrue(
+            "the group has to hold more than one item for the case to mean anything",
+            giftOnly.keys.size >= 2
+        )
         assertEquals(TriState.PARTIAL, partial.triState)
         assertEquals(
             "the count is of items, not of sets",
             giftOnly.keys.size,
             partial.selectedItemCount
         )
-        assertEquals(204, partial.itemCount)
+        assertEquals(37, partial.itemCount)
 
         assertEquals(
             "an id that names nothing selects nothing rather than everything",
@@ -86,7 +90,7 @@ class PatchRowStateTest {
         )
         assertEquals(
             "a tap on a partly selected set selects everything in it",
-            204,
+            37,
             completed.selected(hermesItems).size
         )
         assertEquals(TriState.ALL, PatchRows.triState(hermesItems, completed))
@@ -104,7 +108,7 @@ class PatchRowStateTest {
         )
         assertEquals(
             "and a tap on an empty set selects everything in it",
-            204,
+            37,
             emptied.selected(hermesItems).size
         )
     }
@@ -117,7 +121,7 @@ class PatchRowStateTest {
         // order—the catalog's own grouping, read through its own function.
         val expected = hermesItems.groupedByFeature().flatMap { it.items }
 
-        assertEquals(204, flat.size)
+        assertEquals(37, flat.size)
         assertEquals(
             "the rows are the items, and nothing else",
             expected.map { it.key },
@@ -149,7 +153,7 @@ class PatchRowStateTest {
             DiscordHermesFunctionCatalog.GROUPS,
             rows.groups.map { it.label }
         )
-        assertEquals(204, rows.groups.sumOf { it.rows.size })
+        assertEquals(37, rows.groups.sumOf { it.rows.size })
         assertTrue("a set with more than one item has something to expand into", rows.expandable)
         assertTrue(
             "a group heading has to group: one row per group is a list with extra steps",
@@ -346,15 +350,52 @@ class PatchRowStateTest {
 
     @Test
     fun aPartialSelectionSwitchesOnExactlyTheItemsItNames() {
-        val gift = hermesItems.filter { it.group == GIFT_GROUP }
-        val rows = PatchRows.of(hermes, PatchSelection().with(gift)).groups.flatMap { it.rows }
+        val group = hermesItems.filter { it.group == MULTI_ITEM_GROUP }
+        val rows = PatchRows.of(hermes, PatchSelection().with(group)).groups.flatMap { it.rows }
 
-        assertEquals(gift.size, rows.count { it.enabled })
+        assertEquals(group.size, rows.count { it.enabled })
         assertEquals(
-            gift.map { it.key }.sorted(),
+            group.map { it.key }.sorted(),
             rows.filter { it.enabled }.map { it.key }.sorted()
         )
-        assertEquals(TriState.PARTIAL, PatchRows.of(hermes, PatchSelection().with(gift)).triState)
+        assertEquals(TriState.PARTIAL, PatchRows.of(hermes, PatchSelection().with(group)).triState)
+    }
+
+    /**
+     * A group heading's own switch reports the rows beneath it, so the two never disagree.
+     *
+     * The case that makes this its own function is the blocklist's gates: they are rows with no
+     * item and no switch, so a heading that counted every row it drew would report a group of
+     * gates as partly selected forever.
+     */
+    @Test
+    fun aGroupHeadingReportsOnlyTheRowsUnderItThatCanBeSwitched() {
+        val decorationRows = PatchRows.of(hermes, PatchSelection()).groups
+            .first { it.label == MULTI_ITEM_GROUP }.rows
+        assertEquals("nothing selected is off", TriState.NONE, PatchRows.triStateOfRows(decorationRows))
+
+        val allOn = decorationRows.map { it.copy(enabled = it.switchable) }
+        assertEquals(
+            "every one of them on is on",
+            TriState.ALL,
+            PatchRows.triStateOfRows(allOn)
+        )
+
+        val oneOn = decorationRows.mapIndexed { index, row -> row.copy(enabled = index == 0) }
+        assertEquals(
+            "and one of them on is neither",
+            TriState.PARTIAL,
+            PatchRows.triStateOfRows(oneOn)
+        )
+
+        val gates = PatchRows.of(blocklist, PatchSelection()).groups
+            .first { it.label == PatchRows.GATE_GROUP_LABEL }.rows
+        assertTrue("the gates have to be rows without a switch", gates.all { !it.switchable })
+        assertEquals(
+            "a group with nothing switchable in it is not partly selected",
+            TriState.NONE,
+            PatchRows.triStateOfRows(gates)
+        )
     }
 
     @Test
@@ -370,7 +411,12 @@ class PatchRowStateTest {
             .associateBy { it.key }
 
         audited.forEach { patch ->
-            val key = DiscordHermesFunctionCatalog.itemKeyOf(patch.functionId.toInt())
+            // The note reaches the row of the feature the function belongs to, which is the item
+            // a user sees; the function itself is listed inside that row's technical panel.
+            val feature = requireNotNull(
+                DiscordHermesFunctionCatalog.featureOf(patch.functionId.toInt())
+            ) { "function ${patch.functionId} is audited but no feature covers it" }
+            val key = DiscordHermesFunctionCatalog.itemKeyOf(feature.slug)
             val row = rows[key]
             assertNotNull("function ${patch.functionId} is audited but has no row", row)
             assertTrue(
@@ -379,9 +425,11 @@ class PatchRowStateTest {
                 row.detail!!.contains(patch.title!!)
             )
             assertTrue(row.detail.contains(patch.explanation!!))
+            // The functions an item covers are named in its detail, not its target: the target
+            // summarises what is rewritten, and the detail is the list of functions behind it.
             assertTrue(
-                "and the row has to name the function it rewrites",
-                row.technicalTarget!!.contains(patch.functionId)
+                "and the row has to name the function it rewrites, got: ${row.detail}",
+                row.detail.contains(patch.functionId)
             )
         }
     }
@@ -484,7 +532,7 @@ class PatchRowStateTest {
 
     private companion object {
         /** The catalog's label for the group the gift buttons are listed under. */
-        const val GIFT_GROUP = "Gift buttons"
+        const val MULTI_ITEM_GROUP = "Profile decorations"
 
         /** The package the dead declarations belong to, and one they do not. */
         const val DISCORD = "com.discord"

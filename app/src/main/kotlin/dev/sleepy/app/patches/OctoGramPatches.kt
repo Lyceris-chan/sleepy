@@ -305,14 +305,12 @@ object OctoGramPatches {
     /** The set that drops navigation to the Premium upsell in the app's routers. */
     val PREMIUM_UPSELL = octoGramSet(
         id = "octogram_premium_upsell",
-        label = "Reduce premium paywall entry points (partial)",
-        description = "Drops navigation to the Premium upsell screen where the app builds its window stack, so the " +
-            "paywall is unreachable from most of the app. This is a partial removal, as the reference documents " +
-            "it: 53 of 61 presentation paths are blocked and the remaining 8 still open the screen as a sheet, " +
-            "the profile's premium rows (offered as an option of their own), PremiumFeatureCell and " +
-            "LimitPreviewView still render, and the buttons that used to open the paywall are inert rather than " +
-            "repurposed. The screen still exists, so a premium subscriber also loses the place where they " +
-            "manage their subscription.",
+        label = "Stop the premium screen opening",
+        description = "The premium screen no longer opens when the app navigates to it, which is most of the ways " +
+            "it can be reached. The other two ways are covered too: the sheets it can open as are closed by " +
+            "their own switch, and the rows that lead to it are hidden by theirs. Premium feature cells and " +
+            "usage-limit screens still appear, because they show real account state rather than an advert, and " +
+            "a subscriber loses the screen where they manage their subscription.",
     )
 
     /**

@@ -153,11 +153,16 @@ object PatchRows {
     fun permissionGroupKey(): String = "permissions:group"
 
     /**
-     * Patches by item key, so a row can report which function and how many bytes it replaces.
+     * The functions behind each feature, by item key, so a row can report what it rewrites.
+     *
+     * A list rather than one patch: an item stands for a thing a user recognises, and the thing
+     * is usually several functions (guild tags are seven). The functions are what the row's
+     * technical panel lists.
      */
-    private val HERMES_PATCH_BY_KEY: Map<String, DiscordHermesBundlePatch.FunctionPatch> =
-        DiscordHermesBundlePatch.PATCHES.associateBy {
-            DiscordHermesFunctionCatalog.itemKeyOf(it.functionId)
+    private val HERMES_PATCHES_BY_KEY: Map<String, List<DiscordHermesBundlePatch.FunctionPatch>> =
+        DiscordHermesFunctionCatalog.FEATURES.associate { feature ->
+            DiscordHermesFunctionCatalog.itemKeyOf(feature.slug) to
+                DiscordHermesBundlePatch.PATCHES.filter { it.functionId in feature.functionIds }
         }
 
     /**
@@ -167,9 +172,15 @@ object PatchRows {
      * extracted bodies in [DiscordHermesBundlePatch]. Both kinds of description come from those
      * sources.
      */
-    private val HERMES_AUDIT_BY_KEY: Map<String, HermesPatch> =
-        DiscordPatches.HERMES.hermesPatches.associateBy {
-            PatchItem.keyOf(DiscordPatches.HERMES.id, "fn${it.functionId}")
+    private val HERMES_AUDITS_BY_KEY: Map<String, Map<String, HermesPatch>> =
+        DiscordHermesFunctionCatalog.FEATURES.associate { feature ->
+            // A reference note names its function as a string, while the table uses an id, so the
+            // two are matched by parsing rather than by comparing the two shapes directly.
+            val ids: List<String> = feature.functionIds.map { it.toString() }
+            val notes: Map<String, HermesPatch> = DiscordPatches.HERMES.hermesPatches
+                .filter { patch -> patch.functionId in ids }
+                .associateBy { patch -> patch.functionId }
+            DiscordHermesFunctionCatalog.itemKeyOf(feature.slug) to notes
         }
 
     /**
@@ -314,6 +325,23 @@ object PatchRows {
      */
     fun headerChecked(state: TriState): Boolean = state == TriState.ALL
 
+    /**
+     * The state a feature group's heading reports for its rows.
+     *
+     * Rows rather than items, because a group also holds the blocklist's two gates: they are rows
+     * with no item and no switch, so counting them as items would make every group that holds one
+     * read as permanently partial.
+     */
+    fun triStateOfRows(rows: List<PatchRow>): TriState {
+        val switchable = rows.filter { it.switchable }
+        if (switchable.isEmpty()) return TriState.NONE
+        return when (switchable.count { it.enabled }) {
+            0 -> TriState.NONE
+            switchable.size -> TriState.ALL
+            else -> TriState.PARTIAL
+        }
+    }
+
     /** One item's row: its switch, its text, and the model's reason when another rule covers it. */
     private fun itemRow(
         item: PatchItem,
@@ -370,8 +398,16 @@ object PatchRows {
 
     /** The exact thing this item rewrites in the JavaScript bundle, before it is opened. */
     private fun hermesTarget(item: PatchItem): String? {
-        val patch = HERMES_PATCH_BY_KEY[item.key] ?: return null
-        return "index.android.bundle · function ${patch.functionId} · ${patch.originalSize} bytes"
+        val patches = HERMES_PATCHES_BY_KEY[item.key]?.takeIf { it.isNotEmpty() } ?: return null
+        // One function is named by its id, which is what identifies it across releases; several
+        // are summarised by count, since the ids are listed behind the disclosure.
+        return if (patches.size == 1) {
+            val only = patches.single()
+            "index.android.bundle · function ${only.functionId} · ${only.originalSize} bytes"
+        } else {
+            "index.android.bundle · ${patches.size} functions · " +
+                "${patches.sumOf { it.originalSize }} bytes"
+        }
     }
 
     /** The exact thing an OctoGram item rewrites: its class, and the shape of each edit in it. */
@@ -380,20 +416,27 @@ object PatchRows {
     /** The longer text behind an OctoGram item's target, from the item table's own entry. */
     private fun octoGramDetail(item: PatchItem): String? = OctoGramPatchItems.detail(item)
 
-    /** Why this JavaScript function is stubbed, from the audit note when the reference has one. */
+    /**
+     * Which functions an item patches, one line each, with the reference's note where it has one.
+     *
+     * Read-only: the switch above it is the choice. A feature is several functions often enough
+     * that naming them is the only way to see what an item covers, and the note is the reference's
+     * own words for the functions it documents.
+     */
     private fun hermesDetail(item: PatchItem): String? {
-        val audit = HERMES_AUDIT_BY_KEY[item.key]
-        if (audit != null) {
-            // The note's own words, and only the parts it has: a reference entry is free to carry a
-            // title without an explanation, and "null" is not something to show a user.
-            val note = listOfNotNull(audit.title, audit.explanation).joinToString(" ")
-            val stub = audit.hasmStub.split("\n").joinToString(" ") { it.trim() }.trim()
-            return "$note Stub shape ${audit.stubShape}, assembled as: $stub. " +
-                "Selection key ${item.key}."
+        val patches = HERMES_PATCHES_BY_KEY[item.key]?.takeIf { it.isNotEmpty() } ?: return null
+        val audits = HERMES_AUDITS_BY_KEY[item.key].orEmpty()
+        val lines = patches.joinToString("\n") { patch ->
+            val name = patch.name.ifBlank { "unnamed" }
+            val bytes = patch.replacementHex.length / 2
+            val note = audits[patch.functionId.toString()]?.let { audit ->
+                // The note's own words, and only the parts it has: a reference entry is free to
+                // carry a title without an explanation, and "null" is not something to show.
+                listOfNotNull(audit.title, audit.explanation).joinToString(" ")
+            }
+            val suffix = if (note.isNullOrBlank()) "" else "\n      $note"
+            "  ${patch.functionId}  $name  ${bytes}B$suffix"
         }
-        val patch = HERMES_PATCH_BY_KEY[item.key] ?: return null
-        return "Replaced with the reference build's own " +
-            "${patch.replacementHex.length / 2}-byte body for this function. " +
-            "Selection key ${item.key}."
+        return "Functions replaced:\n$lines\nSelection key ${item.key}."
     }
 }
