@@ -142,8 +142,9 @@ class OctoGramSelectionTest {
             OctoGramPatchItems.patches(OctoGramPatches.CRASH_REPORTER.id).size
         )
         assertEquals(
-            "the premium rows are one item over the reference's three edits",
-            3,
+            "the Telegram Premium row is one item over four edits, the reference's three and the " +
+                "row on the app's own Settings screen",
+            4,
             OctoGramPatchItems.patches(OctoGramPatches.PREMIUM_SETTINGS.id).size
         )
     }

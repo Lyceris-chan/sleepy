@@ -168,7 +168,7 @@ class OctoGramSubsetPatchTest {
     }
 
     @Test
-    fun thePremiumRowsEditFlipsExactlyTheThreeBranchesAndTouchesNothingElse() = runBlocking {
+    fun thePremiumRowsEditFlipsExactlyTheFourBranchesAndTouchesNothingElse() = runBlocking {
         val dexEntries = readDexEntries()
         val classes3 = dexEntries.getValue("classes3.dex")
 
@@ -176,7 +176,7 @@ class OctoGramSubsetPatchTest {
             OctoGramPatchItems.itemKeyOf(OctoGramPatches.PREMIUM_SETTINGS.id, "premiumRows")
         )
         val patches = OctoGramPatchItems.patches(OctoGramPatches.PREMIUM_SETTINGS.id, selection)
-        assertEquals("the premium rows are one switch over three edits", 3, patches.size)
+        assertEquals("the Telegram Premium row is one switch over four edits", 4, patches.size)
 
         // What this run must leave alone: the log's methods and the crash reporter, neither of
         // which it selected.
@@ -219,6 +219,22 @@ class OctoGramSubsetPatchTest {
             "hiding the premium rows replaces three branches with jumps, and changes nothing else",
             mapOf(GOTO to 3, "if-nez" to -2, "if-gez" to -1),
             delta
+        )
+
+        // The row on the app's own Settings screen is the fourth edit, in a class of its own. It is
+        // the same shape: one guarded insert becomes a jump, and the rest of the row builder—which
+        // builds every other settings row—is untouched.
+        val settings = "teb"
+        val settingsBefore = opcodeCounts(before.opcodes(settings, "c3"), "teb.c3()")
+        val settingsAfter = opcodeCounts(after.opcodes(settings, "c3"), "teb.c3()")
+        val settingsDelta = (settingsAfter.keys + settingsBefore.keys)
+            .associateWith { opcode -> (settingsAfter[opcode] ?: 0) - (settingsBefore[opcode] ?: 0) }
+            .filterValues { it != 0 }
+        assertEquals(
+            "hiding the Telegram Premium row in Settings replaces one branch with a jump, and " +
+                "changes nothing else in the class that builds every row there",
+            mapOf(GOTO to 1, "if-nez" to -1),
+            settingsDelta
         )
 
         assertEquals(
@@ -310,14 +326,14 @@ class OctoGramSubsetPatchTest {
      * the sites the reference names, and the rest of each method keeps its instruction counts.
      */
     @Test
-    fun theBusinessEditsTurnExactlyThreeBranchesIntoJumps() = runBlocking {
+    fun theBusinessEditsTurnExactlyFourBranchesIntoJumps() = runBlocking {
         val dexEntries = readDexEntries()
         val business = OctoGramPatches.HIDE_BUSINESS
         val selection = PatchSelection.ofKeys(
             OctoGramPatchItems.itemKeyOf(business.id, "rowAndCommands")
         )
         val patches = OctoGramPatchItems.patches(business.id, selection)
-        assertEquals("the row and its two commands are one item", 3, patches.size)
+        assertEquals("the two rows and the two commands are one item", 4, patches.size)
 
         val classes3 = dexEntries.getValue("classes3.dex")
         val rowBuilder = "org/telegram/ui/ProfileActivity"
@@ -370,6 +386,22 @@ class OctoGramSubsetPatchTest {
                 branchAfter(afterSlugSteps, slug).opcode.substringBefore('/')
             )
         }
+
+        // The Business row on the app's own Settings screen is the fourth edit. It sits in the same
+        // class as the Settings premium row, so this also shows the two sets edit that class
+        // independently: a run that selects this one alone moves a single branch there.
+        val settings = "teb"
+        val settingsBefore = opcodeCounts(before.opcodes(settings, "c3"), "teb.c3()")
+        val settingsAfter = opcodeCounts(after.opcodes(settings, "c3"), "teb.c3()")
+        val settingsDelta = (settingsAfter.keys + settingsBefore.keys)
+            .associateWith { opcode -> (settingsAfter[opcode] ?: 0) - (settingsBefore[opcode] ?: 0) }
+            .filterValues { it != 0 }
+        assertEquals(
+            "hiding the Telegram Business row in Settings replaces one branch with a jump, and " +
+                "leaves the Settings premium row's branch alone",
+            mapOf(GOTO to 1, "if-nez" to -1),
+            settingsDelta
+        )
 
         // The run selected the business set alone, so none of this may move.
         val untouched = uploaders + emitters.map { "cn8" to it } + ("yb3" to "g") +

@@ -721,23 +721,28 @@ object OctoGramPatches {
     )
 
     /**
-     * The three edits that take the premium rows out of the profile's settings list.
+     * The four edits that take the Telegram Premium row out of the settings lists.
      *
-     * `ProfileActivity.yd()` resets every row index to -1 and then inserts each row by asking a
-     * condition and storing the row it took, so replacing the branch with an unconditional `goto`
-     * to the same label leaves that row's index at -1—hidden, and unclickable as well, because
-     * the click router matches rows by index and -1 matches nothing.
+     * Three are in `ProfileActivity.yd()`, which resets every row index to -1 and then inserts each
+     * row by asking a condition and storing the row it took, so replacing the branch with an
+     * unconditional `goto` to the same label leaves that row's index at -1—hidden, and unclickable
+     * as well, because the click router matches rows by index and -1 matches nothing.
      *
-     * The third edit is the one that makes the other two work. The combined premium-sections row is
+     * The third of those is what makes the first two work. The combined premium-sections row is
      * inserted when *any* of premiumRow, starsRow, tonRow or businessRow is still -1, and skipped
      * only when all five premium-ish rows are present, so hiding the Premium row on its own would
      * have made the sections row appear in its place. Forcing the first of those checks to jump
-     * past the insert keeps it out of the list altogether. The three are therefore one choice, and
-     * [OctoGramPatchItems] offers them as one item.
+     * past the insert keeps it out of the list altogether.
      *
-     * `starsRow` (Telegram Stars), `tonRow` (TON) and `businessRow` (Telegram Business) are
-     * separate paid products rather than Telegram Premium and are deliberately left visible, so
-     * their checks and their rows are untouched.
+     * The fourth is the same upsell on the app's own Settings screen, which builds its rows in a
+     * class of its own rather than in the profile's list, so the three edits above never reached
+     * it. Its row is drawn only while the account is not subscribed, and its tap opens the premium
+     * screen.
+     *
+     * `starsRow` (Telegram Stars) and `tonRow` (TON) are separate paid products rather than
+     * Telegram Premium and are deliberately left visible, so their checks and their rows are
+     * untouched. `businessRow` is hidden too, by [BUSINESS_UPSELL] rather than here, because it is
+     * the Business row on both screens that the one switch removes.
      */
     internal val PREMIUM_SETTINGS_ROWS = listOf(
         SmaliPatch(
@@ -782,18 +787,30 @@ object OctoGramPatches {
     .line 820
     .line 821
     goto :cond_34e"""
+        ),
+        SmaliPatch(
+            title = "Hiding the Telegram Premium row in Settings",
+            explanation = "Skips the row insert for the same upsell on the app's own Settings screen, whose " +
+                "rows are built in this class rather than in the profile's list. The branch guards the row " +
+                "titled by string 0x7f0fd21d and drawn with drawable/settings_premium, so it is the premium " +
+                "row and not one of the two products beside it.",
+            versionTag = "3.6.1",
+            smaliPath = "teb.smali",
+            anchor = "    if-nez v3, :cond_2d7",
+            replacement = "    goto :cond_2d7"
         )
     )
 
     /** The set that hides the premium rows in the profile's settings list. */
     val PREMIUM_SETTINGS = octoGramSet(
         id = "octogram_premium_settings",
-        label = "Hide the premium rows in the profile's settings list",
-        description = "Takes the premium rows out of the settings list on your profile: the Telegram Premium row, " +
-            "the Send a Gift row, and the combined premium-sections row that would otherwise appear in their " +
-            "place. The rows share one list and their conditions overlap, so this is one switch rather than " +
-            "three—hiding only the first would put a different premium row on screen. Telegram Stars, TON and " +
-            "Telegram Business are separate products and stay visible.",
+        label = "Hide the Telegram Premium row",
+        description = "Takes the Telegram Premium row out of both settings lists: the one on your profile, " +
+            "together with the Send a Gift row and the combined premium-sections row that would otherwise " +
+            "appear in its place, and the one on the app's Settings screen. The profile's rows share a list " +
+            "and their conditions overlap, so the three there are one switch: hiding only the first would put " +
+            "a different premium row on screen. Telegram Stars and TON are separate products and stay " +
+            "visible; the Telegram Business row has its own switch.",
     )
 
     /**
@@ -843,7 +860,7 @@ object OctoGramPatches {
     )
 
     /**
-     * The three edits that take the Telegram Business upsell row out and close its commands.
+     * The four edits that take the Telegram Business upsell row out and close its commands.
      *
      * 3.6.1: `ProfileActivity.yd()` inserts `businessRow` behind the same kind of condition as the
      * premium rows, so replacing the branch with an unconditional jump to the same label leaves the
@@ -852,7 +869,11 @@ object OctoGramPatches {
      * settings, and the navigation guard in [PREMIUM_UPSELL] already refuses that screen, which
      * would leave a visible row that does nothing.
      *
-     * The other two edits close the `/premium` and `/business` command slugs in `hq6.k(List)`, the
+     * The same upsell is on the app's own Settings screen, built in a class of its own, and that row
+     * is the fourth edit. Its tap opens the premium screen with the same `"settings"` source the
+     * premium row beside it uses, so the two are one surface reached from two screens.
+     *
+     * The last two edits close the `/premium` and `/business` command slugs in `hq6.k(List)`, the
      * dispatcher that turns a typed slug into a fragment. Each slug's branch is replaced with a
      * jump to the next slug's check, so the cascade continues normally and no fragment is
      * constructed. The `/business` branch's fall-through also holds OctoGram's `do-not-hide-ads`
@@ -890,6 +911,17 @@ object OctoGramPatches {
             smaliPath = "hq6.smali",
             anchor = "    if-eqz v0, :cond_f40",
             replacement = "    goto :cond_f40"
+        ),
+        SmaliPatch(
+            title = "The Telegram Business row in Settings",
+            explanation = "Skips the row insert for the same upsell on the app's own Settings screen, whose rows " +
+                "are built in this class rather than in the profile's list. The branch guards the row titled by " +
+                "string 0x7f0fd232 and drawn with drawable/settings_business, and its tap opens the premium " +
+                "screen, so this is the upsell and not the Business feature.",
+            versionTag = "3.6.1",
+            smaliPath = "teb.smali",
+            anchor = "    if-nez v2, :cond_40b",
+            replacement = "    goto :cond_40b"
         )
     )
 
@@ -897,10 +929,11 @@ object OctoGramPatches {
     val HIDE_BUSINESS = octoGramSet(
         id = "octogram_hide_business",
         label = "Hide the Telegram Business upsell row and its commands",
-        description = "Takes the Telegram Business row out of the settings list on your profile and closes the " +
-            "/premium and /business commands. The row is a Telegram Premium upsell rather than an entry to " +
-            "the Business settings, and the commands open the same premium screen, so all three are one " +
-            "switch. The Telegram Business feature itself, and its own settings screens, are untouched.",
+        description = "Takes the Telegram Business row out of both settings lists, the one on your profile and " +
+            "the one on the app's Settings screen, and closes the /premium and /business commands. The row is " +
+            "a Telegram Premium upsell rather than an entry to the Business settings, and the commands open " +
+            "the same premium screen, so all four are one switch. The Telegram Business feature itself, and " +
+            "its own settings screens, are untouched.",
     )
 
     /**

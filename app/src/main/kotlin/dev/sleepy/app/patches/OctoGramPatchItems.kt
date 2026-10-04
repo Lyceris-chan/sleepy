@@ -244,13 +244,15 @@ object OctoGramPatchItems {
         OctoGramPatches.PREMIUM_SETTINGS.id to listOf(
             Entry(
                 identity = "premiumRows",
-                label = "The premium rows in the settings list",
+                label = "The Telegram Premium row",
                 group = PREMIUM_ROWS,
-                description = "The settings list on your profile no longer carries the Telegram Premium row or the " +
-                    "Send a Gift row, and the combined premium-sections row that would appear in their place is " +
-                    "kept out as well. The three are one switch: the rows share one list and their conditions " +
-                    "overlap, so hiding only the first would put a different premium row on screen. Telegram " +
-                    "Stars, TON and Telegram Business are separate products and stay visible.",
+                description = "Neither settings list carries the Telegram Premium row: the one on your profile, " +
+                    "where the Send a Gift row goes with it and the combined premium-sections row that would " +
+                    "appear in their place is kept out too, and the one on the app's Settings screen. The " +
+                    "profile's rows share a list and their conditions overlap, so the three there are one " +
+                    "switch: hiding only the first would put a different premium row on screen. Telegram " +
+                    "Stars and TON are separate products and stay visible; the Telegram Business row has its " +
+                    "own switch.",
                 patches = OctoGramPatches.PREMIUM_SETTINGS_ROWS
             )
         ),
@@ -270,11 +272,11 @@ object OctoGramPatchItems {
                 identity = "rowAndCommands",
                 label = "The Telegram Business row and its two commands",
                 group = PAYWALL,
-                description = "The Telegram Business row leaves the settings list on your profile, and the " +
-                    "/premium and /business commands stop opening the premium screen. The row is a Telegram " +
-                    "Premium upsell rather than an entry to the Business settings, and the commands open the " +
-                    "same screen, so all three are one switch. The Telegram Business feature itself is " +
-                    "untouched.",
+                description = "The Telegram Business row leaves both settings lists, the one on your profile " +
+                    "and the one on the app's Settings screen, and the /premium and /business commands stop " +
+                    "opening the premium screen. The row is a Telegram Premium upsell rather than an entry to " +
+                    "the Business settings, and the commands open the same screen, so all four are one " +
+                    "switch. The Telegram Business feature itself is untouched.",
                 patches = OctoGramPatches.BUSINESS_UPSELL
             )
         ),

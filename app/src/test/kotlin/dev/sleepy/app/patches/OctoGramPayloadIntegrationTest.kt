@@ -93,7 +93,7 @@ class OctoGramPayloadIntegrationTest {
                 patchesToApply.add(patch.copy(dexName = actualDex))
             }
         }
-        assertEquals("the catalog is forty-one edits", 41, patchesToApply.size)
+        assertEquals("the catalog is forty-three edits", 43, patchesToApply.size)
 
         println("Total 1-to-1 patch edits queued: ${patchesToApply.size}")
 
@@ -118,14 +118,14 @@ class OctoGramPayloadIntegrationTest {
         // 5. Test surgical patching on classes3.dex
         val dex3Patches = patchesToApply.filter { it.dexName == "classes3.dex" }
         assertEquals(
-            "thirty-six edits, the other five being the Firebase registrars and the external-browser " +
+            "thirty-eight edits, the other five being the Firebase registrars and the external-browser " +
                 "default in classes.dex",
-            36,
+            38,
             dex3Patches.size
         )
         // The classes the crash reporter and the premium rows live in, named so that an edit that
         // stops resolving shows up as a missing class here.
-        listOf("yb3.smali", "org/telegram/ui/ProfileActivity.smali").forEach { path ->
+        listOf("yb3.smali", "org/telegram/ui/ProfileActivity.smali", "teb.smali").forEach { path ->
             assertTrue(
                 "$path must be among the edits this build gets",
                 dex3Patches.any { it.smaliPath == path }

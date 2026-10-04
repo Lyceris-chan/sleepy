@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-04
+
+### Fixed
+
+- **The Telegram Premium and Telegram Business rows leave the app's Settings screen too, not only the settings list on your profile.** Both rows were already hidden in the list under your profile, by the two switches that hide them, and they stayed visible one screen over. The reason is that the Settings screen builds its rows in a class of its own rather than sharing the profile's list, and the edits ported from the desktop reference had never been derived against it. Each row is drawn only while the account is not subscribed, and each one opens the premium screen when tapped, so both are the same upsell the two switches already refuse.
+
+  Telegram Stars and TON are separate products rather than Telegram Premium and still show, on both screens, as before.
+
 ## [3.1.0] - 2026-10-04
 
 ### Changed
