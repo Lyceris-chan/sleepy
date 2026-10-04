@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-04
+
+### Changed
+
+- **38 more Discord functions are patched, on the same 349.5 build.** There is nothing new to download: the app version and the manifest are unchanged, so a run that has already fetched 349.5 patches it with the wider set. The additions cover the surfaces this release of Discord moved or added: the guild shop and its preview gates, avatar decorations, collectible nameplates and profile frames, guild tag chips and the gates that decide whether one is shown, the Shop This Look sheets, the wishlist grid and the suggestions grid a profile renders, the Quest Home screen, the two Quests toggles in Data & Privacy, the Game Profile Shop carousel, the voice guild tag, and other users' profile tab list, which is rebuilt to build Main and Activity only with no Board and no Wishlist tab.
+
+  Two of the additions are byte-identical closures that Hermes stores once, so each pair shares a single body. A shared body can hold only one replacement, and where the two replacements differ the larger is written there and the smaller is relocated and declared with a size of its own. The desktop reference has both members of each pair end up relocated instead. The finished bundles therefore place those four bodies differently, and every one of them still reads back byte for byte as the reference has it; the bundle comparison checks each function's body on both sides rather than its position.
+
+### Added
+
+- **OctoGram: links open in your browser by default.** A fresh install sends http and https links to the phone's browser rather than to OctoGram's in-app viewer. The setting stays in the app, so a device that has already changed it keeps that choice, and Telegram's own links still open inside the app.
+
+- **OctoGram: the Telegram Business row and the two commands behind it are gone.** The row leaves the settings list on your profile, and `/premium` and `/business` stop opening the premium screen. All three are one Telegram Premium upsell rather than an entry to the Business settings, so they are one switch. The Telegram Business feature itself is untouched.
+
+- **OctoGram: the premium screens that present as a bottom sheet are closed as well.** The existing guard covers the entry points that go through the navigation router; eight more present the paywall as a sheet and were not covered. The guard sits in the helper that every sheet presentation goes through and refuses only the premium screen, so every other sheet still opens.
+
 ## [3.0.0] - 2026-10-03
 
 ### Changed

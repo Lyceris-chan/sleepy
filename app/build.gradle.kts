@@ -137,12 +137,20 @@ android {
 
 }
 
-// The merge test runs the real Discord splits—a 96 MB base and a 74 MB ABI split—end to end,
+// The merge test runs the real Discord splits—a 102 MB base and a 71 MB ABI split—end to end,
 // and that is deliberate: it exercises the same peak memory the device reaches. The heap is capped
 // at what a phone grants an app with `largeHeap`, so a repack that holds the whole archive, or the
 // libraries it is merging, fails here instead of on someone's phone.
+//
+// A process per class is part of that cap rather than a way around it. A device patches one app at
+// a time, so no operation ever begins behind another's heap. Sharing one JVM is the only
+// arrangement where a class starts with its predecessor's 67 MB bundles still filling the tenured
+// generation, and a later 67 MB allocation then fails for want of one contiguous run although the
+// collector would free that much. The sharing was an artifact of the harness, not a condition the
+// device reproduces.
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     maxHeapSize = "512m"
+    forkEvery = 1
 }
 
 kotlin {

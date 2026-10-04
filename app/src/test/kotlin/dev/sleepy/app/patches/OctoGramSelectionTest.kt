@@ -26,15 +26,15 @@ class OctoGramSelectionTest {
 
     @Test
     fun everyOctoGramSetIsSplitIntoItemsOfItsOwn() {
-        assertEquals("the OctoGram sets are the ones sources.json declares", 13, sets.size)
+        assertEquals("the OctoGram sets are the ones sources.json declares", 16, sets.size)
         assertEquals(
             "the item table has to cover exactly the registered sets",
             sets.map { it.id },
             OctoGramPatchItems.SET_IDS
         )
         assertEquals(
-            "sixteen items over the thirteen sets",
-            16,
+            "nineteen items over the sixteen sets",
+            19,
             itemsBySet.values.sumOf { it.size }
         )
 
@@ -193,10 +193,10 @@ class OctoGramSelectionTest {
 
     /**
      * The narrowing as the pipeline applies it: a set contributes exactly when the selection names
-     * one of its items, so a selection naming one set leaves the other twelve out.
+     * one of its items, so a selection naming one set leaves the other fifteen out.
      */
     @Test
-    fun aSelectionNamingOneOctoGramSetLeavesTheOtherTwelveOut() {
+    fun aSelectionNamingOneOctoGramSetLeavesTheOtherFifteenOut() {
         val logger = PatchSelection().with(itemsBySet.getValue(OctoGramPatches.OCTO_LOGGER.id))
 
         assertEquals(

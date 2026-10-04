@@ -54,6 +54,7 @@ class OctoGramPayloadIntegrationTest {
         assertEquals("classes3.dex", classToDex["Lorg/telegram/ui/ActionBar/ActionBarLayout;"])
         assertEquals("classes3.dex", classToDex["Lt6;"])
         assertEquals("classes3.dex", classToDex["Lcn8;"])
+        assertEquals("classes.dex", classToDex["Lit/octogram/android/unsorted/OctoConfig;"])
 
         println("Class-to-DEX index verified successfully across 4 DEX files!")
 
@@ -92,32 +93,38 @@ class OctoGramPayloadIntegrationTest {
                 patchesToApply.add(patch.copy(dexName = actualDex))
             }
         }
-        assertEquals("the catalog is thirty-six edits", 36, patchesToApply.size)
+        assertEquals("the catalog is forty-one edits", 41, patchesToApply.size)
 
         println("Total 1-to-1 patch edits queued: ${patchesToApply.size}")
 
-        // 4. Test surgical patching on classes.dex (Firebase registrars)
-        val firebasePatches = patchesToApply.filter { it.dexName == "classes.dex" }
-        assertEquals(4, firebasePatches.size)
-        val (patchedClassesDex, firebaseResults) = DexProcessor.patchDexSurgically(
+        // 4. Test surgical patching on classes.dex: the four Firebase registrars and the
+        // external-browser default.
+        val classesDexPatches = patchesToApply.filter { it.dexName == "classes.dex" }
+        assertEquals(
+            "the four Firebase registrars and the external-browser default",
+            5,
+            classesDexPatches.size
+        )
+        val (patchedClassesDex, classesDexResults) = DexProcessor.patchDexSurgically(
             dexBytes = dexEntries["classes.dex"]!!,
-            patches = firebasePatches
+            patches = classesDexPatches
         )
         assertTrue("classes.dex output size must be positive", patchedClassesDex.isNotEmpty())
-        firebaseResults.forEach {
-            assertEquals("Firebase patch must succeed: ${it.label}", StepStatus.OK, it.status)
+        classesDexResults.forEach {
+            assertEquals("classes.dex patch must succeed: ${it.label}", StepStatus.OK, it.status)
         }
-        println("classes.dex: all 4 Firebase registrars patched with status OK!")
+        println("classes.dex: all ${classesDexResults.size} patches applied with status OK!")
 
         // 5. Test surgical patching on classes3.dex
         val dex3Patches = patchesToApply.filter { it.dexName == "classes3.dex" }
         assertEquals(
-            "thirty-two edits, the other four being the Firebase registrars",
-            32,
+            "thirty-six edits, the other five being the Firebase registrars and the external-browser " +
+                "default in classes.dex",
+            36,
             dex3Patches.size
         )
-        // The two that the reference scripts this app has not yet transcribed carry, named so
-        // that a patch that stops resolving shows up as a missing class here.
+        // The classes the crash reporter and the premium rows live in, named so that an edit that
+        // stops resolving shows up as a missing class here.
         listOf("yb3.smali", "org/telegram/ui/ProfileActivity.smali").forEach { path ->
             assertTrue(
                 "$path must be among the edits this build gets",
@@ -201,8 +208,8 @@ class OctoGramPayloadIntegrationTest {
             }
         }
         assertEquals(
-            "the nine sets written for the registered build are refused on this one",
-            9,
+            "the twelve sets written for the registered build are refused on this one",
+            12,
             refusedSets
         )
         assertEquals(

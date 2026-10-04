@@ -68,6 +68,7 @@ object OctoGramPatchItems {
     private const val FIREBASE = "Firebase components registered at startup"
     private const val CRASH_REPORTER = "OctoGram's own crash reporter"
     private const val PREMIUM_ROWS = "Premium rows in the profile's settings list"
+    private const val LINKS = "How links open"
 
     /** The identity of the one Firebase item every Firebase set has. */
     private const val REGISTRAR = "registrar"
@@ -251,6 +252,42 @@ object OctoGramPatchItems {
                     "overlap, so hiding only the first would put a different premium row on screen. Telegram " +
                     "Stars, TON and Telegram Business are separate products and stay visible.",
                 patches = OctoGramPatches.PREMIUM_SETTINGS_ROWS
+            )
+        ),
+        OctoGramPatches.EXTERNAL_BROWSER.id to listOf(
+            Entry(
+                identity = "defaultOn",
+                label = "Opening links outside the app by default",
+                group = LINKS,
+                description = "A fresh install sends http and https links to the phone's browser rather than to " +
+                    "OctoGram's own in-app viewer. The setting stays in the app, so a device that has already " +
+                    "changed it keeps that choice, and Telegram's own links still open inside the app.",
+                patches = OctoGramPatches.EXTERNAL_BROWSER_DEFAULT
+            )
+        ),
+        OctoGramPatches.HIDE_BUSINESS.id to listOf(
+            Entry(
+                identity = "rowAndCommands",
+                label = "The Telegram Business row and its two commands",
+                group = PAYWALL,
+                description = "The Telegram Business row leaves the settings list on your profile, and the " +
+                    "/premium and /business commands stop opening the premium screen. The row is a Telegram " +
+                    "Premium upsell rather than an entry to the Business settings, and the commands open the " +
+                    "same screen, so all three are one switch. The Telegram Business feature itself is " +
+                    "untouched.",
+                patches = OctoGramPatches.BUSINESS_UPSELL
+            )
+        ),
+        OctoGramPatches.PREMIUM_SHEETS.id to listOf(
+            Entry(
+                identity = "sheetGuard",
+                label = "The premium screens that open as a sheet",
+                group = PAYWALL,
+                description = "Closes the eight premium entry points that present the paywall as a bottom " +
+                    "sheet, the ones the navigation-router switch cannot see. The guard sits in the helper " +
+                    "every sheet presentation goes through and refuses only a PremiumPreviewFragment, so " +
+                    "every other sheet still opens.",
+                patches = OctoGramPatches.PREMIUM_UPSELL_SHEETS
             )
         )
     )

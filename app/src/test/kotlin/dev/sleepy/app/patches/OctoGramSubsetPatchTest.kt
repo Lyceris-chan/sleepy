@@ -3,6 +3,14 @@ package dev.sleepy.app.patches
 import com.android.tools.smali.dexlib2.DexFileFactory
 import com.android.tools.smali.dexlib2.Opcodes
 import com.android.tools.smali.dexlib2.iface.DexFile
+import com.android.tools.smali.dexlib2.iface.Method
+import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.Instruction
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.reference.FieldReference
+import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import dev.sleepy.app.engine.DexProcessor
 import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.SelectivePatchGenerator
@@ -22,7 +30,9 @@ import org.junit.Test
  *
  * The methods the selection names must change, and the methods the same sets hold but the run did
  * not select must not. Comparison is by opcode with encoding widths folded together, because a
- * full DEX reassembly may re-encode an instruction into its wider form.
+ * full DEX reassembly may re-encode an instruction into its wider form; where an edit moves an
+ * operand and no opcode—the external-browser default passes a different register—the operand is
+ * what the test compares.
  */
 class OctoGramSubsetPatchTest {
 
@@ -218,6 +228,276 @@ class OctoGramSubsetPatchTest {
         )
     }
 
+    /**
+     * The external-browser default, checked where [DexView.opcodes] cannot see it.
+     *
+     * The edit changes which register one call reads and no instruction, so the opcode stream is
+     * identical before and after and the register has to be read from the encoding. The registers
+     * the two Boolean constants are read into are checked too, so the test asserts what the moved
+     * register holds rather than only its number.
+     */
+    @Test
+    fun theExternalBrowserDefaultMovesTheCallOntoTheRegisterHoldingTrue() = runBlocking {
+        val dexEntries = readDexEntries()
+        val externalBrowser = OctoGramPatches.EXTERNAL_BROWSER
+        val selection = PatchSelection.ofKeys(
+            OctoGramPatchItems.itemKeyOf(externalBrowser.id, "defaultOn")
+        )
+        val patches = OctoGramPatchItems.patches(externalBrowser.id, selection)
+        assertEquals("the setting's default is one edit", 1, patches.size)
+
+        val className = "it/octogram/android/unsorted/OctoConfig"
+        val before = DexView(dexEntries.getValue("classes.dex"))
+        val beforeSteps = requireNotNull(before.steps(className, "<init>")) {
+            "$className.<init> is not in the fixture"
+        }
+        val beforeInvoke = defaultInvoke(beforeSteps)
+        assertEquals(
+            "the fixture registers the default from the register that holds Boolean.FALSE",
+            4,
+            beforeInvoke.register
+        )
+        assertEquals(
+            "and Boolean.FALSE is what that register was read from",
+            BOOLEAN_FALSE,
+            fieldReadInto(beforeSteps, beforeInvoke.index, beforeInvoke.register)
+        )
+        assertEquals(
+            "while the register holding Boolean.TRUE is defined as well",
+            BOOLEAN_TRUE,
+            fieldReadInto(beforeSteps, beforeInvoke.index, 3)
+        )
+
+        val (patched, results) =
+            DexProcessor.patchDexSurgically(dexBytes = dexEntries.getValue("classes.dex"), patches = patches)
+        assertTrue("classes.dex produced no output", patched.isNotEmpty())
+        assertEquals("one step per edit", patches.size, results.size)
+        results.forEach {
+            assertEquals("${it.label} failed: ${it.detail}", StepStatus.OK, it.status)
+        }
+
+        val after = DexView(patched)
+        assertEquals(
+            "the edit moves a register operand and changes no instruction around it",
+            before.opcodes(className, "<init>"),
+            after.opcodes(className, "<init>")
+        )
+        val afterInvoke = defaultInvoke(requireNotNull(after.steps(className, "<init>")))
+        assertEquals(
+            "the default is now the register that holds Boolean.TRUE, so a fresh install ships " +
+                "the setting on",
+            3,
+            afterInvoke.register
+        )
+        assertEquals(
+            "and Boolean.TRUE is still what that register holds at the call",
+            BOOLEAN_TRUE,
+            fieldReadInto(
+                requireNotNull(after.steps(className, "<init>")),
+                afterInvoke.index,
+                afterInvoke.register
+            )
+        )
+        assertEquals(
+            "nothing else in the class changed",
+            before.opcodes(className, "g"),
+            after.opcodes(className, "g")
+        )
+    }
+
+    /**
+     * The three business edits: the profile row's branch and the two command slugs become jumps at
+     * the sites the reference names, and the rest of each method keeps its instruction counts.
+     */
+    @Test
+    fun theBusinessEditsTurnExactlyThreeBranchesIntoJumps() = runBlocking {
+        val dexEntries = readDexEntries()
+        val business = OctoGramPatches.HIDE_BUSINESS
+        val selection = PatchSelection.ofKeys(
+            OctoGramPatchItems.itemKeyOf(business.id, "rowAndCommands")
+        )
+        val patches = OctoGramPatchItems.patches(business.id, selection)
+        assertEquals("the row and its two commands are one item", 3, patches.size)
+
+        val classes3 = dexEntries.getValue("classes3.dex")
+        val rowBuilder = "org/telegram/ui/ProfileActivity"
+        val before = DexView(classes3)
+        val beforeRow = opcodeCounts(before.opcodes(rowBuilder, "yd"), "ProfileActivity.yd()")
+        assertEquals(
+            "the branch instructions of ProfileActivity.yd() before anything is applied",
+            mapOf(IF_NEZ to 92, "if-gez" to 13, GOTO to 43),
+            beforeRow.filterKeys { it in BRANCHES }
+        )
+        val beforeSlugs = opcodeCounts(before.opcodes("hq6", "k"), "hq6.k()")
+
+        // Each command keeps its handler and loses its own branch: the first branch after the
+        // slug's `const-string` is the one the edit replaces.
+        val slugSteps = requireNotNull(before.steps("hq6", "k")) { "hq6.k is not in the fixture" }
+        listOf("premium", "business").forEach { slug ->
+            assertEquals(
+                "the /$slug command's branch has to start as the guard the edit replaces",
+                IF_EQZ,
+                branchAfter(slugSteps, slug).opcode
+            )
+        }
+
+        val (patched, results) =
+            DexProcessor.patchDexSurgically(dexBytes = classes3, patches = patches)
+        assertTrue("classes3.dex produced no output", patched.isNotEmpty())
+        assertEquals("one step per edit", patches.size, results.size)
+        results.forEach {
+            assertEquals("${it.label} failed: ${it.detail}", StepStatus.OK, it.status)
+        }
+
+        val after = DexView(patched)
+        val afterRow = opcodeCounts(after.opcodes(rowBuilder, "yd"), "ProfileActivity.yd()")
+        assertEquals(
+            "the business row's insert is skipped and its branch is all that moved",
+            mapOf(GOTO to 1, IF_NEZ to -1),
+            countsDelta(beforeRow, afterRow)
+        )
+        val afterSlugs = opcodeCounts(after.opcodes("hq6", "k"), "hq6.k()")
+        assertEquals(
+            "both command branches become jumps and the cascade is otherwise untouched",
+            mapOf(GOTO to 2, IF_EQZ to -2),
+            countsDelta(beforeSlugs, afterSlugs)
+        )
+        val afterSlugSteps = requireNotNull(after.steps("hq6", "k"))
+        listOf("premium", "business").forEach { slug ->
+            assertEquals(
+                "the /$slug command's branch is now a jump past its handler",
+                GOTO,
+                branchAfter(afterSlugSteps, slug).opcode.substringBefore('/')
+            )
+        }
+
+        // The run selected the business set alone, so none of this may move.
+        val untouched = uploaders + emitters.map { "cn8" to it } + ("yb3" to "g") +
+            ("org/telegram/ui/ActionBar/p" to "E2")
+        assertEquals(
+            "nothing this run did not select may change",
+            opcodesOf(before, untouched),
+            opcodesOf(after, untouched)
+        )
+    }
+
+    /**
+     * The premium-sheet guard: four instructions in front of the sheet helper's body, and the body
+     * behind them unchanged.
+     */
+    @Test
+    fun thePremiumSheetGuardRefusesOnlyThePremiumFragment() = runBlocking {
+        val dexEntries = readDexEntries()
+        val sheets = OctoGramPatches.PREMIUM_SHEETS
+        val selection = PatchSelection.ofKeys(
+            OctoGramPatchItems.itemKeyOf(sheets.id, "sheetGuard")
+        )
+        val patches = OctoGramPatchItems.patches(sheets.id, selection)
+        assertEquals("the sheet guard is one edit", 1, patches.size)
+
+        val classes3 = dexEntries.getValue("classes3.dex")
+        val sheetHelper = "org/telegram/ui/ActionBar/p"
+        val before = DexView(classes3)
+        val beforeOpcodes = requireNotNull(before.opcodes(sheetHelper, "E2")) {
+            "$sheetHelper.E2 is not in the fixture"
+        }
+        assertEquals(
+            "the fixture's sheet helper starts by reading the fragment's parent activity",
+            "invoke-virtual",
+            beforeOpcodes.first()
+        )
+
+        val (patched, results) =
+            DexProcessor.patchDexSurgically(dexBytes = classes3, patches = patches)
+        assertTrue("classes3.dex produced no output", patched.isNotEmpty())
+        assertEquals("one step per edit", patches.size, results.size)
+        results.forEach {
+            assertEquals("${it.label} failed: ${it.detail}", StepStatus.OK, it.status)
+        }
+
+        val after = DexView(patched)
+        val afterOpcodes = requireNotNull(after.opcodes(sheetHelper, "E2"))
+        assertEquals(
+            "the guard adds exactly four instructions and the body behind them is the one it was",
+            listOf("instance-of", IF_EQZ, "const", "return-object") + beforeOpcodes,
+            afterOpcodes
+        )
+        val afterSteps = requireNotNull(after.steps(sheetHelper, "E2"))
+        assertEquals(
+            "the fragment the guard tests for is the paywall's",
+            "Lorg/telegram/ui/PremiumPreviewFragment;",
+            afterSteps.first().reference
+        )
+        assertEquals(
+            "the guard nulls and returns the fragment it tested, which is the method's parameter",
+            afterSteps[2].registers.first(),
+            afterSteps.first().registers.last()
+        )
+        assertEquals(
+            "and the value it returns is that same register",
+            afterSteps[2].registers.first(),
+            afterSteps[3].registers.first()
+        )
+
+        // The run selected the sheet guard alone, so none of this may move.
+        val untouched = uploaders + emitters.map { "cn8" to it } + ("yb3" to "g") +
+            ("org/telegram/ui/ProfileActivity" to "yd") + ("hq6" to "k")
+        assertEquals(
+            "nothing this run did not select may change",
+            opcodesOf(before, untouched),
+            opcodesOf(after, untouched)
+        )
+    }
+
+    /**
+     * The call that registers the external-browser default, and where it sits in the constructor.
+     *
+     * The invoke alone occurs in the class once per setting, so the key's own `const-string` locates
+     * this one: it is the first invoke after that string.
+     */
+    private fun defaultInvoke(steps: List<DexView.Step>): DefaultInvoke {
+        val key = steps.indexOfFirst {
+            it.opcode == CONST_STRING && it.reference == EXTERNAL_BROWSER_KEY
+        }
+        assertTrue("the constructor no longer registers $EXTERNAL_BROWSER_KEY", key >= 0)
+        val invoke = steps.withIndex().drop(key + 1)
+            .firstOrNull { it.value.opcode.substringBefore('/') == "invoke-virtual" }
+            ?: error("no invoke follows the $EXTERNAL_BROWSER_KEY constant")
+        return DefaultInvoke(invoke.index, invoke.value)
+    }
+
+    /** The first branch after [slug]'s own `const-string`: the handler's own guard or jump. */
+    private fun branchAfter(steps: List<DexView.Step>, slug: String): DexView.Step {
+        val at = steps.indexOfFirst { it.opcode == CONST_STRING && it.reference == slug }
+        assertTrue("no const-string for $slug", at >= 0)
+        return steps.drop(at + 1).first { it.opcode.substringBefore('/') in COMMAND_BRANCHES }
+    }
+
+    /** The call that registers the external-browser default, and where it sits in the method. */
+    private data class DefaultInvoke(val index: Int, val step: DexView.Step) {
+        /** The register the call passes as its second argument: the default it registers. */
+        val register: Int get() = step.registers[1]
+    }
+
+    /**
+     * The field the last `sget-object` into [register] before [index] reads, or null when the
+     * method holds no such read.
+     *
+     * Both Boolean constants are read into their registers once near the top of the constructor
+     * and nothing writes either register before the default is registered, so the nearest
+     * preceding field read is the value the call sees.
+     */
+    private fun fieldReadInto(steps: List<DexView.Step>, index: Int, register: Int): String? =
+        steps.subList(0, index)
+            .lastOrNull { it.opcode == SGET_OBJECT && it.registers.firstOrNull() == register }
+            ?.reference
+
+    /** The per-opcode difference between two counts, zeroes dropped. */
+    private fun countsDelta(before: Map<String, Int>, after: Map<String, Int>): Map<String, Int> =
+        (before.keys + after.keys)
+            .associateWith { opcode -> (after[opcode] ?: 0) - (before[opcode] ?: 0) }
+            .filterValues { it != 0 }
+
     /** One method's opcodes per name, as `Class.method`, for comparing two runs. */
     private fun opcodesOf(
         view: DexView,
@@ -242,18 +522,32 @@ class OctoGramSubsetPatchTest {
          */
         const val RETURN_VOID = "return-void"
         const val GOTO = "goto"
+        const val IF_EQZ = "if-eqz"
+        const val IF_NEZ = "if-nez"
+        const val CONST_STRING = "const-string"
+        const val SGET_OBJECT = "sget-object"
+
+        /** The `sget-object` targets the external-browser default moves between. */
+        const val BOOLEAN_TRUE = "Ljava/lang/Boolean;->TRUE:Ljava/lang/Boolean;"
+        const val BOOLEAN_FALSE = "Ljava/lang/Boolean;->FALSE:Ljava/lang/Boolean;"
+
+        /** The preference key the external-browser default is registered under. */
+        const val EXTERNAL_BROWSER_KEY = "openLinksExternalBrowser"
 
         /**
          * The three branch mnemonics this build's premium-row edits move, as dexlib2 spells
          * them.
          */
-        val BRANCHES = setOf("if-nez", "if-gez", GOTO)
+        val BRANCHES = setOf(IF_NEZ, "if-gez", GOTO)
+
+        /** The branches the business-command edits move: each handler's own guard. */
+        val COMMAND_BRANCHES = setOf(IF_EQZ, GOTO)
     }
 }
 
 /**
- * One DEX as dexlib2 reads it, with the two questions these tests ask of it: what instructions a
- * method holds, and whether a string is anywhere in it.
+ * One DEX as dexlib2 reads it, with the questions these tests ask of it: what instructions a method
+ * holds, what operands they name, and whether a string is anywhere in the DEX.
  *
  * The file is written to disk because that is how dexlib2 opens a DEX, and methods are matched by
  * name alone: every method compared here has a name of its own within its class, and a name that
@@ -272,14 +566,60 @@ private class DexView(bytes: ByteArray) {
     /** The file as it stands, read once and only if a string is looked for. */
     private val raw: ByteArray by lazy { file.readBytes() }
 
+    /**
+     * One instruction as [steps] reports it: the opcode, the registers the encoding names, and the
+     * string constant or member reference it carries when it has one.
+     */
+    data class Step(val opcode: String, val registers: List<Int>, val reference: String?)
+
     /** The method's opcodes in order, with the encoding widths folded together, or null. */
-    fun opcodes(className: String, methodName: String): List<String>? {
-        val method = dex.classes
+    fun opcodes(className: String, methodName: String): List<String>? =
+        methodOf(className, methodName)?.implementation?.instructions
+            ?.map { it.opcode.name.substringBefore('/') }
+
+    /**
+     * The method's instructions in order, with the registers and reference each encoding carries.
+     *
+     * [opcodes] answers which instructions a method holds; this view answers what operands they
+     * name, for the edits [opcodes] cannot see. The external-browser default moves a call onto a
+     * different register without changing a single opcode, so the register has to be read from the
+     * encoding. A reference is spelled as the disassembler writes it: a string constant by its
+     * text, a field as `owner->name:type`.
+     */
+    fun steps(className: String, methodName: String): List<Step>? =
+        methodOf(className, methodName)?.implementation?.instructions?.map { instruction ->
+            Step(
+                opcode = instruction.opcode.name,
+                registers = registersOf(instruction),
+                reference = when (val reference = (instruction as? ReferenceInstruction)?.reference) {
+                    null -> null
+                    is StringReference -> reference.string
+                    is FieldReference -> "${reference.definingClass}->${reference.name}:${reference.type}"
+                    else -> reference.toString()
+                }
+            )
+        }
+
+    /** The method with that name in that class, or null when either is absent. */
+    private fun methodOf(className: String, methodName: String): Method? =
+        dex.classes
             .firstOrNull { it.type == "L$className;" }
             ?.methods
             ?.firstOrNull { it.name == methodName }
-            ?: return null
-        return method.implementation?.instructions?.map { it.opcode.name.substringBefore('/') }
+
+    /** The registers one instruction names: its destination first, then its sources. */
+    private fun registersOf(instruction: Instruction): List<Int> = when (instruction) {
+        is FiveRegisterInstruction -> listOf(
+            instruction.registerC,
+            instruction.registerD,
+            instruction.registerE,
+            instruction.registerF,
+            instruction.registerG
+        ).take(instruction.registerCount)
+
+        is TwoRegisterInstruction -> listOf(instruction.registerA, instruction.registerB)
+        is OneRegisterInstruction -> listOf(instruction.registerA)
+        else -> emptyList()
     }
 
     /**

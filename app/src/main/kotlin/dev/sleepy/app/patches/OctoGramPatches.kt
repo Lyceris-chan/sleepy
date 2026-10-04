@@ -13,6 +13,9 @@ import dev.sleepy.app.model.SmaliPatch
  * - work361/patch_logging_361.py (Diagnostic uploaders, and the global logging flag)
  * - work361/patch_crashlog_361.py (OctoGram's own crash reporter, which the logging flag misses)
  * - work361/patch_premium_settings.py (The premium rows in the profile's settings list)
+ * - work361/patch_external_browser_361.py (The external-browser setting's default)
+ * - work361/patch_hide_business_361.py (The Telegram Business upsell row, and its commands)
+ * - work361/patch_premium_sheets_361.py (The paywall's remaining sheet presentations)
  *
  * patch_dex.py (OctoGram 3.6.0) is deliberately not transcribed: no source here offers a 3.6.0
  * build, and the engine patches only a build identified as [REGISTERED_BUILD], so its entries
@@ -794,6 +797,167 @@ object OctoGramPatches {
     )
 
     /**
+     * The edit that registers OctoGram's external-browser setting as on.
+     *
+     * 3.6.1: `OctoConfig.<init>` registers the default for the `openLinksExternalBrowser` key. The
+     * call reads `v4`, which holds `Boolean.FALSE`; `v3` holds `Boolean.TRUE` and is written once,
+     * before this key, and never again. Passing `v3` ships the setting on.
+     *
+     * The default applies only where the key has never been stored: `OctoConfig.a(i43)` falls back
+     * to it when SharedPreferences holds no value, so a device that has already chosen keeps that
+     * choice.
+     */
+    internal val EXTERNAL_BROWSER_DEFAULT = listOf(
+        SmaliPatch(
+            title = "Opening links in the phone's browser by default (3.6.1)",
+            explanation = "Registers Boolean.TRUE instead of Boolean.FALSE as this setting's default, so a " +
+                "fresh install hands http and https links to the phone's browser rather than to the in-app " +
+                "viewer. A device that has already changed the setting keeps its stored choice, and " +
+                "Telegram's own links (t.me and the rest) still open inside the app.",
+            versionTag = "3.6.1",
+            smaliPath = "it/octogram/android/unsorted/OctoConfig.smali",
+            // The invoke alone occurs 130 times in this class—one per setting—so the anchor
+            // carries the key's `const-string` and the `.line` directives between them, which
+            // identify the call this setting's default is registered by.
+            anchor = """    const-string v0, "openLinksExternalBrowser"
+
+    .line 1473
+    .line 1474
+    invoke-virtual {p0, v4, v0}, Lit/octogram/android/unsorted/OctoConfig;->g(Ljava/lang/Object;Ljava/lang/String;)Li43;""",
+            replacement = """    const-string v0, "openLinksExternalBrowser"
+
+    .line 1473
+    .line 1474
+    invoke-virtual {p0, v3, v0}, Lit/octogram/android/unsorted/OctoConfig;->g(Ljava/lang/Object;Ljava/lang/String;)Li43;"""
+        )
+    )
+
+    /** The set that ships links opening in the phone's browser. */
+    val EXTERNAL_BROWSER = octoGramSet(
+        id = "octogram_external_browser",
+        label = "Open links in the phone's browser",
+        description = "OctoGram's setting for opening links outside the app ships off, so http and https links " +
+            "go to its in-app viewer until the setting is found and changed. This registers the setting's " +
+            "default as on, so a fresh install opens them in the phone's browser. A device that has already " +
+            "touched the setting keeps its stored choice, and Telegram's own links still open inside the app.",
+    )
+
+    /**
+     * The three edits that take the Telegram Business upsell row out and close its commands.
+     *
+     * 3.6.1: `ProfileActivity.yd()` inserts `businessRow` behind the same kind of condition as the
+     * premium rows, so replacing the branch with an unconditional jump to the same label leaves the
+     * row's index at -1—hidden, and unclickable as well, because the click router matches rows by
+     * index. The row is an upsell for the premium screen rather than an entry to the Business
+     * settings, and the navigation guard in [PREMIUM_UPSELL] already refuses that screen, which
+     * would leave a visible row that does nothing.
+     *
+     * The other two edits close the `/premium` and `/business` command slugs in `hq6.k(List)`, the
+     * dispatcher that turns a typed slug into a fragment. Each slug's branch is replaced with a
+     * jump to the next slug's check, so the cascade continues normally and no fragment is
+     * constructed. The `/business` branch's fall-through also holds OctoGram's `do-not-hide-ads`
+     * debug command, which the same jump makes unreachable: it only ran when the first slug was
+     * `business`.
+     *
+     * The Telegram Business feature itself is not touched: its package ships unchanged, and only
+     * this upsell row and the two commands that open the premium screen are edited.
+     */
+    internal val BUSINESS_UPSELL = listOf(
+        SmaliPatch(
+            title = "The Telegram Business upsell row",
+            explanation = "Skips the row insert for businessRow, so the settings list on your profile has no " +
+                "Telegram Business row. The row is a Telegram Premium upsell, not an entry to the Business " +
+                "settings, and the paywall guard leaves it with nowhere to go.",
+            versionTag = "3.6.1",
+            smaliPath = "org/telegram/ui/ProfileActivity.smali",
+            anchor = "    if-nez v4, :cond_322",
+            replacement = "    goto :cond_322"
+        ),
+        SmaliPatch(
+            title = "The /premium command",
+            explanation = "Replaces the /premium command's branch with a jump to the next command in the " +
+                "dispatcher, so the command constructs no premium fragment and shows nothing.",
+            versionTag = "3.6.1",
+            smaliPath = "hq6.smali",
+            anchor = "    if-eqz v0, :cond_f20",
+            replacement = "    goto :cond_f20"
+        ),
+        SmaliPatch(
+            title = "The /business command",
+            explanation = "The same jump on the /business command, which opens the premium screen. The " +
+                "dispatcher's cascade continues at the next command instead, so no fragment is constructed.",
+            versionTag = "3.6.1",
+            smaliPath = "hq6.smali",
+            anchor = "    if-eqz v0, :cond_f40",
+            replacement = "    goto :cond_f40"
+        )
+    )
+
+    /** The set that hides the Telegram Business upsell row and closes its commands. */
+    val HIDE_BUSINESS = octoGramSet(
+        id = "octogram_hide_business",
+        label = "Hide the Telegram Business upsell row and its commands",
+        description = "Takes the Telegram Business row out of the settings list on your profile and closes the " +
+            "/premium and /business commands. The row is a Telegram Premium upsell rather than an entry to " +
+            "the Business settings, and the commands open the same premium screen, so all three are one " +
+            "switch. The Telegram Business feature itself, and its own settings screens, are untouched.",
+    )
+
+    /**
+     * The edit that closes the paywall's remaining sheet presentations.
+     *
+     * 3.6.1: `BaseFragment.E2(...)` builds the cells a bottom-sheet dialog is presented with. The
+     * eight PremiumPreviewFragment constructions that open as a sheet all go through it, and the
+     * guards in [PREMIUM_UPSELL] never see them because those paths do not call the navigation
+     * router the guards sit in. The guard inserted here returns null for a PremiumPreviewFragment
+     * before the dialog is built.
+     *
+     * Returning null is the method's own no-parent-activity path: its first branch already returns
+     * null when the fragment's parent activity is absent, and none of the eight callers reads the
+     * return value. Every other sheet keeps building, because only a PremiumPreviewFragment is
+     * refused.
+     */
+    internal val PREMIUM_UPSELL_SHEETS = listOf(
+        SmaliPatch(
+            title = "The paywall's sheet presentations (3.6.1)",
+            explanation = "Refuses PremiumPreviewFragment in the helper every sheet presentation goes through, " +
+                "so the eight premium paths that open the paywall as a bottom sheet stop before the dialog is " +
+                "built. Other sheets are unaffected, because only a PremiumPreviewFragment is refused.",
+            versionTag = "3.6.1",
+            smaliPath = "org/telegram/ui/ActionBar/p.smali",
+            anchor = """.method public final E2(Lorg/telegram/ui/ActionBar/p;Ldd0;)[Lp16;
+    .registers 12
+""",
+            replacement = """.method public final E2(Lorg/telegram/ui/ActionBar/p;Ldd0;)[Lp16;
+    .registers 12
+    # --- OctoGram premium-upsell removal -------------------------------
+    # Every premium sheet is presented through this helper, and no caller reads the
+    # return value, so returning null suppresses the sheet before the dialog is built.
+    instance-of v0, p1, Lorg/telegram/ui/PremiumPreviewFragment;
+
+    if-eqz v0, :cond_premium_sheet_skip
+
+    const/4 p1, 0x0
+
+    return-object p1
+
+    :cond_premium_sheet_skip
+    # -------------------------------------------------------------------
+"""
+        )
+    )
+
+    /** The set that closes the paywall's remaining sheet presentations. */
+    val PREMIUM_SHEETS = octoGramSet(
+        id = "octogram_premium_sheets",
+        label = "Close the paywall's remaining sheets",
+        description = "The navigation-router switch blocks the paywall for 53 of the 61 places the app can " +
+            "present it; the other eight open it as a bottom sheet through a different helper, which that " +
+            "switch never sees. This refuses a PremiumPreviewFragment in that helper, so those eight stop " +
+            "before the dialog is built. Every other sheet still opens.",
+    )
+
+    /**
      * One OctoGram set: its own switch, and the edits [OctoGramPatchItems] offers as its items.
      *
      * The set declares no patches of its own. The engine applies a set's patches whether or not
@@ -824,7 +988,10 @@ object OctoGramPatches {
         FIREBASE_REMOTE_CONFIG_KTX,
         FIREBASE_DATATRANSPORT,
         CRASH_REPORTER,
-        PREMIUM_SETTINGS
+        PREMIUM_SETTINGS,
+        EXTERNAL_BROWSER,
+        HIDE_BUSINESS,
+        PREMIUM_SHEETS
     )
 
 }

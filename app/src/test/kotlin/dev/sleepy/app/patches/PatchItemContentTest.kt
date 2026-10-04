@@ -18,8 +18,8 @@ class PatchItemContentTest {
     fun everyPatchedFunctionHasAFeatureGroupAndADescription() {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
-            "the set is the 166 functions the reference build differs in",
-            166,
+            "the set is the 204 functions the reference build differs in",
+            204,
             patched.size
         )
         assertEquals(
@@ -42,7 +42,7 @@ class PatchItemContentTest {
             DiscordHermesFunctionCatalog.GROUPS.filter { it.isBlank() }
         )
 
-        // A hundred and sixty-four rows in one list is the same problem as one switch, so the
+        // Two hundred and four rows in one list is the same problem as one switch, so the
         // split has to be a substantive one rather than a formality.
         assertTrue(
             "the functions must be split into feature groups, " +
@@ -79,7 +79,7 @@ class PatchItemContentTest {
     @Test
     fun everyItemHasAKeyThatDoesNotDependOnItsPosition() {
         val items = DiscordHermesFunctionCatalog.items()
-        assertEquals(166, items.size)
+        assertEquals(204, items.size)
         assertEquals(
             "two items that share a key are one item as far as a saved selection is concerned",
             items.size,
@@ -97,7 +97,7 @@ class PatchItemContentTest {
         )
 
         // The scheme, stated: the set id, then an identity that is the function id—because the
-        // names are neither unique nor stable. Fifty-seven functions here have no name, and seven
+        // names are neither unique nor stable. Ninety-five functions here have no name, and seven
         // names each cover more than one function.
         assertEquals("discord_hermes:fn68593", DiscordHermesFunctionCatalog.itemKeyOf(68593))
         val typing = DiscordBlocklistRules.API_RULES.first { it.pattern == "/typing" }

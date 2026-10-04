@@ -7,8 +7,8 @@ package dev.sleepy.app.patches
  * `quirky-noether/discord` checkout.
  *
  * Every entry is a whole function body taken from that pair: the base supplies the function's
- * size, and the patched build supplies its replacement bytes. The set covers the 166 functions
- * that differ between the two, and applying it reproduces 164 of them byte for byte. The other
+ * size, and the patched build supplies its replacement bytes. The set covers the 204 functions
+ * that differ between the two, and applying it reproduces 202 of them byte for byte. The other
  * two, 49956 and 58239, carry a deliberate divergence. The reference stubs both to `undefined`,
  * and the one caller of each function dereferences that return: 49956's caller reads `.result`
  * and 58239's caller reads `.length`. Both reads throw a TypeError on `undefined`, so the
@@ -108,6 +108,7 @@ object DiscordHermesBundlePatch {
         FunctionPatch(23431, "debugLogEvent", 79, "93007e7e7e7600"),
         FunctionPatch(23494, "track", 288, "93007600"),
         FunctionPatch(23502, "trackNetworkAction", 135, "93007e7e7e7600"),
+        FunctionPatch(25406, "", 189, "94007e7600"),
         FunctionPatch(25451, "isZoomedExperimentEnabled", 35, "8b00007e7e7600"),
         FunctionPatch(33861, "trackWithMetadata", 365, "93007e7600"),
         FunctionPatch(34036, "surveyFetch", 198, "3d00480100001e00450001008c016c0000017e7e7600"),
@@ -115,6 +116,11 @@ object DiscordHermesBundlePatch {
         FunctionPatch(34869, "distribution", 114, "93007e7e7600"),
         FunctionPatch(34870, "_flush", 183, "93007e7e7e7600"),
         FunctionPatch(38875, "hasSocialLayerStorefront", 204, "96007600"),
+        FunctionPatch(39222, "", 172, "96007600"),
+        FunctionPatch(39223, "", 150, "96007e7e7600"),
+        FunctionPatch(39224, "", 96, "96007600"),
+        FunctionPatch(39225, "", 494, "96007e7e7600"),
+        FunctionPatch(39226, "", 272, "96007600"),
         FunctionPatch(40422, "handleAppStateChange", 158, "93007e7e7600"),
         FunctionPatch(40423, "writeExistingEventStorage", 37, "93007e7600"),
         FunctionPatch(40424, "track", 37, "93007e7600"),
@@ -126,14 +132,17 @@ object DiscordHermesBundlePatch {
         FunctionPatch(40614, "recordChannelFetchedLocal", 200, "93007600"),
         FunctionPatch(40615, "recordChannelFetchedNetwork", 200, "93007600"),
         FunctionPatch(43768, "openPremiumUpsellActionSheet", 114, "93007e7e7600"),
-        FunctionPatch(
-            45460, "_maybeFetchProductsBySkuIds", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
-        ),
-        FunctionPatch(
-            45901, "fetchGuildAffinities", 112,
-            "3d00480100001e00450001008c016c0000017600"
-        ),
+        FunctionPatch(45217, "", 461, "96007e7600"),
+        FunctionPatch(45218, "", 247, "96007e7e7e7600"),
+        FunctionPatch(45222, "", 201, "96007e7600"),
+        FunctionPatch(45460, "_maybeFetchProductsBySkuIds", 61, "3d00480100001e00450001008c016c0000017e7600"),
+        FunctionPatch(45488, "", 260, "94007600"),
+        FunctionPatch(45489, "", 107, "94007e7e7e7600"),
+        FunctionPatch(45549, "", 579, "080000007e7600"),
+        FunctionPatch(45550, "", 243, "080000007e7600"),
+        FunctionPatch(45901, "fetchGuildAffinities", 112, "3d00480100001e00450001008c016c0000017600"),
+        FunctionPatch(47109, "", 196, "93007600"),
+        FunctionPatch(47110, "", 103, "93007e7e7e7600"),
         FunctionPatch(47123, "trackImpression", 398, "93007e7e7600"),
         FunctionPatch(
             47225, "_fetchStorefrontPricesForApplicationId", 61,
@@ -145,37 +154,26 @@ object DiscordHermesBundlePatch {
         ),
         FunctionPatch(47308, "", 468, "94007600"),
         FunctionPatch(47309, "", 218, "94007e7e7600"),
+        FunctionPatch(47349, "", 204, "94007600"),
+        FunctionPatch(47350, "", 87, "94007e7e7e7600"),
         FunctionPatch(
             47611, "_maybeFetchCollectionsWithProducts", 61,
             "3d00480100001e00450001008c016c0000017e7600"
         ),
         FunctionPatch(49760, "openPremiumModal", 82, "93007e7e7600"),
-        // The id held a Nitro upsell button in 348.5 and the confirm-modal RPC handler in 349.5.
-        // The caller reads .result off the return and the RPC client reads the response this
-        // object carries, so the body returns the object that read expects, built from the
-        // object templates of the body it replaces: {result: {confirmed: false}, answered: null,
-        // subject: null}. The SHOW_CONFIRM_MODAL response schema takes an optional confirmed
-        // boolean, which this answers with false: the modal was not confirmed.
         FunctionPatch(49956, "", 133, "0100563b78cd9601520001000201573b0000f7c80400520100007e7601"),
+        FunctionPatch(51631, "", 303, "94007e7e7e7600"),
+        FunctionPatch(51632, "", 151, "94007e7e7e7600"),
+        FunctionPatch(51633, "", 569, "94007e7600"),
+        FunctionPatch(51634, "", 311, "94007e7e7e7600"),
+        FunctionPatch(51635, "", 301, "94007e7600"),
         FunctionPatch(52476, "", 442, "93007e7e7600"),
         FunctionPatch(52477, "", 217, "93007e7600"),
-        FunctionPatch(
-            53460, "_fetchCurrentQuests", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
-        ),
+        FunctionPatch(53460, "_fetchCurrentQuests", 61, "3d00480100001e00450001008c016c0000017e7600"),
         FunctionPatch(53461, "_sendHeartbeat", 61, "3d00480100001e00450001008c016c0000017e7600"),
-        FunctionPatch(
-            53469, "_fetchClaimedQuests", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
-        ),
-        FunctionPatch(
-            53470, "_fetchQuestToDeliver", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
-        ),
-        FunctionPatch(
-            53471, "_fetchEarnedQuestToDeliver", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
-        ),
+        FunctionPatch(53469, "_fetchClaimedQuests", 61, "3d00480100001e00450001008c016c0000017e7600"),
+        FunctionPatch(53470, "_fetchQuestToDeliver", 61, "3d00480100001e00450001008c016c0000017e7600"),
+        FunctionPatch(53471, "_fetchEarnedQuestToDeliver", 61, "3d00480100001e00450001008c016c0000017e7600"),
         FunctionPatch(
             55149, "_fetchSocialLayerStorefrontConfig", 61,
             "3d00480100001e00450001008c016c0000017e7600"
@@ -194,10 +192,6 @@ object DiscordHermesBundlePatch {
             "3d00480100001e00450001008c016c0000017e7e7600"
         ),
         FunctionPatch(57640, "fetchIsSpotifyProtocolRegistered", 101, "96007e7600"),
-        // The id held a gift purchase button in 348.5 and the uncompiled variant of
-        // useTypingUserIdsForDisplay in 349.5. The caller passes the return to
-        // hasTypingIndicatorContent, which reads .length, so the body returns an empty array:
-        // the hook's own shape, holding no typing users.
         FunctionPatch(58239, "", 173, "080000007e7600"),
         FunctionPatch(59199, "", 365, "93007e7600"),
         FunctionPatch(59200, "", 254, "93007e7e7600"),
@@ -208,15 +202,19 @@ object DiscordHermesBundlePatch {
             62045, "isVirtualCurrencyEnabled", 47,
             "34020001011f0378cd9600520100007e7e76013402003b0402013b0102025e03010093006e05040003450405003060"
         ),
-        FunctionPatch(
-            62046, "useVirtualCurrencyMobileEnabled", 47,
-            "34020001011f0378cd9600520100007e7e7601"
-        ),
+        FunctionPatch(62046, "useVirtualCurrencyMobileEnabled", 47, "34020001011f0378cd9600520100007e7e7601"),
+        FunctionPatch(62162, "", 1124, "93007600"),
+        FunctionPatch(62163, "", 555, "93007e7e7e7600"),
+        FunctionPatch(62179, "", 732, "93007600"),
+        FunctionPatch(62180, "", 265, "93007e7600"),
         FunctionPatch(62435, "", 393, "93007e7600"),
         FunctionPatch(
             62714, "useProfileTabIndices", 79,
             "8b04018c02ffffffff890501100104100002b209058b01021000048906020205994f0000f7c8040052050000100001100302b20a061f00010410030189060352050301b20606100202520502027605"
         ),
+        FunctionPatch(62758, "", 1931, "94007e7e7e7600"),
+        FunctionPatch(62766, "", 130, "94007e7e7600"),
+        FunctionPatch(62767, "", 72, "94007600"),
         FunctionPatch(62778, "", 401, "93007e7600"),
         FunctionPatch(62779, "", 110, "93007e7e7600"),
         FunctionPatch(62783, "AddToWishlistItemCard", 417, "93007e7600"),
@@ -239,6 +237,8 @@ object DiscordHermesBundlePatch {
         FunctionPatch(68593, "usePredicate", 34, "96007e7e7600"),
         FunctionPatch(68600, "", 688, "93007600"),
         FunctionPatch(68601, "", 298, "93007e7e7600"),
+        FunctionPatch(68628, "", 3920, "94007600"),
+        FunctionPatch(68629, "", 1917, "94007e7600"),
         FunctionPatch(68858, "", 426, "96007e7e7600"),
         FunctionPatch(69421, "", 42, "96007e7e7600"),
         FunctionPatch(69606, "", 208, "96007600"),
@@ -249,10 +249,19 @@ object DiscordHermesBundlePatch {
         FunctionPatch(70961, "overrideSurvey", 58, "93007e7e7600"),
         FunctionPatch(70962, "surveyHide", 153, "93007e7600"),
         FunctionPatch(70963, "surveySeen", 243, "3d00480100001e00450001008c016c0000017e7e7e7600"),
+        FunctionPatch(71374, "", 303, "93007e7e7e7600"),
+        FunctionPatch(71375, "", 221, "93007e7600"),
         FunctionPatch(71379, "", 4164, "93007600"),
         FunctionPatch(71380, "", 2196, "93007600"),
         FunctionPatch(71381, "", 662, "93007e7e7600"),
         FunctionPatch(71382, "", 445, "93007e7600"),
+        FunctionPatch(71516, "", 37, "96007e7600"),
+        FunctionPatch(
+            71528, "", 37,
+            "96007e76003407003b0307003b0207015e04020293016e0503010444040500128b00026e08"
+        ),
+        FunctionPatch(72534, "", 871, "94007e7e7e7600"),
+        FunctionPatch(72535, "", 369, "94007e7600"),
         FunctionPatch(75525, "componentDidMount", 405, "93007e7600"),
         FunctionPatch(75526, "componentDidUpdate", 1503, "93007e7e7e7600"),
         FunctionPatch(
@@ -293,12 +302,16 @@ object DiscordHermesBundlePatch {
             113052, "", 213,
             "34030142050301000000890701370500073b0803003b0403025e03040a93016e06080103450306005bd16e06030607130306b1a1000000063406005e09040b6e0a08010945090a0159d26e09090a07b04b095e09040b6e0a08010945090a02cdd46e09090a07b019095e04040b6e080801044504080381d36e04040807ae1b3b0a060145090a04bdbd850805532d02006e08090a08130408ae3845070705167f45070706a5b444070707a497001c010000b21c013b07060145060704bdbd850505522d02006e050607051301051004011003047603"
         ),
+        FunctionPatch(
+            113177, "", 624,
+            "3405000203684c00006cc70c003409013b0b09003b0609025e02061e93006e020b0002440702009544040701e05e02061e6e020b0002440202020a4502020371276e02040702520302013b0809143b0709050102224f6ca98504056c2d0200520204013b0405286c040400520204026f020800070252030202080201005a0203003b030519b3a70000000044040204c60203684c0000ae1f0a005e0a061e6e0a0b000a440d0a0095440c0d01e05e0a061e6e0a0b000a440a0a020a450a0a05480a6e0a0c0d0a52030a01010c224f6ca9850a056d2d0200520c0a013b0d091c020a234f0000fbc804003b0e0500440e0e064e520a0e003b010525520a01013b01050b520a01023b0e0515520a0e036f0a08000d0a520c0a023b0a051b700a0800070c0a52030a026e030402033b03051ab20d033b04050a940118030104b3ba0000000344040204c60203684c000031ee0c005e0a061e6e0a0b000a440d0a0095440c0d01e05e0a061e6e0a0b000a440a0a020a450a0a07f1a26e0a0c0d0a52030a01010a224f6ca9850c056e2d0200520a0c013b0c091d0209244f0000bf4f08003b0d050052090d003b0d050a52090d013b0d050252090d023b0e0501940116010e01930db00801440d0e064e52090d033b0d051552090d046f0908000c09520a09023b09051c70090800070a09520309026e030402033b010518b2730044040204c60203684c000084c70c005e09061e6e090b0009440a09009544090a01e05e06061e6e060b0006440606020a45060608940e6e06090a06520306010106224f6ca98509056f2d0200520609013b0905296c090900520609023b05051d70050800070605520305026e030402037602"
+        ),
         FunctionPatch(115029, "sampleStats", 395, "93007e7e7e7600"),
         FunctionPatch(115037, "sampleStats", 68, "93007600"),
         FunctionPatch(115050, "sampleStats", 112, "93007600"),
         FunctionPatch(
             127527, "", 572,
-            "3404000202684c00006cc70c003408013b0a08003b0508025e01051c93006e010a0001440601009544030601e05e01051c6e010a0001440101020a4501010371276e01030601520201013b07080e3b0608050101224f6ca98503041e400200520103013b03041f6c030300520103026f010700060152020102080101005a0102003b020411b3a70000000044030104c60202684c0000ae1f0a005e09051c6e090a0009440c090095440b0c01e05e09051c6e090a0009440909020a45090905480a6e090b0c0952020901010b224f6ca98509041f400200520b09013b0c081302091b640000fbc804003b0d0400440d0d064e52090d003b0d041a52090d013b0d040b52090d023b0d040c52090d036f0907000c09520b09023b09041370090700060b09520209026e020301023b020412b39a0000000244030104c60202684c000031ee0c005e09051c6e090a0009440c090095440b0c01e05e09051c6e090a0009440909020a45090907f1a26e090b0c09520209010109224f6ca9850b042040020052090b013b0b081402081c640000f7c804003b0c040052080c003b0c040b52080c013b0c040c52080c026f0807000b08520908023b08041470080700060908520208026e0203010244030104c60202684c000084c70c005e08051c6e080a0008440908009544080901e05e05051c6e050a0005440505020a45050508940e6e05080905520205010105224f6ca985080421400200520508013b0804206c080800520508023b04041570040700060504520204026e020301027601"
+            "3404000202684c00006cc70c003408013b0a08003b0508025e01051c93006e010a0001440601009544030601e05e01051c6e010a0001440101020a4501010371276e01030601520201013b07080e3b0608050101224f6ca98503041e400200520103013b03041f6c030300520103026f010700060152020102080101005a0102003b020411b3a70000000044030104c60202684c0000ae1f0a005e09051c6e090a0009440c090095440b0c01e05e09051c6e090a0009440909020a45090905480a6e090b0c0952020901010b224f6ca98509041f400200520b09013b0c081302091b640000fbc804003b0d0400440d0d064e52090d003b0d041a52090d013b0d040b52090d023b0d040c52090d036f0907000c09520b09023b09041370090700060b09520209026e020301023b020412b39a0000000244030104c60202684c000031ee0c005e09051c6e090a0009440c090095440b0c01e05e09051c6e090a0009440909020a45090907f1a26e090b0c09520209010109224f6ca9850b042040020052090b013b0b081402081c640000f7c804003b0c040052080c003b0c040b52080c013b0c040c52080c026f0807000b08520908023b08041470080700060908520208026e0203010244030104c60202684c000084c70c005e08051c6e080a0008440908009544080901e05e05051c6e050a0005440505020a45050508940e6e05080905520205010105224f6ca985080421400200520508013b0804206c080800520508023b0404157004070006050452020402af050000007601"
         ),
         FunctionPatch(132693, "handlePostConnectionOpen", 373, "93007e7600"),
         FunctionPatch(

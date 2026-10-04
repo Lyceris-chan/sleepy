@@ -23,7 +23,7 @@ import java.security.MessageDigest
  * reference. The declaration is therefore narrowed to the replacement's length, in the 96-bit
  * entry's `bytecodeSizeInBytes` bits or in the large header's `+12` slot, as the reference
  * does. Padding without narrowing the declaration also runs identically, because the padding is
- * unreachable, but it leaves 153 of the patched functions declaring a body longer than the one
+ * unreachable, but it leaves 189 of the patched functions declaring a body longer than the one
  * the reference declares for them, and the two bundles cannot then be compared function for
  * function—the comparison this patcher is designed to produce. Applied to the Discord 349.5
  * bundle, the patcher produces 155,427 function bodies that are byte-identical to the
@@ -424,7 +424,7 @@ object HermesBundlePatcher {
     /**
      * Index ranges of plans whose bodies overlap, so that at most one of each range can be
      * written where it is. Overlap is common in this bundle: 6,598 consecutive pairs of its
-     * functions share a body exactly, and the Discord patch set carries one such pair.
+     * functions share a body exactly, and the Discord patch set carries two such pairs.
      */
     private fun overlappingGroups(plans: List<Plan>): List<List<Int>> {
         val order = plans.indices.sortedBy { plans[it].bodyOffset }

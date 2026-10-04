@@ -194,12 +194,12 @@ object DiscordPatches {
      * Each entry corresponds to one reference table membership and names the function and the
      * value its stub returns. The pipeline does **not** apply these entries directly: a Hermes
      * function id is only meaningful for the bundle it was taken from, and these ids are pinned to
-     * Discord 349.5. What runs is [DiscordHermesBundlePatch], whose 166 entries were extracted
+     * Discord 349.5. What runs is [DiscordHermesBundlePatch], whose 204 entries were extracted
      * from a paired base/patched bundle of that release and are applied only when the target
      * bundle's byte length matches the reference bundle's.
      *
      * This object is kept because it records why each function is stubbed, which the extracted
-     * bodies cannot, so the 166 entries can be checked against the reference tables.
+     * bodies cannot, so the 204 entries can be checked against the reference tables.
      */
     val HERMES = PatchSet(
         id = "discord_hermes",

@@ -118,20 +118,21 @@ class HermesBundleParityTest {
         )
         assertEquals(DiscordHermesBundlePatch.PATCHES.size, result.appliedCount)
 
-        // 161 replacements fit in place, but 62046 shares its body with 62045; the shared region
-        // holds one replacement, so 62046 is relocated along with the four grown bodies.
+        // 198 replacements fit in place. Four bodies grow, and two pairs share a body, 62045 with
+        // 62046 and 71516 with 71528; a shared region can hold only the larger replacement, so the
+        // smaller of each pair is relocated along with the four grown bodies.
         assertEquals(
             "in-place: " + result.writtenInPlace.joinToString { it.functionId.toString() },
-            161,
+            198,
             result.writtenInPlace.size
         )
         assertEquals(
             "relocated: " + result.relocated.joinToString { it.functionId.toString() },
-            5,
+            6,
             result.relocated.size
         )
         assertEquals(
-            listOf(14786, 14790, 14797, 15698, 62046),
+            listOf(14786, 14790, 14797, 15698, 62046, 71516),
             result.relocated.map { it.functionId }
         )
 

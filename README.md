@@ -35,7 +35,10 @@ Each of the following changes has its own switch, so you can apply all of them, 
 - **Silences OctoGram's logging**: its own log class, which writes to logcat and to a file, and the app-wide switch that gates Telegram's logging, with the five helpers that upload a diagnostic log stubbed.
 - **Switches off OctoGram's own crash reporter.** OctoGram installs a crash handler of its own while the app starts, which writes the stack trace of a crash into the app's storage and raises an "OctoGram just crashed!" notification the next time the app opens. The patch stops the handler from being installed, so a crash writes nothing to the app's storage.
 - **Hides the premium rows in the profile's settings list**: the Telegram Premium row, the Send a Gift row, and the combined premium-sections row that otherwise appears in their place.
-- **Reduces the premium paywall.** Most entry points to the premium screen are blocked. Some remain; see [Known limitations](#known-limitations).
+- **Reduces the premium paywall.** One switch blocks most entry points through the app's navigation routers; a second closes the sheet presentations those routers never see. Some parts remain; see [Known limitations](#known-limitations).
+- **Opens web links in your phone's browser by default.** OctoGram's own setting for this ships off, so links open in its in-app viewer until you find and change it. This makes the setting's default on for a fresh install; the setting stays yours to change, and Telegram's own links still open inside the app.
+- **Hides the Telegram Business upsell row**, and stops the `/premium` and `/business` commands opening the premium screen. The row is a Telegram Premium upsell rather than an entry to Business settings, and the Telegram Business feature itself is untouched.
+- **Closes the paywall's remaining sheet presentations.** The premium entry points that open as a bottom sheet are refused before the sheet is built. Every other sheet still opens.
 
 ## Choose which patches to apply
 
@@ -53,7 +56,7 @@ The patch screen lists a set for each part of the app. Expand a set to see the i
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-The 166 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
+The 204 JavaScript changes are grouped by the feature they affect, such as gift buttons or quests, so you can see what each one does before you switch it on.
 
 ## Install and use sleepy
 
@@ -95,7 +98,7 @@ Where the source provides a SHA-256 hash, sleepy checks the download against it 
 
 ## Comparison with the desktop patch suites
 
-sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, 164 of the 166 JavaScript changes the suite makes are made to the same bytes, and each is checked against the code the suite's build ships. The other two are a deliberate divergence, recorded in the manifest: the reference stubs both functions to `undefined`, and the one caller of each function reads a property off that return, so the reference's own stub throws a `TypeError` on the path the caller runs. sleepy returns a value of the shape the caller reads instead, so those two paths work.
+sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, 202 of the 204 JavaScript changes the suite makes are made to the same bytes, and each is checked against the code the suite's build ships. The other two are a deliberate divergence, recorded in the manifest: the reference stubs both functions to `undefined`, and the one caller of each function reads a property off that return, so the reference's own stub throws a `TypeError` on the path the caller runs. sleepy returns a value of the shape the caller reads instead, so those two paths work.
 
 In two places sleepy does more than the suite. The network blocklist is worked out from the APK you selected instead of being written down as fixed names that the next release can invalidate. And the permissions an app asks for are listed with a switch each, so what it can ask for is your decision rather than a fixed set.
 
@@ -118,7 +121,7 @@ The builds this version supports have the limitations listed in the following se
 
 - Only the 3.6.1 build listed above can be patched. The reference scripts also carry changes for 3.6.0, and sleepy does not ship them: with no 3.6.0 download registered they cannot run, so the patch list does not include them. A build that cannot be identified as 3.6.1 does not receive the changes written for that release; the step log says the build's version could not be identified. The version-independent Firebase registrar changes still apply by class name where those classes exist.
 - The update check is switched off, the logger is silenced and the crash reporter is stubbed out, but the rewritten methods use a register count that differs from the reference build's, so the assembled text is not identical; the operations are the same.
-- Premium paywall removal is partial: 53 of the 61 places the app can present the paywall are blocked, and the remaining eight still open it as a sheet. The premium feature cells and the limit preview screens still appear, and a subscriber loses the screen where they manage their subscription. The premium rows in a profile's own settings list are hidden by the earlier switch rather than by this one.
+- Premium paywall removal is split across two switches, and it is still partial. The navigation-router switch blocks 53 of the 61 places the app can present the paywall; the sheet switch closes the remaining eight, which would otherwise open it as a sheet. The premium feature cells and the limit preview screens still appear, and a subscriber loses the screen where they manage their subscription. The premium rows in a profile's own settings list are hidden by that earlier switch rather than by either of these.
 - Hiding the premium rows is one switch rather than three, and applying part of it is a state this app does not let you reach. The rows share one list and their conditions overlap: hiding only the Telegram Premium row makes the combined premium-sections row appear in its place, which is a different premium row on screen rather than none.
 - Signed with sleepy's own key, so it installs as a different app identity and does not receive official updates.
 

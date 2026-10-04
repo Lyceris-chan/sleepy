@@ -32,8 +32,8 @@ class PatchSelectionTest {
             source = PatchItemCatalog
         )
 
-        assertEquals("both sets in full", 166 + 81, selection.keys.size)
-        assertEquals(166, selection.selected(hermesItems).size)
+        assertEquals("both sets in full", 204 + 81, selection.keys.size)
+        assertEquals(204, selection.selected(hermesItems).size)
         assertEquals(81, selection.selected(blocklistItems).size)
 
         val untouched = PatchRegistry.all
@@ -72,12 +72,12 @@ class PatchSelectionTest {
     fun aSetSwitchSelectsAndDeselectsEveryItemOfTheSet() {
         var selection = PatchSelection()
         selection = selection.setEnabled(hermesItems, true)
-        assertEquals(166, selection.selected(hermesItems).size)
+        assertEquals(204, selection.selected(hermesItems).size)
 
         selection = selection.toggle(hermesItems.first())
         assertEquals(
             "the set switch is not the last item state",
-            165,
+            203,
             selection.selected(hermesItems).size
         )
 
@@ -87,7 +87,7 @@ class PatchSelectionTest {
         selection = selection.setEnabled(hermesItems, true)
         assertEquals(
             "switching the set back on restores the whole set",
-            166,
+            204,
             selection.selected(hermesItems).size
         )
     }
