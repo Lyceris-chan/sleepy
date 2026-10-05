@@ -36,31 +36,39 @@ class HermesBundleParityTest {
     private val sha1FooterSize = 20
 
     /**
-     * One function this build stubs differently from the reference build on purpose.
+     * One function this build patches differently from the reference build on purpose.
      *
      * @param functionId The bundle's identifier for the function.
      * @param reason Why the two bodies differ, in the terms of the caller that reads the return.
-     * @param referenceBodyHex The body the reference bundle holds, which this build rejects.
+     * @param referenceBodyHex The body the reference bundle holds, which this build rejects, or
+     *   null when the reference holds the base bundle's body, which is the case for the compiled
+     *   copies it never patches.
      */
     private data class DeliberateDivergence(
         val functionId: Int,
         val reason: String,
-        val referenceBodyHex: String
+        val referenceBodyHex: String?
     )
 
     /**
-     * The two functions whose bodies are not the reference build's, and why.
+     * The functions whose bodies are not the reference build's, and why.
      *
-     * In 349.5 both ids name functions unrelated to the upsell buttons they held in 348.5, and
-     * the reference's table still stubs them to `undefined`. The one caller of each function
+     * In 349.5, 49956 and 58239 name functions unrelated to the upsell buttons they held in 348.5,
+     * and the reference's table still stubs them to `undefined`. The one caller of each function
      * dereferences the return, so the reference's own value throws a TypeError wherever that
      * caller runs: 58216 hands 58239's return to `hasTypingIndicatorContent`, which reads
      * `.length`, and 49954 reads `.result` off 49956's return. The replacements in
      * [DiscordHermesBundlePatch.PATCHES] carry a value of the shape each caller reads.
      *
+     * 75719 and 62409 are the React Compiler copies of the two profile content components. The
+     * reference patches only the copy the app runs by default, so the compiled copy still builds
+     * the Board and Wishlist tabs whenever the React Compiler experiment is on. This build edits
+     * both copies, so its body differs from the reference by design; the reference still holds the
+     * base bundle's body, and the check below compares it against that.
+     *
      * The exception is per function id and checks both sides, so it cannot hide any other
      * difference: the comparison below requires our body to be exactly the table's replacement
-     * and the reference's body to be exactly the stub named here, and it still compares every
+     * and the reference's body to be exactly the body named here, and it still compares every
      * other function byte for byte.
      */
     private val deliberateDivergences = listOf(
@@ -75,6 +83,22 @@ class HermesBundleParityTest {
             "hasTypingIndicatorContent reads .length off the hook's return, so this build " +
                 "returns an empty array where the reference returns undefined",
             "93007e7600"
+        ),
+        DeliberateDivergence(
+            62409,
+            "the reference leaves the React Compiler copy of the other-profile content " +
+                "component unpatched, so its removal does not hold when the React Compiler " +
+                "experiment is on and the compiled copy still builds the Board and Wishlist " +
+                "tabs; this build removes them from both copies",
+            null
+        ),
+        DeliberateDivergence(
+            75719,
+            "the reference leaves the React Compiler copy of the You screen content component " +
+                "unpatched, so its removal does not hold when the React Compiler experiment is " +
+                "on and the compiled copy still builds the Board and Wishlist tabs; this build " +
+                "removes them from both copies",
+            null
         )
     )
 
@@ -118,15 +142,15 @@ class HermesBundleParityTest {
         )
         assertEquals(DiscordHermesBundlePatch.PATCHES.size, result.appliedCount)
 
-        // 198 replacements fit in place. Five bodies grow—7762 is the odd one, since the reference
+        // 200 replacements fit in place. Five bodies grow—7762 is the odd one, since the reference
         // bounds a cache by writing instructions into the middle of the function rather than
         // replacing it—and two pairs share a body, 62045 with 62046 and 71516 with 71528. A shared
         // region can hold only the larger replacement, so the smaller of each pair is relocated
-        // along with the five grown bodies. Two more in place and one more relocated than before,
-        // which is the same total: 205 patches rather than 204.
+        // along with the five grown bodies. The two compiled-copy edits, 62409 and 75719, keep
+        // their bodies' size, so both land in place and the relocation set is unchanged.
         assertEquals(
             "in-place: " + result.writtenInPlace.joinToString { it.functionId.toString() },
-            198,
+            200,
             result.writtenInPlace.size
         )
         assertEquals(
@@ -174,7 +198,7 @@ class HermesBundleParityTest {
             val divergence = divergences[functionId]
             if (divergence != null) {
                 seenDivergences += functionId
-                mismatches += checkDivergence(patched, ours, reference, theirs, divergence)
+                mismatches += checkDivergence(base, patched, ours, reference, theirs, divergence)
                 continue
             }
             if (ours.bytecodeSize != theirs.bytecodeSize) {
@@ -285,10 +309,12 @@ class HermesBundleParityTest {
     /**
      * Checks one named divergence in both directions, and returns a mismatch description when
      * either side fails: our bundle must carry exactly the patch table's replacement for the id,
-     * and the reference bundle must carry exactly [DeliberateDivergence.referenceBodyHex]. A
-     * difference anywhere else in the two bodies is a drift this test still reports.
+     * and the reference bundle must carry exactly the body the divergence names, either the hex
+     * it holds or, when it holds null, the base bundle's body. A difference anywhere else in the
+     * two bodies is a drift this test still reports.
      */
     private fun checkDivergence(
+        base: ByteArray,
         patched: ByteArray,
         ours: HermesFunctionTable.FunctionLocation,
         reference: ByteArray,
@@ -305,13 +331,20 @@ class HermesBundleParityTest {
             failures += "fn ${divergence.functionId}: this build's body is not the table's " +
                 "${replacement.size}-byte replacement (declared ${ours.bytecodeSize} bytes)"
         }
-        val referenceStub = hexOf(divergence.referenceBodyHex)
-        if (theirs.bytecodeSize != referenceStub.size ||
-            !regionsEqual(reference, theirs.bodyOffset, referenceStub, 0, referenceStub.size)
+        val referenceBody = divergence.referenceBodyHex?.let(::hexOf) ?: run {
+            val located =
+                requireNotNull(HermesFunctionTable.locate(base, divergence.functionId)) {
+                    "function ${divergence.functionId} is not locatable in the base bundle"
+                }
+            base.copyOfRange(located.bodyOffset, located.bodyOffset + located.bytecodeSize)
+        }
+        if (theirs.bytecodeSize != referenceBody.size ||
+            !regionsEqual(reference, theirs.bodyOffset, referenceBody, 0, referenceBody.size)
         ) {
             failures += "fn ${divergence.functionId}: the reference does not hold " +
-                "${divergence.referenceBodyHex} (declared ${theirs.bytecodeSize} bytes), so " +
-                "the recorded divergence no longer matches it"
+                "${divergence.referenceBodyHex ?: "the base bundle's body"} " +
+                "(declared ${theirs.bytecodeSize} bytes), so the recorded divergence no longer " +
+                "matches it"
         }
         return failures
     }

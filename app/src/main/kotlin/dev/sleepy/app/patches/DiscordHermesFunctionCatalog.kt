@@ -7,7 +7,7 @@ import dev.sleepy.app.patches.DiscordHermesBundlePatch.FunctionPatch
 /**
  * What every function in [DiscordHermesBundlePatch.PATCHES] does to the app, in the user's terms.
  *
- * The Hermes set is one switch over 204 functions, which is too coarse for the choices a
+ * The Hermes set is one switch over 207 functions, which is too coarse for the choices a
  * user can make: "hide the gift button but keep quests" is not expressible when both live behind
  * the same switch. This table supplies the per-item list for those functions: each function's
  * feature group, and a line stating what patching it does.
@@ -52,7 +52,7 @@ object DiscordHermesFunctionCatalog {
     /**
      * One thing a user can switch on, and the functions that make it happen.
      *
-     * An item used to be one function, which put 204 rows in front of a user with 95 of them
+     * An item used to be one function, which put 207 rows in front of a user with 98 of them
      * unnamed and the rest named after minified JavaScript identifiers. A feature is the unit a
      * person actually chooses between—"guild tags" rather than the seven functions that draw one.
      * The functions stay addressable: they are listed in the item's technical panel, and the
@@ -372,6 +372,10 @@ object DiscordHermesFunctionCatalog {
         entry(62180, "Stubs the Shop This Look marketing coachmark, so the prompt that " +
             "points at the feature is not built. It lives outside the shop screen, so stubbing " +
             "the screen did not remove it."),
+        entry(62409, "Rebuilds the tab list the React Compiler copy of the other-profile " +
+            "content component builds, so it builds Main and Activity only, with no Board and no " +
+            "Wishlist tab. The app runs that copy when the React Compiler experiment is on; the " +
+            "reference leaves it unpatched, so both tabs still appear when the experiment is on."),
         entry(62435, "349.5 no longer has the quest orb shop carousel at this id: it is " +
             "the compiled variant of the badge row in " +
             "modules/badges/native/BadgeDirectoryNuxCoachmark.tsx, which renders the game-time, " +
@@ -489,6 +493,11 @@ object DiscordHermesFunctionCatalog {
         entry(75688, "Removes the button that opens the collectibles shop."),
         entry(75689, "Removes the coachmark that points at the mobile shop button."),
         entry(75690, "Removes the coachmark that points at the mobile shop button."),
+        entry(75719, "Rebuilds the profile section tab list the React Compiler copy of " +
+            "the You screen content component builds, so it builds Main and Activity only, with " +
+            "no Board and no Wishlist tab. The app runs that copy when the React Compiler " +
+            "experiment is on; the reference leaves it unpatched, so both tabs still appear when " +
+            "the experiment is on."),
         entry(77257, "Stops the per-request tracker, which ran URL matching and " +
             "appended to the telemetry ring for every HTTP request."),
         entry(77458, "Stops _trackStartSpeaking from computing game metadata and " +
@@ -547,9 +556,9 @@ object DiscordHermesFunctionCatalog {
             "voice-call samplers."),
         entry(115050, "Stops the video-effect and system-resource sampler that ran on " +
             "every call-statistics callback."),
-        entry(127527, "Rebuilds the profile section tab list as Main/Board/Activity and " +
-            "never Wishlist. The tab is one element of a list, not a function that can return " +
-            "false, so the body is edited rather than stubbed."),
+        entry(127527, "Rebuilds the profile section tab list so it builds Main and " +
+            "Activity only, with no Board and no Wishlist tab. The tab is one element of a list, " +
+            "not a function that can return false, so the body is edited rather than stubbed."),
         entry(132693, "Stops QuestFetchManager installing the recurring interval that " +
             "refetched quests forever, which against already-blocked endpoints was pure timer and " +
             "network churn."),
@@ -714,8 +723,11 @@ object DiscordHermesFunctionCatalog {
             slug = "wishlist_tabs",
             group = WISHLIST_GROUP,
             label = "Wishlist tabs",
-            description = "Removes the Wishlist tab from your profile and from other people's.",
-            functionIds = listOf(62714, 113177, 127527)
+            description = "Removes the Wishlist and Board tabs from your profile and from other " +
+                "people's, in both copies of each profile component, the copy the app runs by " +
+                "default and the React Compiler copy, so the removal holds whichever copy the " +
+                "experiment selects.",
+            functionIds = listOf(62409, 62714, 75719, 113177, 127527)
         ),
         Feature(
             slug = "wishlist_grids",

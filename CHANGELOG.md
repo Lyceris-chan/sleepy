@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.1] - 2026-10-05
+
+### Fixed
+
+- **The Board and Wishlist tabs are gone from profiles for good.** Discord ships every screen twice—one compiled with the React Compiler, one not—and picks between them with an experiment. The changes that remove the tabs were only ever made to the uncompiled copy, here and in the desktop suite this build is ported from, so the tabs came back for anyone whose account runs the other copy. Both copies are edited now.
+
+  This is a deliberate departure from the desktop suite, which leaves the compiled copy alone. Those two components no longer match that build, and the bundle comparison records them as named exceptions with the reason.
+
 ## [3.4.0] - 2026-10-05
 
 ### Changed
@@ -273,7 +281,8 @@ No part of the app changed in this release. It carries three build changes, and 
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.1...HEAD
+[3.4.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.1...v3.4.0
 [3.3.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.2.0...v3.3.0
