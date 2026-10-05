@@ -47,13 +47,13 @@ class PatchRowStateTest {
         assertEquals("nothing selected is off", TriState.NONE, off.single { it.label == ADS }.triState)
         assertEquals(
             "every item of the set is under some section",
-            37,
+            38,
             off.sumOf { it.itemCount }
         )
         assertTrue("nothing is on", off.all { it.selectedItemCount == 0 })
 
         val everything = PatchSelection().setEnabled(hermesItems, true)
-        assertEquals(37, sectionsOf(hermes, everything).sumOf { it.selectedItemCount })
+        assertEquals(38, sectionsOf(hermes, everything).sumOf { it.selectedItemCount })
         assertTrue(
             "everything on is on in every section",
             sectionsOf(hermes, everything).all { it.triState == TriState.ALL }
@@ -79,7 +79,7 @@ class PatchRowStateTest {
             TriState.NONE,
             partial.single { it.label == ADS }.triState
         )
-        assertEquals(37, partial.sumOf { it.itemCount })
+        assertEquals(38, partial.sumOf { it.itemCount })
 
         assertEquals(
             "an id that names nothing selects nothing rather than everything",
@@ -172,7 +172,7 @@ class PatchRowStateTest {
             "a section has to head rows: an empty one is a heading with no switch behind it",
             sections.all { it.rows.isNotEmpty() }
         )
-        assertEquals(37, sections.sumOf { it.rows.size })
+        assertEquals(38, sections.sumOf { it.rows.size })
         assertEquals(
             "the rows of a section are exactly the items filed under it",
             hermesItems.map { it.section to it.key }.toSet(),

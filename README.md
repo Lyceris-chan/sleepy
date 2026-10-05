@@ -55,7 +55,7 @@ The patch screen is organised by what you want, not by how the app is built. Eve
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-One switch often stands for several changes: the 204 JavaScript changes are grouped into the 37 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
+One switch often stands for several changes: the 205 JavaScript changes are grouped into the 38 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
 
 ## Install and use sleepy
 
@@ -97,7 +97,7 @@ Where the source provides a SHA-256 hash, sleepy checks the download against it 
 
 ## Comparison with the desktop patch suites
 
-sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, 202 of the 204 JavaScript changes the suite makes are made to the same bytes, and each is checked against the code the suite's build ships. The other two are a deliberate divergence, recorded in the manifest: the reference stubs both functions to `undefined`, and the one caller of each function reads a property off that return, so the reference's own stub throws a `TypeError` on the path the caller runs. sleepy returns a value of the shape the caller reads instead, so those two paths work.
+sleepy's changes are ported from the reference patch suite for each app, and the result is checked against that suite rather than assumed to match. For Discord, 203 of the 205 JavaScript changes the suite makes are made to the same bytes, and each is checked against the code the suite's build ships. The other two are a deliberate divergence, recorded in the manifest: the reference stubs both functions to `undefined`, and the one caller of each function reads a property off that return, so the reference's own stub throws a `TypeError` on the path the caller runs. sleepy returns a value of the shape the caller reads instead, so those two paths work.
 
 In two places sleepy does more than the suite. The network blocklist is worked out from the APK you selected instead of being written down as fixed names that the next release can invalidate. And the permissions an app asks for are listed with a switch each, so what it can ask for is your decision rather than a fixed set.
 

@@ -15,9 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The list is two levels deep rather than four, and a section's heading is a switch over everything in it, so a whole section goes on or off in one tap.
 
+### Added
+
+- **Links open in your browser rather than in Discord's own tab.** Discord draws web links in a tab inside its own window, under its own toolbar, with its session. They now open in the browser you actually chose. Nothing new runs: Discord already ships the path this uses, and the change also covers links that ignore your browser setting.
+- **An incoming call no longer freezes the screen.** The screen that appears when a call arrives waited on the caller's avatar, and that wait ran on the interface thread and included a network round-trip. It no longer waits. The caller's name still shows; only the picture is dropped.
+- **The message cache is bounded.** The cache the app fills while drawing messages had no limit, and its expiry was refreshed every time an entry was read, so it grew for as long as the app ran. It is now capped at the same size the app already uses for message previews.
+
 ### Fixed
 
 - Counts no longer read as "Show the 1 items", or as "1 patches available" for a source offering one set.
+- **The camera no longer writes a frame-rate log while it is on.** It built a string and wrote a logcat line every two seconds for the whole length of a video call, and nothing reads either. The check that reports a frozen camera still runs.
+- **Launch no longer loads two things the app does not use.** Discord loads a jank recorder at startup to call two methods that do nothing, and builds a list of seven exception classes to decide whether a network error is worth reporting—in a build that reports nothing. Neither is loaded now.
 
 ## [3.3.1] - 2026-10-04
 

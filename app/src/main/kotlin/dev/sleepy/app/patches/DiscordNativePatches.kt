@@ -20,14 +20,17 @@ import dev.sleepy.app.model.SmaliPatch
  *   the RPC service. Binary XML editing lives in the pipeline, not in a [SmaliPatch].
  * - **Resources**: the ExoPlayer drawable aliases in `res/values/drawables.xml` and the
  *   `res/raw/cache_intl_*` strip both need the resource table rebuilt.
- * - **Bundled files**: deleting `libsentry.so` / `libsentry-android.so`, dropping the OTA
- *   patch asset, and nulling the DSN inside `assets/index.android.bundle` all edit entries
- *   inside the APK rather than a DEX.
+ * - **Bundled files**: deleting `libsentry.so` / `libsentry-android.so` and dropping the OTA
+ *   patch asset happen in the repack ([dev.sleepy.app.engine.ZipRepacker]), and nulling the DSN
+ *   inside `assets/index.android.bundle` happens when the bundle is rewritten
+ *   ([dev.sleepy.app.engine.HermesPatcher]). All three are applied; they edit entries inside the
+ *   APK rather than a DEX, so none of them is a [SmaliPatch].
  *
- * The reference's smali edits that are switched off by default are also left out: stripping
- * the WebRTC camera log crashes the camera on open, lowering the capture resolution makes
- * the capture request smaller than the encoder, and passing 0 to the native media engine is
- * an undocumented value. They are documented in the reference as off for those reasons.
+ * The reference's smali edits that are switched off by default are also left out: bounding
+ * the surface-release wait changes behaviour upstream depends on, lowering the capture
+ * resolution makes the capture request smaller than the encoder, and passing 0 to the native
+ * media engine is an undocumented value. They are documented in the reference as off for those
+ * reasons.
  *
  * Labels: the reference suite edits an apktool tree, whose branch labels are numbered
  * sequentially per method (`:cond_3`). The engine disassembles the APK itself and gets
@@ -915,6 +918,111 @@ object DiscordNativePatches {
     )
 
     /**
+     * Takes the two class loads the startup path pays for a feature that is already disabled.
+     *
+     * `MainApplication.performInitialization` loads `JankSessionRecorder` to call `init` - whose
+     * body is already a stub - and calls `setPerScreenExperiment` on the same instance further
+     * down the method. That is class load and verification of a large class, spent to invoke
+     * nothing, and Discord's own TTI instrumentation times the window and prints it as
+     * `JankSessionRecorder.init()`.
+     *
+     * `CrashReporting.<clinit>` is the other. It exists to build one list of seven exception
+     * KClasses: each `const-class` makes ART resolve and load that class, and each
+     * `getOrCreateKotlinClass` drags in the Kotlin reflection stack. The list only feeds
+     * `isIgnorableNetworkException`, which decides whether a network exception is worth
+     * *reporting* - and nothing is reported in this build. `MainApplication` touches the class
+     * early to call `CrashReporting.init`, so the initializer runs on the startup path.
+     *
+     * The rewrite keeps the field non-null, because its one reader calls `contains` on it, and
+     * keeps `INSTANCE`, so the call site is unaffected.
+     */
+    val STARTUP_CLASS_LOAD = PatchSet(
+        id = "discord_native_startup_class_load",
+        label = "Stop loading unused classes at launch",
+        description = "The launch path loads the jank recorder to call two methods that are " +
+            "already stubs, and the crash reporter's static initializer loads seven exception " +
+            "classes and the Kotlin reflection stack for a list that only decides whether a " +
+            "network error is worth reporting - in a build that reports nothing. This removes " +
+            "both from startup.",
+        smaliPatches = listOf(
+            SmaliPatch(
+                title = "Not reading the jank recorder's instance",
+                explanation = "Stops the launch path reading the jank recorder's instance, which " +
+                    "is what loaded and verified the class, and calling its setup method, which " +
+                    "is already a stub.",
+                smaliPath = "com/discord/MainApplication.smali",
+                anchor = "    sget-object v0, Lcom/discord/jank_stats/JankSessionRecorder;->INSTANCE:Lcom/discord/jank_stats/JankSessionRecorder;\n",
+                replacement = "    # Patch: JankSessionRecorder unloaded\n"
+            ),
+            SmaliPatch(
+                title = "Not initializing the jank recorder",
+                explanation = "Stops the launch path calling the jank recorder's init, whose " +
+                    "body is already a stub.",
+                smaliPath = "com/discord/MainApplication.smali",
+                anchor = "    invoke-virtual {v0, p0}, Lcom/discord/jank_stats/JankSessionRecorder;->init(Landroid/content/Context;)V\n",
+                replacement = "    # Patch: JankSessionRecorder unloaded\n"
+            ),
+            SmaliPatch(
+                title = "Not setting the jank recorder's experiment flag",
+                explanation = "Stops the launch path calling setPerScreenExperiment on the jank " +
+                    "recorder, whose only reader is the recorder's own dead code.",
+                smaliPath = "com/discord/MainApplication.smali",
+                anchor = "    invoke-virtual {v0, v6}, Lcom/discord/jank_stats/JankSessionRecorder;->setPerScreenExperiment(Z)V\n",
+                replacement = "    # Patch: JankSessionRecorder unloaded\n"
+            ),
+            SmaliPatch(
+                title = "Not loading seven exception classes at launch",
+                explanation = "Builds the crash reporter's list of ignorable network exceptions " +
+                    "from a zero-length array instead of seven loaded classes and their Kotlin " +
+                    "reflection wrappers, so the initializer no longer resolves a class or " +
+                    "touches reflection at startup.",
+                smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
+                methodSignature = ".method static constructor <clinit>()V",
+                replacementBody = """.method static constructor <clinit>()V
+    .locals 9
+
+    .line 1
+    new-instance v0, Lcom/discord/crash_reporting/CrashReporting;
+
+    .line 2
+    .line 3
+    invoke-direct {v0}, Lcom/discord/crash_reporting/CrashReporting;-><init>()V
+
+    .line 4
+    .line 5
+    .line 6
+    sput-object v0, Lcom/discord/crash_reporting/CrashReporting;->INSTANCE:Lcom/discord/crash_reporting/CrashReporting;
+
+    .line 7
+    .line 8
+    # Patch: the 7 exception KClasses this used to build were loaded
+    # eagerly at startup, purely to decide whether a network exception
+    # is worth *reporting*. Nothing is reported in this build, so the
+    # list is empty and the loads are gone.
+    const/4 v7, 0x0
+
+    new-array v7, v7, [Lkotlin/reflect/KClass;
+
+    .line 52
+    .line 53
+    const/4 v8, 0x0
+
+    invoke-static {v7}, Lkotlin/collections/a0;->g([Ljava/lang/Object;)Ljava/util/List;
+
+    .line 78
+    move-result-object v0
+
+    sput-object v0, Lcom/discord/crash_reporting/CrashReporting;->ignoreNetworkExceptionList:Ljava/util/List;
+
+    .line 79
+    .line 80
+    return-void
+.end method"""
+            )
+        )
+    )
+
+    /**
      * Stops contact and installed-app fingerprinting and pins the React Native Fabric
      * flags to React Native's defaults.
      */
@@ -1289,6 +1397,86 @@ object DiscordNativePatches {
     )
 
     /**
+     * Stops the camera building a frame-rate string every two seconds for a log nothing reads.
+     *
+     * `CameraVideoCapturer$CameraStatistics$1.run()` reposts itself for the whole camera session
+     * and, on every tick, computes the frame rate, builds a string and hands it to
+     * `org.webrtc.Logging.d` - which, with no loggable injected, falls through to
+     * `java.util.logging` and builds a second string before writing a logcat line nobody reads.
+     *
+     * The tag constant that call uses is kept. A freeze-detection branch further down the same
+     * method reuses `v1` as its tag without reloading it, so removing the constant along with the
+     * log call would leave `v1` undefined on every path to that branch and ART would reject the
+     * class at load - which is the moment the camera opens. The frozen-camera detection itself is
+     * untouched.
+     */
+    val CAMERA_LOG = PatchSet(
+        id = "discord_native_camera_log",
+        label = "Stop the camera's frame-rate log",
+        description = "The camera builds a frame-rate string every two seconds for the whole of a " +
+            "video call and writes it to a log nothing reads. This drops the string build and " +
+            "the log call, keeping the frozen-camera detection and the log tag it reuses.",
+        smaliPatches = listOf(
+            SmaliPatch(
+                title = "Dropping the camera's frame-rate log",
+                explanation = "Removes the string the camera builds every two seconds while it is " +
+                    "open, and the log line it feeds, so a video call no longer allocates two " +
+                    "strings and writes a logcat line nobody reads on every tick. The " +
+                    "frozen-camera check and the log tag it reuses are kept.",
+                smaliPath = "org/webrtc/CameraVideoCapturer\$CameraStatistics\$1.smali",
+                anchor = """    new-instance v1, Ljava/lang/StringBuilder;
+
+    .line 19
+    .line 20
+    const-string v2, "Camera fps: "
+
+    .line 21
+    .line 22
+    invoke-direct {v1, v2}, Ljava/lang/StringBuilder;-><init>(Ljava/lang/String;)V
+
+    .line 23
+    .line 24
+    .line 25
+    invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+
+    .line 26
+    .line 27
+    .line 28
+    const-string v0, "."
+
+    .line 29
+    .line 30
+    invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    .line 31
+    .line 32
+    .line 33
+    invoke-virtual {v1}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
+
+    .line 34
+    .line 35
+    .line 36
+    move-result-object v0
+
+    .line 37
+    const-string v1, "CameraStatistics"
+
+    .line 38
+    .line 39
+    invoke-static {v1, v0}, Lorg/webrtc/Logging;->d(Ljava/lang/String;Ljava/lang/String;)V
+""",
+                replacement = """    # Patch: fps log removed - the string was built every 2 s per
+    # camera and written to a sink nobody reads. The tag constant
+    # below is KEPT: the freeze-detection branch further down reuses
+    # v1 as its tag without reloading it, and deleting it fails ART
+    # verification at class load.
+    const-string v1, "CameraStatistics"
+"""
+            )
+        )
+    )
+
+    /**
      * Keeps the microphone and camera foreground-service types while the app is
      * backgrounded and falls through to the next candidate when a type is not permitted.
      */
@@ -1403,6 +1591,115 @@ object DiscordNativePatches {
         )
     )
 
+    /**
+     * Keeps every web link out of Discord's own in-app tab.
+     *
+     * Discord's whole link surface is one React Native module. It reports the browser the user
+     * picked to the JavaScript side, which then branches: the in-app choice renders a Chrome
+     * Custom Tab inside Discord's own task, and the Chrome choice hands the URL to the system
+     * browser with a plain ACTION_VIEW. Both paths ship already, so this set only decides which
+     * one a link takes.
+     *
+     * The edits are deliberately redundant. The exported constants stop reading the stored
+     * choice and fall back to Chrome, and the in-app entry point itself is re-pointed at the
+     * external-browser call, so a stale stored choice or a caller that passes the in-app browser
+     * explicitly still leaves the app.
+     *
+     * `openTrackedCustomTab` is left alone: its callback is `Function1<Boolean, Unit>` where the
+     * external call wants `Function1<Unit, Unit>`, and the erased generics would throw when the
+     * callback ran. `openPlayStoreInline` is left alone because it opens a Play Store deep link
+     * rather than a web link.
+     */
+    val EXTERNAL_BROWSER = PatchSet(
+        id = "discord_native_external_browser",
+        label = "Open links in your browser",
+        description = "Discord renders links in Chrome Custom Tabs inside its own task, under its " +
+            "toolbar and with its session. This makes the browser setting report Chrome instead " +
+            "of the in-app tab and exits from the module's in-app entry point, so a link to a " +
+            "shop page, a quest page or anything else opens in the browser you chose.",
+        smaliPatches = listOf(
+            SmaliPatch(
+                title = "Forgetting the stored in-app browser choice",
+                explanation = "Reads a cache key nothing writes when the app asks which browser was " +
+                    "chosen, so a device that had already settled on the in-app tab goes back to the " +
+                    "default instead of that stored choice.",
+                smaliPath = "com/discord/browser_manager/BrowserManagerModule.smali",
+                anchor = "    const-string v2, \"SELECTED_BROWSER\"",
+                replacement = "    const-string v2, \"SELECTED_BROWSER_IGNORED\""
+            ),
+            SmaliPatch(
+                title = "Making the browser the default choice",
+                explanation = "Changes the default the browser setting falls back to from the in-app " +
+                    "tab to Chrome, so a device with Custom Tabs available reports the browser as the " +
+                    "chosen one.",
+                smaliPath = "com/discord/browser_manager/BrowserManagerModule.smali",
+                anchor = """    :cond_28
+    if-eqz v0, :cond_2c
+
+    .line 42
+    .line 43
+    const/4 v1, 0x1""",
+                replacement = """    :cond_28
+    if-eqz v0, :cond_2c
+
+    .line 42
+    .line 43
+    const/4 v1, 0x2"""
+            ),
+            SmaliPatch(
+                title = "Opening links from the in-app entry point externally",
+                explanation = "Points the module's openInAppURL at the external-browser call, so a " +
+                    "link still opens in your browser when something else selects the in-app tab - a " +
+                    "stale setting, or a deep link that passes its own choice.",
+                smaliPath = "com/discord/browser_manager/BrowserManagerModule.smali",
+                anchor = """    invoke-virtual {v0, v1, p1, v2}, Lcom/discord/browser_manager/BrowserManager;->tryOpenUrlWithCustomTabs(Landroid/content/Context;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V""",
+                replacement = """    invoke-virtual {v0, v1, p1, v2}, Lcom/discord/browser_manager/BrowserManager;->tryOpenUrlExternally(Landroid/content/Context;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V"""
+            )
+        )
+    )
+
+    /**
+     * Takes the avatar fetch off the incoming-call screen's blocking path.
+     *
+     * `IncomingCallActivity` runs three nested `runBlocking` calls on the main thread, and the
+     * image fetch behind them builds the Fresco pipeline and then suspends on a network
+     * round-trip, so the interface is parked until the caller's picture downloads. `fetchImage`
+     * is the suspend function those calls wait on; returning null completes them at once.
+     *
+     * The callers already handle null: the result is cast to `Bitmap`, which a null passes, and
+     * handed to `ImageView.setImageBitmap`, which clears the view. Only the picture is dropped;
+     * the caller's name still shows. Fresco itself is not lost, because the normal startup path
+     * builds it as well.
+     */
+    val INCOMING_CALL = PatchSet(
+        id = "discord_native_incoming_call",
+        label = "Stop a call freezing the screen",
+        description = "The incoming-call screen waits on the main thread for the caller's avatar " +
+            "to download, which freezes the interface while a call arrives. This drops the image " +
+            "fetch, so the screen comes up at once with the caller's name and no picture.",
+        smaliPatches = listOf(
+            SmaliPatch(
+                title = "Dropping the caller's avatar on the incoming-call screen",
+                explanation = "Returns no avatar instead of fetching one, so the incoming-call " +
+                    "screen no longer waits on a Fresco initialisation and a network round-trip on " +
+                    "the main thread. The caller's name still shows; only the picture is missing.",
+                smaliPath = "com/discord/notifications/renderer/IncomingCallActivity.smali",
+                methodSignature = ".method private final fetchImage(Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+                replacementBody = """.method private final fetchImage(Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+    .locals 0
+
+    # Patch: no network wait. Returning null without suspending is a valid
+    # completion; the caller casts it to Bitmap (null casts fine) and clears
+    # the ImageView with it. Removes the Fresco init + network round-trip that
+    # `runBlocking` on the main thread was waiting for.
+    const/4 p1, 0x0
+
+    return-object p1
+.end method"""
+            )
+        )
+    )
+
     /** Every set this object defines. */
     val ALL = listOf(
         SENTRY,
@@ -1416,11 +1713,15 @@ object DiscordNativePatches {
         JS_POLLS,
         SYSTRACE,
         CRASH_LOGCAT,
+        STARTUP_CLASS_LOAD,
         PRIVACY,
         RESOURCE_MONITORS,
         CALL_PATH,
         MEDIA,
+        CAMERA_LOG,
         FOREGROUND_SERVICE,
-        EXPERIMENTS
+        EXPERIMENTS,
+        EXTERNAL_BROWSER,
+        INCOMING_CALL
     )
 }

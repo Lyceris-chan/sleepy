@@ -69,12 +69,16 @@ object PatchSections {
         DiscordNativePatches.JS_POLLS.id to BACKGROUND,
         DiscordNativePatches.SYSTRACE.id to BACKGROUND,
         DiscordNativePatches.CRASH_LOGCAT.id to CRASHES,
+        DiscordNativePatches.STARTUP_CLASS_LOAD.id to FIXES,
         DiscordNativePatches.PRIVACY.id to TRACKING,
         DiscordNativePatches.RESOURCE_MONITORS.id to BACKGROUND,
         DiscordNativePatches.CALL_PATH.id to FIXES,
         DiscordNativePatches.MEDIA.id to FIXES,
+        DiscordNativePatches.CAMERA_LOG.id to FIXES,
         DiscordNativePatches.FOREGROUND_SERVICE.id to FIXES,
         DiscordNativePatches.EXPERIMENTS.id to FIXES,
+        DiscordNativePatches.EXTERNAL_BROWSER.id to FIXES,
+        DiscordNativePatches.INCOMING_CALL.id to FIXES,
         DiscordBlocklistPatch.NETWORK_BLOCKLIST.id to NETWORK,
         OctoGramPatches.SPONSORED_MSGS.id to ADS,
         OctoGramPatches.PHOTO_VIEWER_ADS.id to ADS,
@@ -118,6 +122,7 @@ object PatchSections {
         "Performance metrics" to BACKGROUND,
         "Startup timing" to BACKGROUND,
         "Debug logs" to BACKGROUND,
+        "Memory and stability" to FIXES,
         "Unused stubs" to FIXES
     )
 

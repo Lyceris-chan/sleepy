@@ -118,9 +118,12 @@ class HermesBundleParityTest {
         )
         assertEquals(DiscordHermesBundlePatch.PATCHES.size, result.appliedCount)
 
-        // 198 replacements fit in place. Four bodies grow, and two pairs share a body, 62045 with
-        // 62046 and 71516 with 71528; a shared region can hold only the larger replacement, so the
-        // smaller of each pair is relocated along with the four grown bodies.
+        // 198 replacements fit in place. Five bodies grow—7762 is the odd one, since the reference
+        // bounds a cache by writing instructions into the middle of the function rather than
+        // replacing it—and two pairs share a body, 62045 with 62046 and 71516 with 71528. A shared
+        // region can hold only the larger replacement, so the smaller of each pair is relocated
+        // along with the five grown bodies. Two more in place and one more relocated than before,
+        // which is the same total: 205 patches rather than 204.
         assertEquals(
             "in-place: " + result.writtenInPlace.joinToString { it.functionId.toString() },
             198,
@@ -128,11 +131,11 @@ class HermesBundleParityTest {
         )
         assertEquals(
             "relocated: " + result.relocated.joinToString { it.functionId.toString() },
-            6,
+            7,
             result.relocated.size
         )
         assertEquals(
-            listOf(14786, 14790, 14797, 15698, 62046, 71516),
+            listOf(7762, 14786, 14790, 14797, 15698, 62046, 71516),
             result.relocated.map { it.functionId }
         )
 

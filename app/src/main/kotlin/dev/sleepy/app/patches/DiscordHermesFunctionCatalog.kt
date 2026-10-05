@@ -91,10 +91,14 @@ object DiscordHermesFunctionCatalog {
     private const val STARTUP_GROUP = "Startup timing"
     private const val LOGGING_GROUP = "Debug logs"
     private const val FINGERPRINT_GROUP = "Device fingerprinting"
+    private const val STABILITY_GROUP = "Memory and stability"
     private const val LEFTOVER_GROUP = "Unused stubs"
 
     /** Every patched function, in the order the patch table applies them. */
     val ENTRIES: List<Entry> = listOf(
+        entry(7762, "Clamps the entry count of the message-markup cache. It was built with no " +
+            "limit and with its expiry clock refreshed on every read, so it grew for as long as " +
+            "the app ran, on the path that draws every message."),
         entry(13894, "349.5 no longer has a startup initializer at this id: it is the " +
             "module factory for modules/telemetry_ring/native/channels/NormalTelemetry.tsx. The " +
             "stub returns undefined without running the factory, so the module never assigns " +
@@ -848,6 +852,15 @@ object DiscordHermesFunctionCatalog {
             description = "Stops the handler that computed a fingerprint of your device for every " +
                 "tracked event.",
             functionIds = listOf(19786)
+        ),
+        Feature(
+            slug = "markup_cache_bound",
+            group = STABILITY_GROUP,
+            label = "Bound the message cache",
+            description = "Caps the cache the app fills while drawing messages. It had no limit " +
+                "and its expiry was refreshed on every read, so it grew for as long as the app " +
+                "ran, which is memory pressure the app cannot recover.",
+            functionIds = listOf(7762)
         ),
         Feature(
             slug = "leftover_stubs",
