@@ -11,7 +11,7 @@ import org.junit.Test
  * A clickable container merges its descendants into one node, so a row that names its action in
  * `onClickLabel` and repeats the same words in a child icon's `contentDescription` announces the
  * action twice. The tests read the component sources and check that each row names its action
- * once, that an expandable step reports its role and state, and that section labels are headings.
+ * once, and that an expandable step reports its role and state.
  */
 class RowSemanticsTest {
 
@@ -21,7 +21,7 @@ class RowSemanticsTest {
      */
     @Test
     fun noRowNamesItsActionTwice() {
-        val card = source(PATCH_SET_CARD)
+        val card = source(PATCH_SECTION_CARD)
         val itemRow = source(PATCH_ITEM_ROW)
         val stepLog = source(STEP_LOG_ITEM)
 
@@ -79,15 +79,6 @@ class RowSemanticsTest {
         )
     }
 
-    /** Each technical section label is a Text that a screen reader can navigate to as a heading. */
-    @Test
-    fun theTechnicalSectionLabelsAreHeadings() {
-        val card = source(PATCH_SET_CARD)
-        for (label in SECTION_LABELS) {
-            assertTrue("$label carries no heading semantics", declaresHeading(card, label))
-        }
-    }
-
     /**
      * The value of every `marker` occurrence: from the marker to the comma or bracket that ends
      * it.
@@ -124,20 +115,12 @@ class RowSemanticsTest {
     private fun stringLiterals(region: String): List<String> =
         QUOTED.findAll(region).map { it.value.trim('"') }.toList()
 
-    /** Whether the Text that shows `label` carries `heading()` within the lines after it. */
-    private fun declaresHeading(source: String, label: String): Boolean =
-        Regex(Regex.escape("\"$label\"") + """[\s\S]{0,400}?heading\(\)""").containsMatchIn(source)
     private companion object {
         const val COMPONENTS = "app/src/main/kotlin/dev/sleepy/app/ui/components"
-        const val PATCH_SET_CARD = "$COMPONENTS/PatchSetCard.kt"
+        const val PATCH_SECTION_CARD = "$COMPONENTS/PatchSectionCard.kt"
         const val PATCH_ITEM_ROW = "$COMPONENTS/PatchItemRow.kt"
         const val STEP_LOG_ITEM = "$COMPONENTS/StepLogItem.kt"
 
         val QUOTED = Regex("\"[^\"]*\"")
-        val SECTION_LABELS = listOf(
-            "SMALI METHOD SURGERY TARGETS",
-            "HERMES BYTECODE STUBS (index.android.bundle)",
-            "GENERATED FROM THE TARGET APK"
-        )
     }
 }

@@ -158,8 +158,11 @@ fun SourceCard(
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
+                    // Counted rather than written as "patches": a source offering one set would
+                    // read as "1 patches available".
+                    val sets = if (source.patchIds.size == 1) "set" else "sets"
                     Text(
-                        text = "${source.patchIds.size} patches available",
+                        text = "${source.patchIds.size} patch $sets available",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )

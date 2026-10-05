@@ -8,8 +8,8 @@ import org.junit.Test
  * The state a screen keeps across re-entry and rotation, and the retry after a failed run.
  *
  * Re-entering the selection screen with the same source must not rebuild the selection, the
- * expanded sets and the saved confirmation must survive a rotation, and a stopped or failed run
- * must leave the screen in a state the user can act on.
+ * expanded sections and the saved confirmation must survive a rotation, and a stopped or failed
+ * run must leave the screen in a state the user can act on.
  */
 class ScreenStateRestorationTest {
 
@@ -29,13 +29,13 @@ class ScreenStateRestorationTest {
         assertTrue("the guard does not precede the reseed", guard in 0 until reseed)
     }
 
-    /** The expanded sets are a screen state, so a rotation keeps them. */
+    /** The expanded sections are a screen state, so a rotation keeps them. */
     @Test
-    fun theExpandedSetsSurviveARotation() {
+    fun theExpandedSectionsSurviveARotation() {
         val source = source("app/src/main/kotlin/dev/sleepy/app/ui/screens/PatchSelectScreen.kt")
         assertTrue(
-            "the expanded set ids are not saved",
-            source.contains("""var expandedSetIds by rememberSaveable(""")
+            "the expanded section labels are not saved",
+            source.contains("""var expandedSections by rememberSaveable(""")
         )
         assertTrue("the saved set has no saver", source.contains("stateSaver = listSaver("))
     }

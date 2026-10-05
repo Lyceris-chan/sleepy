@@ -66,7 +66,7 @@ import dev.sleepy.app.model.PermissionScan
 import dev.sleepy.app.patches.PatchRegistry
 import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.ui.components.PatchItemRow
-import dev.sleepy.app.ui.components.PatchSetCard
+import dev.sleepy.app.ui.components.PatchSectionCard
 import dev.sleepy.app.ui.state.PatchRow
 import dev.sleepy.app.ui.state.PatchRows
 import dev.sleepy.app.ui.state.TriState
@@ -76,15 +76,16 @@ import dev.sleepy.app.viewmodel.PatchViewModel
  * Chooses which changes to apply, alone or item by item, and optionally gives the result its own
  * package name so it can be installed next to the app it was built from.
  *
- * A patch set is a header—its own switch, and what it selects—over an expandable
- * body of its items. The header's switch is tri-state, so a set with the gift button on and
- * everything else off is shown as such rather than rounded to on or off, and the body is where
- * that state is reached: each item has its own switch and its own description of what turning it
- * on does.
+ * A section is a header—its own switch, and how many of its items are on—over a flat list of rows.
+ * The header's switch is tri-state, so a section with one row on and the rest off is shown as such
+ * rather than rounded to on or off, and a tap completes or clears the whole section: that is what
+ * turns "all of the ads" or "none of them" into one tap. Each row under it has its own switch and
+ * its own description of what turning it on does, and there is no heading between rows, because a
+ * heading under a heading would be the third level of disclosure the list used to have.
  *
- * The body is emitted as lazy list items rather than as one composable per set, with each row
- * keyed by the item's own stable key, so expanding the eighty-one-rule blocklist or the
- * hundred-and-forty-two-function JavaScript set composes only the rows on screen.
+ * The rows are emitted as lazy list items rather than as one composable per section, with each row
+ * keyed by the item's own stable key, so expanding the eighty-one-rule blocklist or the JavaScript
+ * section's thirty-seven rows composes only the rows on screen.
  *
  * A row can also be inert, and the row then states why: a blocklist rule that another enabled
  * rule covers is grayed with the pattern that covers it named in full, and the interceptor's two
@@ -121,14 +122,14 @@ fun PatchSelectScreen(
 
     // Recomputed whenever the selection changes—which is what makes a covered row live again as
     // soon as its coverer is switched off, with no state to keep in step and nothing to invalidate.
-    val rowsBySet = remember(source?.id, selection) {
-        availablePatches.associate { it.id to PatchRows.of(it, selection) }
+    val sections = remember(source?.id, selection) {
+        PatchRows.sectionsOf(availablePatches, selection)
     }
 
     // Held here rather than inside the rows, because a lazy list discards and rebuilds the
-    // composables of the items that scroll out of view. Saved so a rotation keeps the sets the
+    // composables of the items that scroll out of view. Saved so a rotation keeps the sections the
     // reader opened rather than collapsing every one of them.
-    var expandedSetIds by rememberSaveable(
+    var expandedSections by rememberSaveable(
         stateSaver = listSaver(
             save = { it.toList() },
             restore = { it.toSet() }
@@ -151,8 +152,8 @@ fun PatchSelectScreen(
     }
     val permissionRemovalCount = permissionRows.count { it.switchable && !it.enabled }
 
-    val selectedItemCount = rowsBySet.values.sumOf { it.selectedItemCount }
-    val totalItemCount = rowsBySet.values.sumOf { it.itemCount }
+    val selectedItemCount = sections.sumOf { it.selectedItemCount }
+    val totalItemCount = sections.sumOf { it.itemCount }
 
     // The name is checked against the source's own package because a clone that keeps it replaces
     // the original instead of installing beside it: the pipeline skips the rename for an equal
@@ -253,31 +254,26 @@ fun PatchSelectScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // The permission section comes before the patch sets, not after them: its list is
+            // The permission section comes before the patch sections, not after them: its list is
             // shipped with the app, so it is ready before anything is downloaded, and a section
-            // a section after twenty-two set cards is one most people do not scroll to.
+            // after the patch list is one most people do not scroll to.
             item(key = PatchRows.permissionCardKey(), contentType = "permissions") {
                 PermissionCard(
                     scan = permissionScan,
                     rows = permissionRows,
-                    expanded = PermissionCatalog.SET_ID in expandedSetIds,
+                    expanded = PermissionCatalog.SET_ID in expandedSections,
                     onRead = { viewModel.readPermissions() },
                     onExpandedChange = {
-                        expandedSetIds = if (PermissionCatalog.SET_ID in expandedSetIds) {
-                            expandedSetIds - PermissionCatalog.SET_ID
-                        } else {
-                            expandedSetIds + PermissionCatalog.SET_ID
-                        }
+                        expandedSections = expandedSections.toggled(PermissionCatalog.SET_ID)
                     }
                 )
             }
 
-            if (permissionRows.isNotEmpty() && PermissionCatalog.SET_ID in expandedSetIds) {
+            if (permissionRows.isNotEmpty() && PermissionCatalog.SET_ID in expandedSections) {
                 item(key = PatchRows.permissionGroupKey(), contentType = "group") {
                     GroupHeading(
                         label = PermissionCatalog.DECLARED_GROUP,
-                        rows = permissionRows,
-                        onToggle = null
+                        rows = permissionRows
                     )
                 }
                 items(
@@ -289,6 +285,36 @@ fun PatchSelectScreen(
                         row = row,
                         onToggle = { viewModel.toggleItem(it) }
                     )
+                }
+            }
+
+            sections.forEach { section ->
+                val expanded = section.label in expandedSections
+
+                item(key = PatchRows.sectionKey(section.label), contentType = "section") {
+                    PatchSectionCard(
+                        section = section,
+                        expanded = expanded,
+                        onSectionToggled = { enabled ->
+                            viewModel.setItemsEnabled(section.rows.mapNotNull { it.item }, enabled)
+                        },
+                        onExpandedChange = {
+                            expandedSections = expandedSections.toggled(section.label)
+                        }
+                    )
+                }
+
+                if (expanded) {
+                    items(
+                        items = section.rows,
+                        key = { it.key },
+                        contentType = { "row" }
+                    ) { row ->
+                        PatchItemRow(
+                            row = row,
+                            onToggle = { viewModel.toggleItem(it) }
+                        )
+                    }
                 }
             }
 
@@ -305,7 +331,7 @@ fun PatchSelectScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Select the modifications to apply surgically in memory during the " +
-                        "build step, by set or one item at a time.",
+                        "build step, by section or one item at a time.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -319,65 +345,16 @@ fun PatchSelectScreen(
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            availablePatches.forEach { patchSet ->
-                val setRows = rowsBySet.getValue(patchSet.id)
-                val expanded = patchSet.id in expandedSetIds
-
-                item(key = PatchRows.setKey(patchSet.id), contentType = "set") {
-                    PatchSetCard(
-                        set = patchSet,
-                        rows = setRows,
-                        expanded = expanded,
-                        onSetToggled = { enabled ->
-                            viewModel.setPatchSetEnabled(patchSet.id, enabled)
-                        },
-                        onExpandedChange = {
-                            expandedSetIds = if (expanded) {
-                                expandedSetIds - patchSet.id
-                            } else {
-                                expandedSetIds + patchSet.id
-                            }
-                        }
-                    )
-                }
-
-                if (expanded) {
-                    setRows.groups.forEach { group ->
-                        item(
-                            key = PatchRows.groupKey(patchSet.id, group.label),
-                            contentType = "group"
-                        ) {
-                            GroupHeading(
-                                label = group.label,
-                                rows = group.rows,
-                                onToggle = { enabled ->
-                                    viewModel.setItemsEnabled(
-                                        group.rows.mapNotNull { it.item },
-                                        enabled
-                                    )
-                                }
-                            )
-                        }
-                        items(
-                            items = group.rows,
-                            key = { it.key },
-                            contentType = { "row" }
-                        ) { row ->
-                            PatchItemRow(
-                                row = row,
-                                onToggle = { viewModel.toggleItem(it) }
-                            )
-                        }
-                    }
-                }
-            }
-
             item(key = "footer") {
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
+
+/** [id] added to a saved set of expanded ids, or removed when it is already in it. */
+private fun Set<String>.toggled(id: String): Set<String> =
+    if (id in this) this - id else this + id
 
 /**
  * The patch button's label—"3 items selected", and what else the run does when permission
@@ -409,9 +386,9 @@ private fun patchButtonLabel(selectedItems: Int, permissionRemovals: Int): Strin
  * build declares that the list does not name is a permission with no row—so it is stated rather
  * than omitted. What the read finds does not replace the list on its own.
  *
- * There is deliberately no switch for the whole section. Everywhere else a set's header carries
- * one, and a header switch here puts "remove every permission this build declares" behind one
- * tap—a state that cannot be undone on an installed app, and one the model does not allow once
+ * There is deliberately no switch for the whole section. Everywhere else a section's header
+ * carries one, and a header switch here puts "remove every permission this build declares" behind
+ * one tap—a state that cannot be undone on an installed app, and one the model does not allow once
  * the last permission remains. The rows are the only way in.
  */
 @Composable
@@ -772,41 +749,28 @@ private fun selectionSummary(selectedItems: Int, totalItems: Int): String {
 }
 
 /**
- * The heading of one feature group inside an expanded set, and the switch for the whole group.
+ * The heading that introduces the permission rows.
  *
- * It names the feature rather than the set, so the patched functions appear as things the app
- * does—analytics, quests, guild tags—instead of as one undifferentiated list. Making the heading
- * a switch is what turns "all of the decorations" or "none of them" into one tap.
+ * It is not a section and carries no switch: the permission rows are filed under the card's own
+ * list rather than under one of the change sections, and a switch over them would sit over
+ * declarations the build removes whatever the user does—a decision that does not exist.
  *
- * [onToggle] is null for a section that is not a choice. The permission list is one: its rows
- * include declarations the build removes whatever you do, and a switch over those would offer a
- * decision that does not exist.
+ * The count is of the rows that can be switched, and it says how many of those are on, so a row the
+ * build decides about does not read as one the user switched off.
  */
 @Composable
 private fun GroupHeading(
     label: String,
-    rows: List<PatchRow>,
-    onToggle: ((Boolean) -> Unit)?
+    rows: List<PatchRow>
 ) {
     val state = PatchRows.triStateOfRows(rows)
     val switchable = rows.count { it.switchable }
     val selected = rows.count { it.switchable && it.enabled }
-    val headings = Modifier
-        .fillMaxWidth()
-        .padding(start = 8.dp, end = 8.dp)
 
     Row(
-        modifier = if (onToggle == null) {
-            headings
-        } else {
-            headings
-                .heightIn(min = 48.dp)
-                .toggleable(
-                    value = PatchRows.headerChecked(state),
-                    role = Role.Switch,
-                    onValueChange = onToggle
-                )
-        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {

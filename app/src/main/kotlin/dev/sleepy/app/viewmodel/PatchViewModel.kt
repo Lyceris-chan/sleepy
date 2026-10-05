@@ -32,8 +32,8 @@ import kotlinx.coroutines.launch
  *
  * The selection is a [PatchSelection]—a set of item keys—rather than a set of patch set ids,
  * because a set is too coarse for some choices: "hide the gift button but keep quests" cannot be
- * expressed when both are behind one switch. The set's own switch still exists; it is the set of
- * its items, selected or cleared in one action ([setPatchSetEnabled]).
+ * expressed when both are behind one switch. The switch a section carries still exists; it selects
+ * or clears every item of that section in one action ([setItemsEnabled]).
  *
  * A saved selection is read through [PatchSelection.fromSavedIds], which expands a patch set id
  * into every item of that set, so the ids a source declares keep the meaning they had before
@@ -224,20 +224,10 @@ class PatchViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Turns every item of the set with this id on or off at once—the set's own switch.
+     * Turns a list of items on or off at once—the switch a section carries.
      *
-     * The items are resolved through [PatchItemCatalog], so a set id that names no set leaves the
-     * selection alone rather than clearing it.
-     */
-    fun setPatchSetEnabled(setId: String, enabled: Boolean) {
-        _selection.value = _selection.value.setEnabled(PatchItemCatalog.itemsOf(setId), enabled)
-    }
-
-    /**
-     * Turns a list of items on or off at once—the switch a feature group carries.
-     *
-     * Takes the items rather than a group's name: a group is a presentation of the catalog's own
-     * ordering, and the screen already holds the rows, so resolving a name here would be a second
+     * Takes the items rather than a section's name: which items are in a section is the catalog's
+     * own answer, and the screen already holds the rows, so resolving a name here would be a second
      * way to ask a question the rows have already answered.
      */
     fun setItemsEnabled(items: List<PatchItem>, enabled: Boolean) {

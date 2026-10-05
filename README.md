@@ -42,22 +42,20 @@ Each of the following changes has its own switch, so you can apply all of them, 
 
 ## Choose which patches to apply
 
-The patch screen lists a set for each part of the app. Expand a set to see the individual changes inside it.
+The patch screen is organised by what you want, not by how the app is built. Every change sits in one of seven sections: **Ads and promotions**, **Declutter**, **Tracking and analytics**, **Crash reporting**, **Background work**, **App fixes** and **Network blocking**. Expand a section to see the changes inside it.
 
 - Each change has its own switch. Turn it on or off on its own.
-- Each feature group inside a set has a switch of its own, which turns everything under that heading on or off at once. It reports whether none, some or all of them are selected, the same way a set's switch does.
-- A set's own switch reports whether none, some or all of its changes are selected. If you select a few changes inside a set, the set's switch shows that rather than rounding up or down.
-- Tapping a partly selected set selects every change inside it. Tapping a fully selected set clears it.
+- A section's own switch turns everything in that section on or off at once. It reports whether none, some or all of them are selected, so a section you have partly chosen shows that rather than rounding up or down. Tapping a partly selected section completes it; tapping a fully selected one clears it.
 - Some switches are unavailable, with the reason shown. Two reasons appear:
   - **Already covered by …** shows a rule you already have switched on that blocks every request this one blocks. Switch that one off and this switch works again.
   - **Required …** marks one of the two checks the blocklist needs. Those checks run in every build.
 - The counts shown with the list and on the button show how many changes you have selected.
-- **Permissions** are listed before the patch sets, one switch per permission the app asks for. Switching one off deletes that permission from the patched app's manifest, and that is permanent: Android gives an app only the permissions its manifest declares, and an installed app cannot ask for another one later.
+- **Permissions** are listed before the sections, one switch per permission the app asks for. Switching one off deletes that permission from the patched app's manifest, and that is permanent: Android gives an app only the permissions its manifest declares, and an installed app cannot ask for another one later.
 
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-The JavaScript changes are grouped into the features they affect—37 switches over 204 functions, such as gift buttons, guild tags or quests—so you can see what each one does before you switch it on. Each heading is a switch over its whole group, so getting all of the decorations, or none of them, is one tap.
+One switch often stands for several changes: the 204 JavaScript changes are grouped into the 37 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
 
 ## Install and use sleepy
 

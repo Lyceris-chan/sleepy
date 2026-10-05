@@ -900,6 +900,7 @@ object DiscordHermesFunctionCatalog {
                 identity = feature.slug,
                 label = feature.label,
                 group = feature.group,
+                section = PatchSections.forHermesGroup(feature.group),
                 description = feature.description
             )
         }

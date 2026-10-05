@@ -312,6 +312,7 @@ object OctoGramPatchItems {
             identity = entry.identity,
             label = entry.label,
             group = entry.group,
+            section = PatchSections.forSet(setId),
             description = entry.description
         )
     }
@@ -339,7 +340,7 @@ object OctoGramPatchItems {
      *
      * A set that applies one edit names that edit; an item holding several names the class they are
      * in and how many there are, because a row is one line and the twelve emitters are not a line.
-     * The full list is one tap further on, in the set's own technical panel.
+     * The full text is one tap further on, behind the row's own disclosure.
      */
     fun technicalTarget(item: PatchItem): String? {
         val entry = entryOf(item) ?: return null
@@ -358,22 +359,19 @@ object OctoGramPatchItems {
      * The longer text behind one item's technical target.
      *
      * An item with a single edit spells that edit out here, because its row is the only place the
-     * user can read it before patching. An item with several lists their titles and points at the
-     * set's technical panel for the full text of each, which is where the panel already prints
-     * them: the explanations are moved rather than dropped.
+     * user can read it before patching. An item over several prints every one of them in full: the
+     * row used to point at the set's technical panel for that text, and the panel went away with
+     * the set cards, so the text has to live on the row.
      */
     fun detail(item: PatchItem): String? {
         val entry = entryOf(item) ?: return null
-        val single = entry.patches.singleOrNull()
-        if (single != null) {
-            val title = single.title?.takeIf { it.isNotBlank() }
-            val explanation = single.explanation?.takeIf { it.isNotBlank() }
-            val text = listOfNotNull(title, explanation).joinToString(" ")
-            return "$text Selection key ${item.key}."
+        val edits = entry.patches.joinToString("\n\n") { patch ->
+            listOfNotNull(
+                patch.title?.takeIf { it.isNotBlank() },
+                patch.explanation?.takeIf { it.isNotBlank() }
+            ).joinToString(" ")
         }
-        val titles = entry.patches.mapNotNull { it.title?.takeIf(String::isNotBlank) }
-        return "${entry.patches.size} entries in this item: ${titles.joinToString("; ")}. " +
-            "Each is listed in full under this set's technical details. Selection key ${item.key}."
+        return "$edits\nSelection key ${item.key}."
     }
 
     /** The entry an item stands for, or null when no entry of its set has that identity. */

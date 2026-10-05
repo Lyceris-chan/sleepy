@@ -8,31 +8,33 @@ import dev.sleepy.app.model.PatchItem
 import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.PermissionRow
-import dev.sleepy.app.model.groupedByFeature
+import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.patches.DiscordBlocklistPatch
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.OctoGramPatchItems
 import dev.sleepy.app.patches.PatchItemCatalog
+import dev.sleepy.app.patches.PatchRegistry
+import dev.sleepy.app.patches.PatchSections
 import dev.sleepy.app.patches.PermissionCatalog
 
 /**
- * The state a patch set's own switch can be in.
+ * The state a section's own switch can be in.
  *
- * A set is not limited to on or off: it is on when every one of its items is on, off when none
+ * A section is not limited to on or off: it is on when every one of its items is on, off when none
  * are, and [PARTIAL] in between. A user reaches [PARTIAL] deliberately by switching one item on
- * inside a set, and the header reports it without rounding to either end. For the derivation, see
- * [PatchRows.triState].
+ * inside a section, and the header reports it without rounding to either end. For the derivation,
+ * see [PatchRows.triState].
  */
 enum class TriState {
-    /** Nothing in the set is on. */
+    /** Nothing in the section is on. */
     NONE,
 
-    /** Some of the set is on, and some is not. */
+    /** Some of the section is on, and some is not. */
     PARTIAL,
 
-    /** Everything in the set is on. */
+    /** Everything in the section is on. */
     ALL
 }
 
@@ -54,8 +56,8 @@ enum class InertKind {
 }
 
 /**
- * One row of a patch set's expanded body: an item with its own switch, or one of the blocklist's
- * prefix gates, which has no item behind it because nothing can select it.
+ * One row of an expanded section: an item with its own switch, or one of the blocklist's prefix
+ * gates, which has no item behind it because nothing can select it.
  *
  * @property key A key stable across recompositions and unique within the list, which is what the
  *   lazy list uses to identify the row. It is the item's own [PatchItem.key] for an item and
@@ -69,8 +71,8 @@ enum class InertKind {
  * @property inertReason Why the switch is fixed, in full. This value is not blank when
  *   [inertKind] is set; a grayed row with no reason is what the field prevents.
  * @property technicalTarget The exact thing the patch touches—the emitted smali literal, the
- *   function and its byte count, or the OctoGram class and the shape of each edit in it—shown
- *   one tap away rather than in the row itself.
+ *   function and its byte count, or the smali files a whole-set item's set rewrites—shown one tap
+ *   away rather than in the row itself.
  * @property detail The longer explanation behind [technicalTarget], or null when there is none.
  */
 data class PatchRow(
@@ -88,63 +90,59 @@ data class PatchRow(
     val switchable: Boolean get() = inertKind == null && item != null
 }
 
-/** The rows of one feature group, under the label that group carries. */
-data class PatchRowGroup(val label: String, val rows: List<PatchRow>)
-
 /**
- * One patch set as the list renders it: its groups, and what its own switch reports.
+ * One section as the list renders it: its rows, and what its own switch reports.
  *
- * The counts are of items, not of rows: a gate is not an item, so the blocklist reports 81 items
- * whether or not its two gates are in the list, and a set switch covers exactly the items that
- * [PatchRows.of] counted.
+ * The rows are flat and in the catalogue's own order—there is no heading inside a section, because
+ * a heading under a heading is the third level of disclosure this screen exists to lose. The
+ * counts are of items, not of rows: a gate is not an item, so Network blocking reports 81 items
+ * whether or not its two gates are in the row list, and the section switch covers exactly the
+ * items that [PatchRows.sectionsOf] counted.
+ *
+ * @property label The section's name, from [PatchSections].
+ * @property description One line saying what the section is for, written for a user.
+ * @property rows Every row under the section, in the order the list shows them.
+ * @property itemCount How many items the section holds.
+ * @property selectedItemCount How many of those are switched on.
+ * @property triState What the section's own switch reports.
  */
-data class PatchSetRows(
-    val groups: List<PatchRowGroup>,
+data class PatchSectionRows(
+    val label: String,
+    val description: String,
+    val rows: List<PatchRow>,
     val itemCount: Int,
     val selectedItemCount: Int,
     val triState: TriState
-) {
-    /** True when expanding this set shows rows to choose between. */
-    val expandable: Boolean get() = itemCount > 1
-}
+)
 
 /**
- * Builds the rows the patch-selection list renders, and derives a set's tri-state from its items.
+ * Builds the rows the patch-selection list renders, and derives a section's tri-state from its
+ * items.
  *
- * Everything here is a pure function of the set, the current [PatchSelection] and the tables in
+ * Everything here is a pure function of the sets, the current [PatchSelection] and the tables in
  * `patches/`, so the coverage graying is recomputed rather than stored: the blocklist's rows are
  * re-derived from the selection on every read ([DiscordBlocklistPatch.rows]), and turning a
  * covering rule off makes everything it covered selectable again with no state to keep in step.
  *
  * This is presentation only and adds no facts of its own. Item labels, descriptions, groups and
- * identities come from [PatchItemCatalog]; whether a rule is redundant comes from the coverage
- * table; the graying reasons are the model's own strings.
+ * identities come from [PatchItemCatalog]; which section an item is filed under comes from the
+ * item itself, which the catalog filled in from [PatchSections]; whether a rule is redundant comes
+ * from the coverage table; the graying reasons are the model's own strings.
  */
 object PatchRows {
-
-    /**
-     * The heading the blocklist's two prefix gates are listed under.
-     *
-     * They are rows without a switch rather than items, because nothing can select or deselect
-     * them, and they are listed first because that is where the interceptor tests them: before it
-     * checks any rule.
-     */
-    const val GATE_GROUP_LABEL = "Applied before every rule (not switchable)"
 
     /** The row key of a gate, which is not an item and so has no item key. */
     private fun gateKey(setId: String, pattern: String): String = "gate:$setId:$pattern"
 
     /**
-     * The key of a set's header in the lazy list.
+     * The key of a section's header in the lazy list.
      *
-     * A lazy list uses keys as a row's identity across recompositions, so they are built here,
-     * next to the row keys they have to stay distinct from, rather than spelled out at the call
-     * site.
+     * A lazy list uses keys as a row's identity across recompositions, so they are built here, next
+     * to the row keys they have to stay distinct from, rather than spelled out at the call site.
+     * The label is the key's body because the label is what a section is: there is no id behind it
+     * to outlive it, and a renamed section is a different section on screen anyway.
      */
-    fun setKey(setId: String): String = "set:$setId"
-
-    /** The key of a group heading inside a set's expanded body. */
-    fun groupKey(setId: String, groupLabel: String): String = "group:$setId:$groupLabel"
+    fun sectionKey(label: String): String = "section:$label"
 
     /** The key of the permission section's card in the lazy list. */
     fun permissionCardKey(): String = "permissions"
@@ -184,57 +182,60 @@ object PatchRows {
         }
 
     /**
-     * A set's rows and its switch state, for the current [selection].
+     * Every section of [sets] that has a row, in [PatchSections.ALL] order, for [selection].
      *
-     * A set that is not split into items is not left out: its one item stands for the whole set,
-     * and this returns it as a single row, which is what makes a whole set's selection and its
-     * item's selection the same choice.
+     * A set that is not split into items is not left out: its one item stands for the whole set, so
+     * it is a row inside its section, and switching that row is the same choice as selecting the
+     * set. A section nothing lands in is left out entirely rather than shown empty: a source
+     * carries different sets, so which of the seven sections exist is a property of the source, and
+     * a section with nothing under it would be a heading with no switch behind it.
      *
-     * @param set The set to build rows for.
+     * @param sets The source's sets.
      * @param selection The selection the rows are derived from.
-     * @return The set's groups, item counts, and switch state.
+     * @return One entry per non-empty section, sections and rows in display order.
      */
-    fun of(set: PatchSet, selection: PatchSelection): PatchSetRows {
-        val items = PatchItemCatalog.itemsOf(set.id)
-        val blocklistRows = if (set.id == DiscordBlocklistPatch.NETWORK_BLOCKLIST.id) {
+    fun sectionsOf(sets: List<PatchSet>, selection: PatchSelection): List<PatchSectionRows> {
+        val itemsBySection = LinkedHashMap<String, MutableList<PatchItem>>()
+        sets.forEach { set ->
+            PatchItemCatalog.itemsOf(set.id).forEach { item ->
+                itemsBySection.getOrPut(item.section) { mutableListOf() } += item
+            }
+        }
+
+        val blocklistRows = if (sets.any { it.id == DiscordBlocklistPatch.NETWORK_BLOCKLIST.id }) {
             DiscordBlocklistPatch.rows(selection)
         } else {
             emptyList()
         }
+        val gates = blocklistRows
+            .filterIsInstance<BlocklistGateRow>()
+            .map { gateRow(DiscordBlocklistPatch.NETWORK_BLOCKLIST.id, it) }
+        val gatesSection = PatchSections.forSet(DiscordBlocklistPatch.NETWORK_BLOCKLIST.id)
         val rulesByIdentity = blocklistRows
             .filterIsInstance<BlocklistRuleRow>()
             .associateBy { it.rule.identity }
 
-        val groups = buildList {
-            val gates = blocklistRows.filterIsInstance<BlocklistGateRow>()
-            if (gates.isNotEmpty()) {
-                add(PatchRowGroup(GATE_GROUP_LABEL, gates.map { gateRow(set.id, it) }))
-            }
-            for (group in items.groupedByFeature()) {
-                add(
-                    PatchRowGroup(
-                        label = group.label,
-                        rows = group.items.map { item ->
-                            itemRow(item, selection, rulesByIdentity[item.identity])
-                        }
-                    )
-                )
-            }
+        return PatchSections.ALL.mapNotNull { section ->
+            val items = itemsBySection[section].orEmpty()
+            val rows = (if (section == gatesSection) gates else emptyList()) +
+                items.map { item -> itemRow(item, selection, rulesByIdentity[item.identity]) }
+            if (rows.isEmpty()) return@mapNotNull null
+            PatchSectionRows(
+                label = section,
+                description = PatchSections.descriptionOf(section),
+                rows = rows,
+                itemCount = items.size,
+                selectedItemCount = selection.selected(items).size,
+                triState = triState(items, selection)
+            )
         }
-
-        return PatchSetRows(
-            groups = groups,
-            itemCount = items.size,
-            selectedItemCount = selection.selected(items).size,
-            triState = triState(items, selection)
-        )
     }
 
     /**
      * The permission section's rows: one per permission the build declares, in the order its
      * manifest declares them.
      *
-     * These are the same rows an expanded set has, rendered by the same row and grayed by the
+     * These are the same rows an expanded section has, rendered by the same row and grayed by the
      * same mechanism, because a permission that cannot be switched off is the same kind of claim
      * as a blocklist gate: [InertKind.REQUIRED], the model's own reason, and no switch to move.
      * What differs is only where the list comes from—the declarations shipped for the release
@@ -247,6 +248,10 @@ object PatchRows {
      * are derived from the selection on every read like everything else here: the last remaining
      * permission is locked as soon as it is the last, and is unlocked as soon as another is
      * switched back on.
+     *
+     * The permissions keep their own card rather than being filed under a section: the card states
+     * what removing a declaration costs before it offers the switch, and the list is about the
+     * build being patched rather than about a change sleepy makes.
      *
      * @param declared The permission names the build declares.
      * @param selection The selection the rows are derived from.
@@ -295,9 +300,9 @@ object PatchRows {
     }
 
     /**
-     * The state of a set whose items are [items]: on only when every one of them is on.
+     * The state of a section whose items are [items]: on only when every one of them is on.
      *
-     * A set with no items is [TriState.NONE] rather than [TriState.ALL], so an id that names no
+     * A section with no items is [TriState.NONE] rather than [TriState.ALL], so an id that names no
      * set reads as nothing selected instead of everything.
      */
     fun triState(items: List<PatchItem>, selection: PatchSelection): TriState {
@@ -310,27 +315,28 @@ object PatchRows {
     }
 
     /**
-     * Returns the value a set's header switch reports for [state], and therefore what a tap on it
-     * means.
+     * Returns the value a section's header switch reports for [state], and therefore what a tap on
+     * it means.
      *
-     * The switch reports "the whole set is on" and nothing else, which determines both directions
-     * of a tap: a set that is fully on reports true, so a tap returns false and clears it, and a
-     * set that is off—or partly on, which is the state the user asked for when they switched
-     * one item on inside a set—reports false, so a tap returns true and selects everything in
-     * the set. A partial set is therefore completed rather than cleared by a tap on its header,
-     * and clearing one takes the same single tap that clearing a fully-on set takes.
+     * The switch reports "the whole section is on" and nothing else, which determines both
+     * directions of a tap: a section that is fully on reports true, so a tap returns false and
+     * clears it, and a section that is off—or partly on, which is the state the user asked for when
+     * they switched one item on inside a section—reports false, so a tap returns true and selects
+     * everything in the section. A partial section is therefore completed rather than cleared by a
+     * tap on its header, and clearing one takes the same single tap that clearing a fully-on
+     * section takes.
      *
-     * @param state The set's switch state.
+     * @param state The section's switch state.
      * @return True if the switch reports on; false otherwise.
      */
     fun headerChecked(state: TriState): Boolean = state == TriState.ALL
 
     /**
-     * The state a feature group's heading reports for its rows.
+     * The state a group of rows reports, for a heading that is not a section.
      *
-     * Rows rather than items, because a group also holds the blocklist's two gates: they are rows
-     * with no item and no switch, so counting them as items would make every group that holds one
-     * read as permanently partial.
+     * Rows rather than items, because the permission heading holds rows that cannot be switched:
+     * counting them as items would make the heading read as partly selected forever while no
+     * control on it could change that.
      */
     fun triStateOfRows(rows: List<PatchRow>): TriState {
         val switchable = rows.filter { it.switchable }
@@ -350,9 +356,9 @@ object PatchRows {
     ): PatchRow {
         val technical = when {
             ruleRow != null -> constString(ruleRow.rule.pattern)
-            // Each of the three kinds of item has its own target, and a kind with nothing to name
-            // keeps the row without a target rather than showing a blank where it goes.
-            else -> hermesTarget(item) ?: octoGramTarget(item)
+            // Each kind of item has its own target, and a kind with nothing to name keeps the row
+            // without a target rather than showing a blank where it goes.
+            else -> hermesTarget(item) ?: octoGramTarget(item) ?: wholeSetTarget(item)
         }
         return PatchRow(
             key = item.key,
@@ -368,6 +374,7 @@ object PatchRows {
             detail = ruleRow?.let { ruleDetail(item, it) }
                 ?: hermesDetail(item)
                 ?: octoGramDetail(item)
+                ?: wholeSetDetail(item)
         )
     }
 
@@ -415,6 +422,67 @@ object PatchRows {
 
     /** The longer text behind an OctoGram item's target, from the item table's own entry. */
     private fun octoGramDetail(item: PatchItem): String? = OctoGramPatchItems.detail(item)
+
+    /**
+     * The files a whole-set item's set rewrites.
+     *
+     * A set that is not split into items has no entry of its own to name them, so the row takes
+     * them from the set: the set's technical panel used to be where they were read, and the panel
+     * went away with the set cards.
+     */
+    private fun wholeSetTarget(item: PatchItem): String? {
+        val set = PatchRegistry.get(item.setId) ?: return null
+        val paths = set.smaliPatches.map { it.smaliPath }.distinct()
+        if (paths.isEmpty()) return null
+        return if (set.smaliPatches.size == 1) {
+            paths.single()
+        } else {
+            "${set.smaliPatches.size} smali entries in ${paths.size} " +
+                (if (paths.size == 1) "file" else "files") + ": " + paths.joinToString(", ")
+        }
+    }
+
+    /**
+     * The text behind a whole-set item's target: each entry's own title and explanation, above the
+     * file and method it rewrites.
+     *
+     * The same facts the set's technical panel listed, moved to the row rather than dropped with
+     * the panel. A set of one edit has no rows inside it to carry them otherwise.
+     */
+    private fun wholeSetDetail(item: PatchItem): String? {
+        val set = PatchRegistry.get(item.setId) ?: return null
+        val entries = set.smaliPatches.joinToString("\n\n") { patch ->
+            val location = listOfNotNull(
+                patch.dexName?.takeIf { it.isNotBlank() }?.let { "[$it] ${patch.smaliPath}" }
+                    ?: patch.smaliPath.takeIf { it.isNotBlank() },
+                targetLine(patch)
+            ).joinToString(" · ")
+            listOfNotNull(
+                patch.title?.takeIf { it.isNotBlank() },
+                patch.explanation?.takeIf { it.isNotBlank() },
+                location.takeIf { it.isNotBlank() }
+            ).joinToString("\n")
+        }
+        if (entries.isBlank()) return null
+        return "$entries\nSelection key ${item.key}."
+    }
+
+    /**
+     * What one smali entry does to the file it names: replaces a method, slices a case out of a
+     * switch, or splices around an anchor.
+     *
+     * Only the first has a method signature, and a line reading "Method: null" reports nothing
+     * where the precise target belongs, so a shape with nothing to name gets no line.
+     */
+    private fun targetLine(patch: SmaliPatch): String? = when {
+        !patch.methodSignature.isNullOrBlank() -> "replaces ${patch.methodSignature}"
+        !patch.switchCaseLabel.isNullOrBlank() -> "slices switch case ${patch.switchCaseLabel}"
+        !patch.anchor.isNullOrBlank() ->
+            "splices around: " +
+                patch.anchor.lines().joinToString(" ; ") { it.trim() }.trim(' ', ';')
+
+        else -> null
+    }
 
     /**
      * Which functions an item patches, one line each, with the reference's note where it has one.

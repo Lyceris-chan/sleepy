@@ -2,19 +2,21 @@ package dev.sleepy.app.ui
 
 import dev.sleepy.app.model.BlocklistCoverage
 import dev.sleepy.app.model.PatchSelection
+import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.PermissionCoverage
-import dev.sleepy.app.model.groupedByFeature
 import dev.sleepy.app.patches.DeclaredPermissions
 import dev.sleepy.app.patches.DiscordBlocklistPatch
+import dev.sleepy.app.patches.DiscordBlocklistRules
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.patches.PatchRegistry
+import dev.sleepy.app.patches.PatchSections
 import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.ui.state.InertKind
 import dev.sleepy.app.ui.state.PatchRow
 import dev.sleepy.app.ui.state.PatchRows
-import dev.sleepy.app.ui.state.PatchSetRows
+import dev.sleepy.app.ui.state.PatchSectionRows
 import dev.sleepy.app.ui.state.TriState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,10 +26,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The rows the selection screen renders: tri-state set switches, locked rows, and stable keys.
+ * The rows the selection screen renders: tri-state section switches, locked rows, and stable keys.
  *
- * A set switch reports partial selection rather than rounding to on or off, a row that cannot be
- * switched says which of the reasons applies, and every row carries a key that is stable and
+ * A section switch reports partial selection rather than rounding to on or off, a row that cannot
+ * be switched says which of the reasons applies, and every row carries a key that is stable and
  * unique. The permission section is rendered from the same rows.
  */
 class PatchRowStateTest {
@@ -40,32 +42,44 @@ class PatchRowStateTest {
         PatchItemCatalog.itemsOf(DiscordBlocklistPatch.NETWORK_BLOCKLIST.id)
 
     @Test
-    fun theSetSwitchIsTriStateAndCountsItemsRatherThanSets() {
-        val off = PatchRows.of(hermes, PatchSelection())
-        assertEquals("nothing selected is off", TriState.NONE, off.triState)
-        assertEquals(37, off.itemCount)
-        assertEquals(0, off.selectedItemCount)
+    fun theSectionSwitchIsTriStateAndCountsItemsRatherThanSets() {
+        val off = sectionsOf(hermes, PatchSelection())
+        assertEquals("nothing selected is off", TriState.NONE, off.single { it.label == ADS }.triState)
+        assertEquals(
+            "every item of the set is under some section",
+            37,
+            off.sumOf { it.itemCount }
+        )
+        assertTrue("nothing is on", off.all { it.selectedItemCount == 0 })
 
         val everything = PatchSelection().setEnabled(hermesItems, true)
-        assertEquals(TriState.ALL, PatchRows.of(hermes, everything).triState)
-        assertEquals(37, PatchRows.of(hermes, everything).selectedItemCount)
+        assertEquals(37, sectionsOf(hermes, everything).sumOf { it.selectedItemCount })
+        assertTrue(
+            "everything on is on in every section",
+            sectionsOf(hermes, everything).all { it.triState == TriState.ALL }
+        )
 
         // The case the whole per-item split exists for: one feature on and everything else off
         // reads as partly on, not as on and not as off. The group is one with several items in
-        // it, so the selection is a real part of the set rather than a single row.
+        // it, so the selection is a real part of the section rather than a single row.
         val giftOnly = PatchSelection().with(hermesItems.filter { it.group == MULTI_ITEM_GROUP })
-        val partial = PatchRows.of(hermes, giftOnly)
+        val partial = sectionsOf(hermes, giftOnly)
         assertTrue(
             "the group has to hold more than one item for the case to mean anything",
             giftOnly.keys.size >= 2
         )
-        assertEquals(TriState.PARTIAL, partial.triState)
+        assertEquals(TriState.PARTIAL, partial.single { it.label == DECLUTTER }.triState)
         assertEquals(
             "the count is of items, not of sets",
             giftOnly.keys.size,
-            partial.selectedItemCount
+            partial.single { it.label == DECLUTTER }.selectedItemCount
         )
-        assertEquals(37, partial.itemCount)
+        assertEquals(
+            "and the section the selection is not in stays off",
+            TriState.NONE,
+            partial.single { it.label == ADS }.triState
+        )
+        assertEquals(37, partial.sumOf { it.itemCount })
 
         assertEquals(
             "an id that names nothing selects nothing rather than everything",
@@ -75,109 +89,138 @@ class PatchRowStateTest {
     }
 
     @Test
-    fun aTapOnASetSwitchCompletesAPartialSetAndClearsAFullOne() {
-        assertFalse(
-            "a set that is not fully on reports off",
-            PatchRows.headerChecked(TriState.NONE)
-        )
+    fun aTapOnASectionSwitchCompletesAPartialSectionAndClearsAFullOne() {
+        assertFalse("a section that is not fully on reports off", PatchRows.headerChecked(TriState.NONE))
         assertFalse("and so does a partly selected one", PatchRows.headerChecked(TriState.PARTIAL))
-        assertTrue("only a fully selected set reports on", PatchRows.headerChecked(TriState.ALL))
+        assertTrue("only a fully selected section reports on", PatchRows.headerChecked(TriState.ALL))
 
-        val partial = PatchSelection().with(listOf(hermesItems.first()))
+        val items = hermesItems.filter { it.section == DECLUTTER }
+        val partial = PatchSelection().with(listOf(items.first()))
+        assertTrue("the section has to hold more than one item", items.size > 1)
+
         val completed = partial.setEnabled(
-            hermesItems,
-            !PatchRows.headerChecked(PatchRows.triState(hermesItems, partial))
+            items,
+            !PatchRows.headerChecked(PatchRows.triState(items, partial))
         )
         assertEquals(
-            "a tap on a partly selected set selects everything in it",
-            37,
-            completed.selected(hermesItems).size
+            "a tap on a partly selected section selects everything in it",
+            items.size,
+            completed.selected(items).size
         )
-        assertEquals(TriState.ALL, PatchRows.triState(hermesItems, completed))
+        assertEquals(TriState.ALL, PatchRows.triState(items, completed))
+        assertEquals(
+            "and only the section it belongs to moved",
+            TriState.NONE,
+            PatchRows.triState(hermesItems.filter { it.section == ADS }, completed)
+        )
 
         val cleared = completed.setEnabled(
-            hermesItems,
-            !PatchRows.headerChecked(PatchRows.triState(hermesItems, completed))
+            items,
+            !PatchRows.headerChecked(PatchRows.triState(items, completed))
         )
-        assertEquals("a tap on a fully selected set clears it", emptySet<String>(), cleared.keys)
-        assertEquals(TriState.NONE, PatchRows.triState(hermesItems, cleared))
+        assertEquals("a tap on a fully selected section clears it", emptySet<String>(), cleared.keys)
+        assertEquals(TriState.NONE, PatchRows.triState(items, cleared))
 
         val emptied = PatchSelection().setEnabled(
-            hermesItems,
-            !PatchRows.headerChecked(PatchRows.triState(hermesItems, PatchSelection()))
+            items,
+            !PatchRows.headerChecked(PatchRows.triState(items, PatchSelection()))
         )
         assertEquals(
-            "and a tap on an empty set selects everything in it",
-            37,
-            emptied.selected(hermesItems).size
+            "and a tap on an empty section selects everything in it",
+            items.size,
+            emptied.selected(items).size
         )
     }
 
     @Test
-    fun everyItemIsItsOwnSwitchAndKeepsTheTextTheCatalogGivesIt() {
-        val rows = PatchRows.of(hermes, PatchSelection().setEnabled(hermesItems, true))
-        val flat = rows.groups.flatMap { it.rows }
-        // Grouped, so the rows come back in the order the groups list them rather than in table
-        // order—the catalog's own grouping, read through its own function.
-        val expected = hermesItems.groupedByFeature().flatMap { it.items }
+    fun everyRowIsItsItemAndKeepsTheTextTheCatalogGivesIt() {
+        val sections = sectionsOf(hermes, PatchSelection().setEnabled(hermesItems, true))
 
-        assertEquals(37, flat.size)
-        assertEquals(
-            "the rows are the items, and nothing else",
-            expected.map { it.key },
-            flat.map { it.key }
-        )
-        assertEquals(expected.map { it.label }, flat.map { it.label })
-        assertEquals(expected.map { it.description }, flat.map { it.description })
-        assertEquals(
-            "a group heading has to head a group",
-            rows.groups.size,
-            rows.groups.map { it.label }.distinct().size
-        )
+        sections.forEach { section ->
+            // The rows of a section are its items, in the catalogue's own order: the list has no
+            // second level, so the section is the only grouping and the order inside it is the
+            // order the items were declared in.
+            val expected = hermesItems.filter { it.section == section.label }
+            assertEquals(expected.map { it.key }, section.rows.map { it.key })
+            assertEquals(expected.map { it.label }, section.rows.map { it.label })
+            assertEquals(expected.map { it.description }, section.rows.map { it.description })
+            assertTrue(
+                "${section.label} has a row that is not its item",
+                section.rows.all { it.item != null }
+            )
+        }
         assertTrue(
             "every patched function is switchable and on",
-            flat.all { it.switchable && it.enabled }
+            sections.flatMap { it.rows }.all { it.switchable && it.enabled }
         )
         assertTrue(
             "and every row says which function it rewrites",
-            flat.all { !it.technicalTarget.isNullOrBlank() }
+            sections.flatMap { it.rows }.all { !it.technicalTarget.isNullOrBlank() }
         )
     }
 
     @Test
-    fun theJavaScriptSetIsListedUnderItsFeatureGroups() {
-        val rows = PatchRows.of(hermes, PatchSelection())
+    fun theJavaScriptSetIsListedUnderTheSectionsItsGroupsName() {
+        val sections = sectionsOf(hermes, PatchSelection())
 
         assertEquals(
-            "two hundred and four rows in one list is the same problem as one switch",
-            DiscordHermesFunctionCatalog.GROUPS,
-            rows.groups.map { it.label }
+            "the sections are [PatchSections.ALL] order and no other",
+            PatchSections.ALL.filter { label -> sections.any { it.label == label } },
+            sections.map { it.label }
         )
-        assertEquals(37, rows.groups.sumOf { it.rows.size })
-        assertTrue("a set with more than one item has something to expand into", rows.expandable)
         assertTrue(
-            "a group heading has to group: one row per group is a list with extra steps",
-            rows.groups.all { it.rows.isNotEmpty() }
+            "a section has to head rows: an empty one is a heading with no switch behind it",
+            sections.all { it.rows.isNotEmpty() }
+        )
+        assertEquals(37, sections.sumOf { it.rows.size })
+        assertEquals(
+            "the rows of a section are exactly the items filed under it",
+            hermesItems.map { it.section to it.key }.toSet(),
+            sections.flatMap { section -> section.rows.map { section.label to it.key } }.toSet()
         )
     }
 
     @Test
     fun theBlocklistKeepsItsRuleOrderAndItsTwoMatchingRegimes() {
-        val groups = PatchRows.of(blocklist, PatchSelection()).groups.drop(1)
+        val network = networkSection(PatchSelection())
 
-        assertEquals(blocklistItems.groupedByFeature().map { it.label }, groups.map { it.label })
-        assertEquals(blocklistItems.map { it.key }, groups.flatMap { it.rows }.map { it.key })
+        assertEquals(
+            "the gates are applied before the rules, so they are the first two rows",
+            listOf("const-string v2, \"/api/\"", "const-string v2, \"/external/\""),
+            network.rows.take(2).map { it.technicalTarget }
+        )
+        assertEquals(
+            "every rule follows, in the order the interceptor is compiled in",
+            blocklistItems.map { it.key },
+            network.rows.drop(2).map { it.key }
+        )
         assertEquals(
             "every rule row is a rule the coverage table evaluated, so none lost its graying",
             81,
-            groups.sumOf { it.rows.size }
+            network.rows.drop(2).size
         )
+
+        // The two matching regimes survive as text now that the headings that named them are
+        // gone: a rule still says whether it is tested against every URL or only Discord API calls,
+        // which is what makes one rule able to cover another.
+        val hostPatterns = DiscordBlocklistRules.HOST_RULES.map { it.pattern }.toSet()
+        network.rows.drop(2).forEach { row ->
+            val expected = if (row.label in hostPatterns) {
+                "Tested against every request URL."
+            } else {
+                "Tested only against Discord API URLs"
+            }
+            assertTrue(
+                "${row.label} does not say which kind of request it is tested against, got: " +
+                    row.detail,
+                row.detail.orEmpty().startsWith(expected)
+            )
+        }
     }
 
     @Test
     fun aCoveredRuleIsGrayedWithThePatternThatCoversIt() {
-        val rows = PatchRows.of(blocklist, PatchSelection().setEnabled(blocklistItems, true))
-        val questHome = row(rows, "/quest-home")
+        val questHome = row(rowsOf(blocklist, PatchSelection().setEnabled(blocklistItems, true)), "/quest-home")
 
         assertEquals(InertKind.COVERED, questHome.inertKind)
         assertFalse(questHome.switchable)
@@ -198,9 +241,9 @@ class PatchRowStateTest {
     fun turningTheCovererOffMakesTheCoveredRowLiveAgain() {
         val quest = blocklistItems.first { it.label == "/quest" }
         val withEverything = PatchSelection().setEnabled(blocklistItems, true)
-        assertFalse(row(PatchRows.of(blocklist, withEverything), "/quest-home").switchable)
+        assertFalse(row(rowsOf(blocklist, withEverything), "/quest-home").switchable)
 
-        val rebuilt = PatchRows.of(blocklist, withEverything.without(listOf(quest)))
+        val rebuilt = rowsOf(blocklist, withEverything.without(listOf(quest)))
         val liveAgain = row(rebuilt, "/quest-home")
 
         assertNull("its coverer is off, so nothing covers it any more", liveAgain.inertKind)
@@ -213,9 +256,7 @@ class PatchRowStateTest {
         assertEquals(
             "the other three redundancies are untouched",
             listOf("/users/@me/activities/statistics", "/users/@me/billing", "/guilds/premium"),
-            rebuilt.groups.flatMap { it.rows }
-                .filter { it.inertKind == InertKind.COVERED }
-                .map { it.label }
+            rebuilt.filter { it.inertKind == InertKind.COVERED }.map { it.label }
         )
 
         val withoutQuest = withEverything.without(listOf(quest))
@@ -233,16 +274,13 @@ class PatchRowStateTest {
 
     @Test
     fun theGatesAreLockedRowsThatSayTheyAreRequired() {
-        val rows = PatchRows.of(blocklist, PatchSelection())
-        val gateGroup = rows.groups.first()
+        val network = networkSection(PatchSelection())
+        val gates = network.rows.take(2)
 
-        assertEquals(PatchRows.GATE_GROUP_LABEL, gateGroup.label)
-        assertEquals(
-            "the gates are applied before the rules, so they are listed before them",
-            listOf("const-string v2, \"/api/\"", "const-string v2, \"/external/\""),
-            gateGroup.rows.map { it.technicalTarget }
-        )
-        gateGroup.rows.forEach { gate ->
+        assertEquals("the gates are not items and are not counted as any", 81, network.itemCount)
+        assertEquals(83, network.rows.size)
+        assertEquals(0, network.selectedItemCount)
+        gates.forEach { gate ->
             assertEquals(InertKind.REQUIRED, gate.inertKind)
             assertFalse("a gate has no switch to move", gate.switchable)
             assertNull("a gate is not an item: nothing can select or deselect it", gate.item)
@@ -253,10 +291,6 @@ class PatchRowStateTest {
             assertTrue(gate.inertReason!!.startsWith(BlocklistCoverage.REQUIRED_REASON_PREFIX))
             assertTrue(gate.description.isNotBlank())
         }
-
-        assertEquals("the gates are not items and are not counted as any", 81, rows.itemCount)
-        assertEquals(83, rows.groups.sumOf { it.rows.size })
-        assertEquals(0, rows.selectedItemCount)
     }
 
     @Test
@@ -265,7 +299,7 @@ class PatchRowStateTest {
 
         PatchRegistry.all.forEach { set ->
             states.forEach { selection ->
-                PatchRows.of(set, selection).groups.flatMap { it.rows }.forEach { row ->
+                sectionsOf(set, selection).flatMap { it.rows }.forEach { row ->
                     if (row.inertKind != null) {
                         assertTrue(
                             "${set.id} ${row.label} is inert with no reason to read",
@@ -289,32 +323,28 @@ class PatchRowStateTest {
 
     @Test
     fun everyRowKeyIsStableUniqueAndItsOwn() {
-        val keys = mutableListOf<String>()
-        PatchRegistry.all.forEach { set ->
-            val rows = PatchRows.of(
-                set,
-                PatchSelection().setEnabled(PatchItemCatalog.itemsOf(set.id), true)
-            )
-            keys += PatchRows.setKey(set.id)
-            rows.groups.forEach { group ->
-                keys += PatchRows.groupKey(set.id, group.label)
-                keys += group.rows.map { it.key }
-            }
-        }
+        // The screen hands the whole source to the builder, so the keys are checked the way the
+        // list receives them: one key per section, one per row, and no two alike anywhere.
+        val selection = PatchSelection().setEnabled(blocklistItems, true)
+        val sections = PatchRows.sectionsOf(PatchRegistry.all, selection)
+        val keys = sections.map { PatchRows.sectionKey(it.label) } +
+            sections.flatMap { it.rows.map { row -> row.key } }
         assertEquals(
             "a lazy list keys rows by these, and two equal keys is a crash: " +
                 "${keys.size - keys.distinct().size} duplicate(s)",
             keys.size,
             keys.distinct().size
         )
-
-        val selection = PatchSelection().setEnabled(blocklistItems, true)
-        val rowKeys = PatchRows.of(blocklist, selection).groups.flatMap { it.rows }.map { it.key }
         assertEquals(
             "the same selection renders the same keys, so nothing is rebuilt that did not change",
-            rowKeys,
-            PatchRows.of(blocklist, selection).groups.flatMap { it.rows }.map { it.key }
+            keys,
+            PatchRows.sectionsOf(PatchRegistry.all, selection).let { rebuilt ->
+                rebuilt.map { PatchRows.sectionKey(it.label) } +
+                    rebuilt.flatMap { it.rows.map { row -> row.key } }
+            }
         )
+
+        val rowKeys = networkSection(selection).rows.map { it.key }
         assertEquals(
             "an item's row is keyed by the item's own key, which is what a saved selection records",
             blocklistItems.map { it.key },
@@ -336,11 +366,15 @@ class PatchRowStateTest {
 
         single.forEach { set ->
             val item = PatchItemCatalog.itemsOf(set.id).first()
-            val rows = PatchRows.of(set, PatchSelection())
+            val sections = sectionsOf(set, PatchSelection())
+            val rows = sections.flatMap { it.rows }
 
-            assertEquals(1, rows.itemCount)
-            assertFalse("a set with one item has nothing to expand into", rows.expandable)
-            assertEquals(listOf(item.key), rows.groups.single().rows.map { it.key })
+            assertEquals(
+                "the set contributes one row, under the section its item was filed in",
+                listOf(item.key),
+                rows.map { it.key }
+            )
+            assertEquals(listOf(item.section), sections.map { it.label })
             assertTrue(
                 "a saved set id has to select the item that now stands for the set",
                 PatchSelection.fromSavedIds(listOf(set.id), PatchItemCatalog).contains(item)
@@ -348,49 +382,85 @@ class PatchRowStateTest {
         }
     }
 
+    /**
+     * A whole-set item has no entry of its own to name what it rewrites, so its row carries the
+     * set's smali targets: the set's technical panel used to be where they were read, and the
+     * panel went away with the set cards.
+     */
+    @Test
+    fun aWholeSetItemRowNamesTheSmaliItsSetRewrites() {
+        val wholeSet = PatchRegistry.all.filter {
+            it.smaliPatches.isNotEmpty() && PatchItemCatalog.itemsOf(it.id).size == 1
+        }
+        assertTrue("the Discord sets are the whole-set ones", wholeSet.isNotEmpty())
+
+        wholeSet.forEach { set ->
+            val row = rowsOf(set, PatchSelection()).single()
+            val target = row.technicalTarget.orEmpty()
+            val detail = row.detail.orEmpty()
+            set.smaliPatches.forEach { patch ->
+                assertTrue(
+                    "${row.key} does not name ${patch.smaliPath}, its row reads: $target",
+                    target.contains(patch.smaliPath)
+                )
+                assertTrue(
+                    "${row.key} has no text behind its target",
+                    detail.contains(patch.smaliPath)
+                )
+                patch.title?.takeIf { it.isNotBlank() }?.let { title ->
+                    assertTrue(
+                        "${row.key} does not carry ${patch.smaliPath}'s title, got: $detail",
+                        detail.contains(title)
+                    )
+                }
+            }
+        }
+    }
+
     @Test
     fun aPartialSelectionSwitchesOnExactlyTheItemsItNames() {
         val group = hermesItems.filter { it.group == MULTI_ITEM_GROUP }
-        val rows = PatchRows.of(hermes, PatchSelection().with(group)).groups.flatMap { it.rows }
+        val rows = rowsOf(hermes, PatchSelection().with(group))
+        val sections = sectionsOf(hermes, PatchSelection().with(group))
 
         assertEquals(group.size, rows.count { it.enabled })
         assertEquals(
             group.map { it.key }.sorted(),
             rows.filter { it.enabled }.map { it.key }.sorted()
         )
-        assertEquals(TriState.PARTIAL, PatchRows.of(hermes, PatchSelection().with(group)).triState)
+        assertEquals(
+            TriState.PARTIAL,
+            sections.single { it.label == DECLUTTER }.triState
+        )
     }
 
     /**
-     * A group heading's own switch reports the rows beneath it, so the two never disagree.
+     * A heading's own count reports the rows beneath it that can be switched, so the two never
+     * disagree.
      *
      * The case that makes this its own function is the blocklist's gates: they are rows with no
      * item and no switch, so a heading that counted every row it drew would report a group of
-     * gates as partly selected forever.
+     * gates as partly selected forever. The permission heading is the one that reads it now.
      */
     @Test
-    fun aGroupHeadingReportsOnlyTheRowsUnderItThatCanBeSwitched() {
-        val decorationRows = PatchRows.of(hermes, PatchSelection()).groups
-            .first { it.label == MULTI_ITEM_GROUP }.rows
-        assertEquals("nothing selected is off", TriState.NONE, PatchRows.triStateOfRows(decorationRows))
+    fun aHeadingCountsOnlyTheRowsUnderItThatCanBeSwitched() {
+        val rows = rowsOf(blocklist, PatchSelection())
+        val gates = rows.filter { !it.switchable }
+        val rules = rows.filter { it.switchable }
+        assertTrue("the gates have to be rows without a switch", gates.isNotEmpty())
 
-        val allOn = decorationRows.map { it.copy(enabled = it.switchable) }
-        assertEquals(
-            "every one of them on is on",
-            TriState.ALL,
-            PatchRows.triStateOfRows(allOn)
-        )
+        assertEquals("nothing selected is off", TriState.NONE, PatchRows.triStateOfRows(rules))
 
-        val oneOn = decorationRows.mapIndexed { index, row -> row.copy(enabled = index == 0) }
+        val allOn = rules.map { it.copy(enabled = true) }
+        assertEquals("every one of them on is on", TriState.ALL, PatchRows.triStateOfRows(allOn))
+
+        val oneOn = allOn.mapIndexed { index, row -> row.copy(enabled = index == 0) }
         assertEquals(
             "and one of them on is neither",
             TriState.PARTIAL,
             PatchRows.triStateOfRows(oneOn)
         )
 
-        val gates = PatchRows.of(blocklist, PatchSelection()).groups
-            .first { it.label == PatchRows.GATE_GROUP_LABEL }.rows
-        assertTrue("the gates have to be rows without a switch", gates.all { !it.switchable })
         assertEquals(
             "a group with nothing switchable in it is not partly selected",
             TriState.NONE,
@@ -406,8 +476,7 @@ class PatchRowStateTest {
             audited.isNotEmpty()
         )
 
-        val rows = PatchRows.of(hermes, PatchSelection().setEnabled(hermesItems, true))
-            .groups.flatMap { it.rows }
+        val rows = rowsOf(hermes, PatchSelection().setEnabled(hermesItems, true))
             .associateBy { it.key }
 
         audited.forEach { patch ->
@@ -526,13 +595,31 @@ class PatchRowStateTest {
         )
     }
 
+    /** The sections [set]'s items land in, for [selection], as the screen builds them. */
+    private fun sectionsOf(set: PatchSet, selection: PatchSelection): List<PatchSectionRows> =
+        PatchRows.sectionsOf(listOf(set), selection)
+
+    /** Every row [set] contributes, across the sections its items were filed in. */
+    private fun rowsOf(set: PatchSet, selection: PatchSelection): List<PatchRow> =
+        sectionsOf(set, selection).flatMap { it.rows }
+
+    /** The one section the blocklist's rules are under, gates and all. */
+    private fun networkSection(selection: PatchSelection): PatchSectionRows =
+        sectionsOf(blocklist, selection).single { it.label == PatchSections.NETWORK }
+
     /** The row for [label] in a set's rows, as the screen finds it. */
-    private fun row(rows: PatchSetRows, label: String): PatchRow =
-        rows.groups.flatMap { it.rows }.first { it.label == label }
+    private fun row(rows: List<PatchRow>, label: String): PatchRow =
+        rows.first { it.label == label }
 
     private companion object {
         /** The catalog's label for the group the gift buttons are listed under. */
         const val MULTI_ITEM_GROUP = "Profile decorations"
+
+        /** The section the gifts are filed under, from the group above. */
+        const val DECLUTTER = PatchSections.DECLUTTER
+
+        /** The section the shop and its offers are filed under. */
+        const val ADS = PatchSections.ADS
 
         /** The package the dead declarations belong to, and one they do not. */
         const val DISCORD = "com.discord"

@@ -3,7 +3,6 @@ package dev.sleepy.app.patches
 import dev.sleepy.app.model.PatchItem
 import dev.sleepy.app.model.PatchItemSource
 import dev.sleepy.app.model.PatchSet
-import dev.sleepy.app.model.SmaliPatch
 
 /**
  * Every patch set's items, by set id.
@@ -57,17 +56,6 @@ object PatchItemCatalog : PatchItemSource {
             ?: DiscordHermesFunctionCatalog.itemsOfLegacyKey(setId)
             ?: emptyList()
 
-    /**
-     * The smali entries a set's items carry between them, in item order.
-     *
-     * An OctoGram set declares no patches of its own, because the engine takes them from its
-     * generator rather than from the set—so the technical panel, which lists what a set touches,
-     * has to read them from the item table instead. Every other set lists its own patches
-     * ([PatchSet.smaliPatches]) or generated ones, so this function returns an empty list for
-     * those sets.
-     */
-    fun itemPatches(setId: String): List<SmaliPatch> = OctoGramPatchItems.patches(setId)
-
     /** Every item of every registered set, in registration order. */
     fun all(): List<PatchItem> = PatchRegistry.all.flatMap { itemsOf(it.id) }
 
@@ -80,6 +68,7 @@ object PatchItemCatalog : PatchItemSource {
         identity = WHOLE_SET_IDENTITY,
         label = set.label,
         group = set.label,
+        section = PatchSections.forSet(set.id),
         description = set.description
     )
 }

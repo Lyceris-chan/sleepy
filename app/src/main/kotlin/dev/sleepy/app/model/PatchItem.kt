@@ -18,6 +18,9 @@ package dev.sleepy.app.model
  * @property label The item's name as the UI shows it. Free to change; nothing persists it.
  * @property group The user-facing feature the item belongs to, named so that it describes what it
  *   covers.
+ * @property section The section of the patch list the item is sorted under, for example
+ *   `Ads and promotions`. Empty for an item that is not part of that list, which today is the
+ *   declared permissions: they keep their own card and are not filed under a section.
  * @property description One line that describes the effect of switching the item on.
  */
 data class PatchItem(
@@ -25,6 +28,7 @@ data class PatchItem(
     val identity: String,
     val label: String,
     val group: String,
+    val section: String = "",
     val description: String
 ) {
     /**
@@ -61,21 +65,4 @@ fun interface PatchItemSource {
      * set, and for a set id that no longer exists after a release removes a set.
      */
     fun itemsOf(setId: String): List<PatchItem>
-}
-
-/**
- * One feature group's items, in declaration order.
- *
- * The UI displays group headings, and the order of the groups is content rather than something to
- * sort by label, so grouping preserves the order the items were declared in.
- */
-data class PatchItemGroup(val label: String, val items: List<PatchItem>)
-
-/** Groups [this] by feature, keeping the order the groups first appear in. */
-fun Iterable<PatchItem>.groupedByFeature(): List<PatchItemGroup> {
-    val groups = LinkedHashMap<String, MutableList<PatchItem>>()
-    for (item in this) {
-        groups.getOrPut(item.group) { mutableListOf() } += item
-    }
-    return groups.map { (label, items) -> PatchItemGroup(label, items) }
 }

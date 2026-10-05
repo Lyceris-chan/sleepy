@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-10-05
+
+### Changed
+
+- **The patch list is organised by what you want, not by how the app is built.** It was one card per patch set—38 of them, 22 holding a single switch—under names like `discord_native_systrace`, above 81 blocklist rules grouped by where they matched rather than by what they blocked. Every change now sits in one of seven sections: **Ads and promotions**, **Declutter**, **Tracking and analytics**, **Crash reporting**, **Background work**, **App fixes** and **Network blocking**.
+
+  The list is two levels deep rather than four, and a section's heading is a switch over everything in it, so a whole section goes on or off in one tap.
+
+### Fixed
+
+- Counts no longer read as "Show the 1 items", or as "1 patches available" for a source offering one set.
+
 ## [3.3.1] - 2026-10-04
 
 ### Changed
@@ -253,7 +265,8 @@ No part of the app changed in this release. It carries three build changes, and 
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.1...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.0...HEAD
+[3.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.1...v3.4.0
 [3.3.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.1.0...v3.2.0

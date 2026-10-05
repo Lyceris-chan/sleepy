@@ -45,7 +45,7 @@ class OctoGramSelectionTest {
                 assertEquals(set.id, item.setId)
                 assertTrue("${item.key} has no name", item.label.isNotBlank())
                 assertTrue("${item.key} does not say what it does", item.description.isNotBlank())
-                assertTrue("${item.key} is under no feature heading", item.group.isNotBlank())
+                assertTrue("${item.key} is in no feature group", item.group.isNotBlank())
                 assertNotEquals(
                     "${item.key} is a whole-set item: every OctoGram set is split now",
                     "set",
@@ -72,37 +72,43 @@ class OctoGramSelectionTest {
     fun aSetIsItsItemsAndSaysWhichOfThemAreOn() {
         sets.forEach { set ->
             val items = itemsBySet.getValue(set.id)
-            val off = PatchRows.of(set, PatchSelection())
+            val off = PatchRows.sectionsOf(listOf(set), PatchSelection()).single()
+            assertEquals(
+                "the set's items are filed under the section the mapping names",
+                PatchSections.forSet(set.id),
+                off.label
+            )
             assertEquals(items.size, off.itemCount)
             assertEquals(0, off.selectedItemCount)
             assertEquals(TriState.NONE, off.triState)
             assertFalse(PatchRows.headerChecked(off.triState))
             assertEquals(
-                "a set has something to expand into only when it holds more than one item",
-                items.size > 1,
-                off.expandable
+                "the section holds the set's items and nothing else",
+                items.map { it.key },
+                off.rows.map { it.key }
             )
 
             if (items.size > 1) {
                 // The state a user reaches on purpose, and the one the header must not round to
                 // either end: some of the set is on and some is not.
-                val partial = PatchRows.of(set, PatchSelection().with(items.take(1)))
+                val partial =
+                    PatchRows.sectionsOf(listOf(set), PatchSelection().with(items.take(1))).single()
                 assertEquals(TriState.PARTIAL, partial.triState)
                 assertEquals(1, partial.selectedItemCount)
                 assertFalse(PatchRows.headerChecked(partial.triState))
             }
 
-            val on = PatchRows.of(set, PatchSelection().with(items))
+            val on = PatchRows.sectionsOf(listOf(set), PatchSelection().with(items)).single()
             assertEquals(TriState.ALL, on.triState)
             assertTrue(PatchRows.headerChecked(on.triState))
             assertEquals(items.size, on.selectedItemCount)
             assertEquals(
                 "every item is one row, and every row is one item",
                 items.map { it.key }.toSet(),
-                on.groups.flatMap { it.rows }.map { it.key }.toSet()
+                on.rows.map { it.key }.toSet()
             )
 
-            on.groups.flatMap { it.rows }.forEach { row ->
+            on.rows.forEach { row ->
                 assertTrue("${row.key} is the user's to move", row.switchable)
                 assertEquals(set.id, row.item?.setId)
                 assertTrue("${row.key} names no target", row.technicalTarget.orEmpty().isNotBlank())

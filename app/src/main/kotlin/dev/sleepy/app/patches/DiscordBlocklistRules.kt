@@ -368,6 +368,7 @@ object DiscordBlocklistRules {
         identity = rule.identity,
         label = rule.pattern,
         group = group,
+        section = PatchSections.NETWORK,
         description = rule.description
     )
 

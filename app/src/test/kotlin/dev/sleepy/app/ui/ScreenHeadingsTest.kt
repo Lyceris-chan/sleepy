@@ -38,6 +38,11 @@ class ScreenHeadingsTest {
             "the permission section title"
         ),
         Site(
+            "ui/components/PatchSectionCard.kt",
+            "text = section.label",
+            "a patch section title"
+        ),
+        Site(
             "ui/screens/SettingsScreen.kt",
             "text = \"Settings & Transparency\"",
             "the settings title"
