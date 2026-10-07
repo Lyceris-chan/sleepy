@@ -937,12 +937,14 @@ object DiscordNativePatches {
      */
     val STARTUP_CLASS_LOAD = PatchSet(
         id = "discord_native_startup_class_load",
-        label = "Stop loading unused classes at launch",
+        label = "Stop unused work at launch",
         description = "The launch path loads the jank recorder to call two methods that are " +
             "already stubs, and the crash reporter's static initializer loads seven exception " +
             "classes and the Kotlin reflection stack for a list that only decides whether a " +
-            "network error is worth reporting - in a build that reports nothing. This removes " +
-            "both from startup.",
+            "network error is worth reporting - in a build that reports nothing. The crash " +
+            "reporter is then set up on a thread the launch path waits for, reading the stored " +
+            "OTA bundle for a label nothing reads. This removes all of it from startup, along " +
+            "with the launch metric the removed recorder call was named by.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Not reading the jank recorder's instance",
@@ -1017,6 +1019,73 @@ object DiscordNativePatches {
     .line 80
     return-void
 .end method"""
+            ),
+            SmaliPatch(
+                title = "Not setting the crash reporter up on a thread of its own",
+                explanation = "The launch path hands the crash reporter's setup to a second " +
+                    "thread and waits for it, and the setup reads the stored OTA bundle to " +
+                    "label the report and installs the foreground-service logger behind a " +
+                    "breadcrumb. Crash reporting is off at the source in this build, so the " +
+                    "setup returns without doing any of it and the label is read only to be " +
+                    "passed to a call that ignores it. The sequence becomes the one object its " +
+                    "caller expects back.",
+                smaliPath = "com/discord/MainApplication.smali",
+                methodSignature = ".method private static final performInitialization" +
+                    "${'$'}lambda${'$'}10(Lcom/discord/MainApplication;)" +
+                    "Lcom/discord/crash_reporting/CrashReporting${'$'}CrashReportingReady;",
+                replacementBody = """.method private static final performInitialization${'$'}lambda${'$'}10(Lcom/discord/MainApplication;)Lcom/discord/crash_reporting/CrashReporting${'$'}CrashReportingReady;
+    .registers 2
+
+    # Patch: this read the OTA bundle's release name out of shared preferences, handed it to
+    # CrashReporting.init, recorded a launch metric and installed the foreground-service logger.
+    # init returns immediately in this build because isDisabled() is forced true, so the release
+    # name is never read; the logger's only callback writes a breadcrumb that addBreadcrumb drops
+    # for the same reason; and the metric is Discord's label for work that no longer happens.
+    #
+    # All the caller does with the result is set tags on it, and setTag is gated on the same
+    # isDisabled(), so a fresh object is what this has always effectively produced here.
+    new-instance v0, Lcom/discord/crash_reporting/CrashReporting${'$'}CrashReportingReady;
+
+    invoke-direct {v0}, Lcom/discord/crash_reporting/CrashReporting${'$'}CrashReportingReady;-><init>()V
+
+    return-object v0
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Removing the jank recorder's launch metric",
+                explanation = "The launch path no longer initialises the recorder, so the " +
+                    "launch metric named after it is a label for work that does not happen and " +
+                    "the last thing in the application class that mentions the recorder. The " +
+                    "metric is not a cost: what it measured is a timestamp taken after a call " +
+                    "that is no longer made.",
+                smaliPath = "com/discord/MainApplication.smali",
+                anchor = """    const-string v5, "JankSessionRecorder.init()"
+
+    .line 130
+    .line 131
+    const/16 v10, 0xe
+
+    .line 132
+    .line 133
+    const/4 v11, 0x0
+
+    .line 134
+    const-wide/16 v6, 0x0
+
+    .line 135
+    .line 136
+    const/4 v8, 0x0
+
+    .line 137
+    const/4 v9, 0x0
+
+    .line 138
+    invoke-static/range {v4 .. v11}, Lcom/discord/tti_manager/TTIMetrics;->record${'$'}default(Lcom/discord/tti_manager/TTIMetrics;Ljava/lang/String;JLjava/lang/String;ZILjava/lang/Object;)V
+""",
+                replacement = """    # Patch: the recorder is not initialised here any more, so this metric names
+    # work that no longer happens. Its label was the last mention of the recorder
+    # in this class.
+"""
             )
         )
     )

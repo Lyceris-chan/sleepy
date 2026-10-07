@@ -17,13 +17,18 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The two startup class loads, applied to the real build and read back from the DEX.
+ * What the launch path stops doing, applied to the real build and read back from the DEX.
  *
  * `MainApplication.performInitialization` reaches `JankSessionRecorder` through three lines - the
- * instance read that loads the class, the `init` call and the experiment-flag call - and the edit
- * removes all three, so nothing in the class references the recorder. The timing label
- * `"JankSessionRecorder.init()"` is a string, not a reference, and is asserted to survive:
- * removing it would be an edit the recorded change set does not make.
+ * instance read that loads the class, the `init` call and the experiment-flag call - and removes
+ * all three, along with the launch metric named after the call. The metric is a string rather
+ * than a reference, which is why it outlived the call it described: a launch report is read as a
+ * list of what startup did, so a label for work that no longer happens belongs with the call.
+ *
+ * The same method hands the crash reporter's setup to a thread of its own and waits for it. That
+ * setup reads the stored OTA bundle for a release name, passes it to a call that ignores it,
+ * records another metric and installs the foreground-service logger. It becomes the one object
+ * its caller expects back.
  *
  * `CrashReporting.<clinit>` is rewritten to build its list of ignorable network exceptions from a
  * zero-length array. The assertions read the initializer back out of the class, so the reflective
@@ -58,6 +63,20 @@ class StartupClassLoadTest {
         const val CLASS_LITERAL = "const-class v"
         const val REFLECTION_LOAD = "Lkotlin/jvm/internal/Reflection;->getOrCreateKotlinClass"
 
+        /** The crash-report setup the launch path runs on a thread of its own. */
+        const val SETUP_SIGNATURE =
+            ".method private static final performInitialization${'$'}lambda${'$'}10(" +
+                "Lcom/discord/MainApplication;)" +
+                "Lcom/discord/crash_reporting/CrashReporting${'$'}CrashReportingReady;"
+
+        /** What that setup does, none of which anything reads in this build. */
+        val SETUP_WORK = listOf(
+            "Lcom/discord/bundle_updater/BundleUpdater${'$'}Companion;->instance()",
+            "Lcom/discord/crash_reporting/CrashReporting;->init(",
+            "\"CrashReporting.init()\"",
+            "Lcom/discord/lifecycle/ForegroundServiceStartGuard;->setLogger("
+        )
+
         /** What it must keep doing. */
         const val INSTANCE_FIELD =
             "INSTANCE:Lcom/discord/crash_reporting/CrashReporting;"
@@ -65,7 +84,7 @@ class StartupClassLoadTest {
     }
 
     @Test
-    fun theLaunchPathStopsLoadingBothClasses() = runBlocking {
+    fun theLaunchPathStopsDoingThisWork() = runBlocking {
         val baseApk = ComparisonApks.discordBaseApk
         assumeTrue("the Discord fixtures are not on this machine (${baseApk.path})", baseApk.isFile)
 
@@ -88,19 +107,19 @@ class StartupClassLoadTest {
         val patches = DiscordNativePatches.STARTUP_CLASS_LOAD.smaliPatches
             .filter { it.smaliPath == APPLICATION || it.smaliPath == REPORTER }
         assertEquals(
-            "discord_native_startup_class_load must hold three recorder edits and the " +
-                "initializer rewrite",
-            4,
+            "discord_native_startup_class_load must hold three recorder edits, its launch " +
+                "metric, the crash reporter's initializer rewrite and the crash-report setup",
+            6,
             patches.size
         )
         assertEquals(
-            "three of the edits are anchor edits",
-            3,
+            "four of the edits are anchor edits",
+            4,
             patches.count { it.anchor != null && it.replacement != null }
         )
         assertEquals(
-            "one of them rewrites a method body",
-            1,
+            "two of them rewrite a method body",
+            2,
             patches.count { it.methodSignature != null && it.replacementBody != null }
         )
 
@@ -121,9 +140,11 @@ class StartupClassLoadTest {
             "stock must reference the recorder, or there is nothing to remove",
             stockApplication.contains("jank_stats/JankSessionRecorder")
         )
-        assertTrue(
-            "stock must keep the timing label, which this edit does not touch",
-            stockApplication.contains(TIMING_LABEL)
+        assertEquals(
+            "the timing label must occur once in the stock build, as the anchor it is removed " +
+                "by",
+            1,
+            occurrences(stockApplication, TIMING_LABEL)
         )
 
         val stockClinit = clinitOf(stockReporter)
@@ -137,6 +158,18 @@ class StartupClassLoadTest {
             7,
             occurrences(stockClinit, REFLECTION_LOAD)
         )
+
+        // The crash-report setup, which the launch path runs on a thread of its own and waits
+        // for. Every part of it is dead in this build, and the edit has to remove all of it.
+        val stockSetup = methodBody(stockApplication, SETUP_SIGNATURE)
+        assertTrue("the setup must be in the stock application class", stockSetup.isNotEmpty())
+        SETUP_WORK.forEach { line ->
+            assertTrue(
+                "stock's setup must still do this, or the edit is describing work that is not " +
+                    "there:\n$line",
+                stockSetup.contains(line)
+            )
+        }
 
         // Apply the set's own edits with the engine the pipeline uses.
         val (patched, results) = DexProcessor.patchDexSurgically(dexBytes = dex, patches = patches)
@@ -160,9 +193,14 @@ class StartupClassLoadTest {
                 afterApplication.contains(line.trim())
             )
         }
-        assertTrue(
-            "the timing label must survive - it is a string, not a class load",
+        assertFalse(
+            "the timing label must not survive: it named a call that is no longer made, so a " +
+                "launch report would list work this build does not do",
             afterApplication.contains(TIMING_LABEL)
+        )
+        assertFalse(
+            "and the recorder must not be named anywhere in the class, label included",
+            afterApplication.contains("JankSessionRecorder")
         )
 
         val afterClinit = clinitOf(afterReporter)
@@ -170,6 +208,21 @@ class StartupClassLoadTest {
             "the initializer must not resolve an exception class",
             afterClinit.contains(CLASS_LITERAL)
         )
+        val afterSetup = methodBody(afterApplication, SETUP_SIGNATURE)
+        assertTrue("the setup must survive the edit as a method", afterSetup.isNotEmpty())
+        SETUP_WORK.forEach { line ->
+            assertFalse(
+                "nothing the setup used to do may survive:\n$line",
+                afterSetup.contains(line)
+            )
+        }
+        assertTrue(
+            "and it must still hand its caller the object the caller expects",
+            afterSetup.contains(
+                "Lcom/discord/crash_reporting/CrashReporting${'$'}CrashReportingReady;"
+            ) && afterSetup.contains("return-object v0")
+        )
+
         assertFalse(
             "the initializer must not touch the Kotlin reflection stack",
             afterClinit.contains(REFLECTION_LOAD)
@@ -191,8 +244,11 @@ class StartupClassLoadTest {
 
     /** The text of the class's static initializer, up to its closing `.end method`. */
     private fun clinitOf(classText: String): String =
-        classText.substringAfter(".method static constructor <clinit>()V")
-            .substringBefore(".end method")
+        methodBody(classText, ".method static constructor <clinit>()V")
+
+    /** The text of the one method [signature] names, up to its closing `.end method`. */
+    private fun methodBody(classText: String, signature: String): String =
+        classText.substringAfter(signature).substringBefore(".end method")
 
     /** How many times [needle] occurs in [haystack] - the engine's replace edits every one. */
     private fun occurrences(haystack: String, needle: String): Int =

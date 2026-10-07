@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-10-07
+
+### Changed
+
+- **Three more things stop happening while the app starts.** Discord's launch report lists what startup did, and three of its entries are Java-side work this build has no use for.
+
+  The crash reporter's setup ran on a thread of its own that the launch path then waited on. It read the stored OTA bundle for a release name, handed that name to a call that ignores it in a build where reporting is off at the source, recorded a launch metric, and installed a logger whose only callback writes a breadcrumb the same switch drops. All of that is now the single object its caller expects back.
+
+  The jank recorder's launch metric outlived the call it described: the recorder stopped being initialised a release ago, so the entry named work that no longer happened. It goes with the rest of that call.
+
+  The third entry, `BundlerUpdater.init()`, stays, and cannot be removed: the updater's instance accessor raises if that initialiser never ran, and the code that chooses which JavaScript bundle the app loads goes through it.
+
 ## [3.5.0] - 2026-10-07
 
 ### Fixed
@@ -312,7 +324,8 @@ No part of the app changed in this release. It carries three build changes, and 
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.5.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.6.0...HEAD
+[3.6.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.1...v3.5.0
 [3.4.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.1...v3.4.0
