@@ -4,7 +4,7 @@ import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.patches.DiscordHermesBundlePatch
 import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.PatchItemCatalog
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.bundleOf
 import dev.sleepy.app.testing.firstDifference
 import dev.sleepy.app.testing.readU32Le
@@ -17,17 +17,17 @@ import org.junit.Test
 
 /**
  * A subset of the JavaScript patch table, applied to the real bundle and checked against the
- * reference.
+ * recorded build.
  *
  * Per-item selection exists to apply a subset, so the functions the selection names must match
- * the reference build and the functions it does not name must keep their base bytes. The bundles
- * come from the same two Discord 349.5 APKs the full parity test uses.
+ * the recorded build and the functions it does not name must keep their base bytes. The bundles
+ * come from the same two Discord 349.5 APKs the full comparison test uses.
  */
-class HermesSubsetParityTest {
+class HermesSubsetComparisonTest {
 
-    /** The shipped build the patch set was extracted from, and the patched reference build. */
-    private val baseApk = ReferenceApks.discordBaseApk
-    private val referenceApk = ReferenceApks.discordReferenceApk
+    /** The shipped build the patch set was extracted from, and the patched recorded build. */
+    private val baseApk = ComparisonApks.discordBaseApk
+    private val recordedApk = ComparisonApks.discordRecordedApk
 
     private val fileLengthOffset = 32
     private val sha1FooterSize = 20
@@ -41,7 +41,7 @@ class HermesSubsetParityTest {
      *
      * Both are features whose functions all fit where they are. A feature holding one of the two
      * functions that share a body with another would relocate a function rather than write it in
-     * place, which is a different case and is covered by the whole-table parity test.
+     * place, which is a different case and is covered by the whole-table comparison test.
      */
     private val chosenFeatures = listOf("gift_buttons", "analytics_events")
 
@@ -53,14 +53,14 @@ class HermesSubsetParityTest {
     /** Patched by the whole-table path, and in a feature the selection does not name. */
     private val leftAlone = 79601
 
-    private fun bundleName(chosen: Boolean) = if (chosen) "reference" else "base"
+    private fun bundleName(chosen: Boolean) = if (chosen) "chosen" else "base"
 
     @Test
     fun aSubsetChangesTheChosenFunctionsAndNothingElse() {
         assumeTrue(
             "the Discord 349.5 APKs are not on this machine (${baseApk.path}, " +
-                "${referenceApk.path})",
-            baseApk.isFile && referenceApk.isFile
+                "${recordedApk.path})",
+            baseApk.isFile && recordedApk.isFile
         )
 
         val selection = PatchSelection.ofKeys(
@@ -109,7 +109,7 @@ class HermesSubsetParityTest {
 
         val result = HermesBundlePatcher.apply(base, patches)
         val patched = result.bundleBytes
-        val reference = bundleOf(referenceApk)
+        val recorded = bundleOf(recordedApk)
 
         assertEquals(
             "every patch must land: a skip leaves a function holding the old body",
@@ -124,14 +124,14 @@ class HermesSubsetParityTest {
             result.relocated.map { it.functionId }
         )
 
-        // Every function in the bundle, compared against the body it should have: the reference
+        // Every function in the bundle, compared against the body it should have: the recorded
         // build's for the three that were selected, the input's for all the others.
         val mismatches = ArrayList<String>()
         var matchedChosen = 0
         var matchedUntouched = 0
         for (functionId in 0 until DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT) {
             val wasChosen = functionId in chosen
-            val expected = if (wasChosen) reference else base
+            val expected = if (wasChosen) recorded else base
             val ours = HermesFunctionTable.locate(patched, functionId)
             val theirs = HermesFunctionTable.locate(expected, functionId)
             if (ours == null || theirs == null) {
@@ -168,7 +168,7 @@ class HermesSubsetParityTest {
         }
 
         println(
-            "HermesSubsetParityTest: ${chosen.size} chosen functions match the reference, " +
+            "HermesSubsetComparisonTest: ${chosen.size} chosen functions match the recorded bundle, " +
                 "$matchedUntouched of " +
                 "${DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT - chosen.size} " +
                 "unchosen ones are byte-identical to the input"

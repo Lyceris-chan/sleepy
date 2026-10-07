@@ -4,18 +4,18 @@ import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
 
 /**
- * Native (smali/DEX) modifications for Discord, transcribed from the reference suite in
- * `quirky-noether/discord/patches/core.py` (Discord 349.5 Alpha).
+ * Native (smali/DEX) modifications for Discord, transcribed from the recorded change set for
+ * Discord 349.5 Alpha.
  *
- * This object carries the part of that suite that [DiscordPatches] does not: the edits that
+ * This object carries the part of that change set that [DiscordPatches] does not: the edits that
  * are neither the Hermes JavaScript bundle nor a whole-method stub of the handful of
  * telemetry entry points already covered there. Every entry corresponds to a call the
- * reference makes, and the smali it writes is the reference's output.
+ * recorded change set makes, and the smali it writes is the recorded output.
  *
  * Three kinds of edit are deliberately absent, because an on-device patcher that edits DEX
  * files cannot apply them:
  *
- * - **AndroidManifest.xml**: the reference removes split/meta-data declarations, six dead
+ * - **AndroidManifest.xml**: the recorded change set removes split/meta-data declarations, six dead
  *   permissions, the Sentry providers, the AppsFlyer intent query and the exported flag on
  *   the RPC service. Binary XML editing lives in the pipeline, not in a [SmaliPatch].
  * - **Resources**: the ExoPlayer drawable aliases in `res/values/drawables.xml` and the
@@ -26,16 +26,15 @@ import dev.sleepy.app.model.SmaliPatch
  *   ([dev.sleepy.app.engine.HermesPatcher]). All three are applied; they edit entries inside the
  *   APK rather than a DEX, so none of them is a [SmaliPatch].
  *
- * The reference's smali edits that are switched off by default are also left out: bounding
- * the surface-release wait changes behaviour upstream depends on, lowering the capture
+ * The recorded change set's smali edits that are switched off by default are also left out:
+ * bounding the surface-release wait changes behaviour upstream depends on, lowering the capture
  * resolution makes the capture request smaller than the encoder, and passing 0 to the native
- * media engine is an undocumented value. They are documented in the reference as off for those
- * reasons.
+ * media engine is an undocumented value. They are recorded as off for those reasons.
  *
- * Labels: the reference suite edits an apktool tree, whose branch labels are numbered
+ * Labels: the recorded change set edits an apktool tree, whose branch labels are numbered
  * sequentially per method (`:cond_3`). The engine disassembles the APK itself and gets
  * address-based labels (`:cond_4c`). An anchor that names a label therefore uses the engine's
- * spelling, while every emitted replacement keeps the reference's text byte for byte—the
+ * spelling, while every emitted replacement keeps the recorded text byte for byte—the
  * labels a patch *introduces* (`:cond_gate_skip`, `:cond_no_stall`, `:new_cache`,
  * `:cond_patch_skip`) are its own and are reproduced as written.
  *
@@ -1268,7 +1267,11 @@ object DiscordNativePatches {
     val MEDIA = PatchSet(
         id = "discord_native_media",
         label = "Fix the media engine and voice calls",
-        description = "Stops the video renderer from blocking the UI thread while it creates a graphics context, surfaces media callback failures in logcat instead of dropping them, and builds the media engine's coroutine scope on a supervisor job so one failure cannot disable every later media call.",
+        description = "Stops the video renderer from blocking the UI thread while it creates a " +
+            "graphics context, surfaces media callback failures in logcat instead of dropping " +
+            "them, builds the media engine's coroutine scope on a supervisor job so one failure " +
+            "cannot disable every later media call, and registers a repeated connection id " +
+            "rather than throwing on it.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Stopping video tiles from freezing the interface",
@@ -1392,6 +1395,69 @@ object DiscordNativePatches {
     move-result-object v2
 
 """
+            ),
+            SmaliPatch(
+                title = "Registering a media connection instead of refusing to",
+                explanation = "Registers the newest connection for an id rather than throwing " +
+                    "when the id is already taken, so the camera path cannot fail with an " +
+                    "exception JavaScript is never told about.",
+                smaliPath = "com/discord/media/engine/MediaEngineNativeConnections.smali",
+                methodSignature = ".method public final register(ILcom/discord/native/engine/NativeConnection;)V",
+                replacementBody = """.method public final register(ILcom/discord/native/engine/NativeConnection;)V
+    .registers 8
+    .param p2    # Lcom/discord/native/engine/NativeConnection;
+        .annotation build Lorg/jetbrains/annotations/NotNull;
+        .end annotation
+    .end param
+
+    const-string v0, "connection"
+
+    invoke-static {p2, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
+
+    # Patch: this threw IllegalStateException("Check failed.") when the id was already
+    # registered, and again when the connection itself already was. Its one caller is
+    # MediaEngine.createVoiceConnection, which evaluates getEngine().createVoiceConnection(..)
+    # first - so the throw discarded a live native connection nobody could ever dispose - and
+    # runs inside the coroutine MediaEngineModule.createOwnStreamConnectionWithOptions launches
+    # on appScope. That is the camera path. The throw is never reported to JavaScript, so its
+    # callback is never invoked and its caller waits forever.
+    #
+    # The id now names the connection the caller just created, and the one it replaced is
+    # disposed rather than leaked. A repeat registration of the very same object is left alone,
+    # because disposing it would free the connection the map now holds.
+    iget-object v0, p0, Lcom/discord/media/engine/MediaEngineNativeConnections;->connections:Ljava/util/Map;
+
+    invoke-static {p1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v1
+
+    invoke-interface {v0, v1, p2}, Ljava/util/Map;->put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+    move-result-object v0
+
+    check-cast v0, Lcom/discord/native/engine/NativeConnection;
+
+    if-eqz v0, :registered
+
+    if-eq v0, p2, :registered
+
+    # Patch: log the replacement under the tag the media callbacks use, so a device
+    # capture shows it happening instead of showing nothing at all.
+    sget-object v1, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
+
+    const-string v2, "MediaEngineCB"
+
+    const-string v3, "media engine connection id was already registered; the connection it named was disposed"
+
+    const/4 v4, 0x0
+
+    invoke-virtual {v1, v2, v3, v4}, Lcom/discord/logging/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+
+    invoke-virtual {v0}, Lcom/discord/native/engine/NativeConnection;->dispose()V
+
+    :registered
+    return-void
+.end method"""
             )
         )
     )

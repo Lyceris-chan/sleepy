@@ -8,7 +8,7 @@ import dev.sleepy.app.model.SelectivePatchGenerator
 import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.model.TargetApk
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.dexEntries
 import dev.sleepy.app.testing.manifestOf
 import java.util.zip.ZipFile
@@ -33,7 +33,7 @@ class OctoGramPayloadIntegrationTest {
 
     @Test
     fun octoGram361DynamicResolutionAndSurgicalPatching() = runBlocking {
-        val apkFile = ReferenceApks.octoGram361Arm64
+        val apkFile = ComparisonApks.octoGram361Arm64
         // An absent fixture is a skipped test, not a passing one: a return from the body reports
         // a pass instead, and this file's coverage is absent from CI.
         assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
@@ -144,7 +144,7 @@ class OctoGramPayloadIntegrationTest {
 
     @Test
     fun olderOctoGramBuildIsRefusedBecauseItsVersionIsNotIdentified() = runBlocking {
-        val apkFile = ReferenceApks.octoGramArm64
+        val apkFile = ComparisonApks.octoGramArm64
         assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
         println("Reading OctoGram 3.6.0 APK (size: ${apkFile.length()} bytes)...")
@@ -230,7 +230,7 @@ class OctoGramPayloadIntegrationTest {
 
     @Test
     fun binaryXmlPackageRename() {
-        val apkFile = ReferenceApks.octoGram361Arm64
+        val apkFile = ComparisonApks.octoGram361Arm64
         assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
         val entry = ZipFile(apkFile).use { it.getEntry("AndroidManifest.xml") }

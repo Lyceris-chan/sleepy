@@ -18,9 +18,10 @@ class PatchItemContentTest {
     fun everyPatchedFunctionHasAFeatureGroupAndADescription() {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
-            "the set is the 207 functions the patch table covers, 205 taken from the reference " +
-                "build plus the 2 compiled-copy edits it leaves unpatched",
-            207,
+            "the set is the 209 functions the patch table covers, 205 taken from the recorded " +
+                "build plus the 4 edits it leaves unpatched: the two compiled-copy edits and the " +
+                "two branches of the Shop This Look gate",
+            209,
             patched.size
         )
         assertEquals(
@@ -50,7 +51,7 @@ class PatchItemContentTest {
             DiscordHermesFunctionCatalog.GROUPS.filter { it.isBlank() }
         )
 
-        // Two hundred and seven rows in one list is the same problem as one switch, so the
+        // Two hundred and nine rows in one list is the same problem as one switch, so the
         // split has to be a substantive one rather than a formality.
         assertTrue(
             "the functions must be split into feature groups, " +
@@ -156,7 +157,7 @@ class PatchItemContentTest {
     @Test
     fun everyBlocklistEntryHasADescription() {
         val rules = DiscordBlocklistRules.ALL
-        assertEquals("the two tables are the reference's 20 host and 61 API rules", 81, rules.size)
+        assertEquals("the two tables are the recorded set's 20 host and 61 API rules", 81, rules.size)
         assertEquals(20, DiscordBlocklistRules.HOST_RULES.size)
         assertEquals(61, DiscordBlocklistRules.API_RULES.size)
         assertEquals(

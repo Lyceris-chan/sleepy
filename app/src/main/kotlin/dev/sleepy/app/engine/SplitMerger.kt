@@ -21,9 +21,9 @@ import java.util.zip.ZipInputStream
  * from the base as the libraries are: a base-only APK has none of the resources only those
  * splits carry. So a split contributes two things here—every
  * shared object under `lib/`, and every file under `res/` except the split's own `values/`
- * directory. That last exception comes from the reference merge and is required: a
- * configuration split's `values/` holds placeholder stubs for the values it replaces rather
- * than resources of its own, and copying those in replaces resources that the base already has.
+ * directory. That last exception is required: a configuration split's `values/` holds
+ * placeholder stubs for the values it replaces rather than resources of its own, and copying
+ * those in replaces resources that the base already has.
  *
  * What is deliberately *not* merged is the splits' `resources.arsc`, and that is the whole of
  * this object's limitation rather than a detail. Every split contains a partial table naming
@@ -31,7 +31,7 @@ import java.util.zip.ZipInputStream
  * names its 1,246, and the two sets share no path string at all—so the files merged in here
  * are written at the right paths, but nothing in the merged APK refers to them. Making them
  * resolve means relinking the tables, which is aapt2's job and more than a repack; what this
- * produces is the file set and the size the desktop build has, and no more than that.
+ * produces is the file set and the size the recorded build has, and no more than that.
  *
  * [mergeSplit] reads those entries into memory; [mergeSplitToDir] writes them to files: a
  * configuration split is tens of megabytes, which is more than a phone heap can hold next to
@@ -116,7 +116,7 @@ object SplitMerger {
      * and the platform's split installer is what reads it—Play's, on a bundle install. An APK
      * with every one of its splits inside it is not a split, so the file describes an installation
      * that does not exist: it is the resource-side counterpart of the Play split markers removed
-     * from the manifest, and the reference merge removes it in the same step as them.
+     * from the manifest.
      *
      * It cannot be removed on its own. The row that names it is in the resource table, and a table
      * resolving to a file the archive does not hold is worse than an archive holding a file that no
@@ -127,8 +127,8 @@ object SplitMerger {
 
     /**
      * A split's own default resources, which it carries only as replacements for the base's.
-     * The reference merge skips these and so does this one: they are placeholder stubs for
-     * table-backed values, not files the base is missing.
+     * These are skipped: they are placeholder stubs for table-backed values, not files the base
+     * is missing.
      */
     private const val SPLIT_DEFAULT_VALUES = "res/values/"
 

@@ -7,10 +7,9 @@ import dev.sleepy.app.patches.DiscordPatches
  * The `AndroidManifest.xml` edits that a Discord run requests, selected from what the run does
  * rather than from a fixed list.
  *
- * The reference suite rewrites the manifest as text, in a script that runs once against one
- * release. This object expresses the same set of edits as selectors against the compiled
- * document—a patcher on a phone does not have the text form—and it selects each of them
- * rather than applying them unconditionally, because the edits fall into several groups:
+ * This object expresses the edits as selectors against the compiled document—a patcher on a
+ * phone does not have the text form—and it selects each of them rather than applying them
+ * unconditionally, because the edits fall into several groups:
  *
  * - The Sentry providers, the Play split markers and the attribution query each belong to
  *   something the user switched on or off. Removing a component whose code is still being
@@ -127,8 +126,8 @@ object DiscordManifestEdits {
 
         // The declarations that this build does not use. No switch controls this group: the app
         // does not use these permissions under any setting, so unlike the Sentry providers and the
-        // attribution query there is no alternative state for a run to choose—the reference
-        // removes them from every build it makes.
+        // attribution query there is no alternative state for a run to choose—the recorded
+        // change set removes them from every build.
         //
         // The list comes from a function rather than a literal here, because it is also what the
         // permission list marks its rows with: a permission section that offers a switch for one
@@ -206,13 +205,13 @@ object DiscordManifestEdits {
             emptyList()
         }
 
-        // Google Analytics: inert in this build, and switched off the way the reference switches it
-        // off. The declarations stay—the SDK's classes are still in the dex and the manifest
-        // still describes them—but the platform does not instantiate a component whose
-        // `android:enabled` is false, so the receiver does not receive a broadcast and the
-        // JobService is not bound. Deleting the elements instead makes a claim about the code the
-        // app contains; this makes a claim about what the app does, and it is the one the
-        // reference makes.
+        // Google Analytics: inert in this build, and switched off the way the recorded change
+        // set switches it off. The declarations stay—the SDK's classes are still in the dex and
+        // the manifest still describes them—but the platform does not instantiate a component
+        // whose `android:enabled` is false, so the receiver does not receive a broadcast and the
+        // JobService is not bound. Deleting the elements instead makes a claim about the code
+        // the app contains; this makes a claim about what the app does, and it is the one the
+        // recorded change set makes.
         val analyticsOverrides = if (isDiscordBuild) {
             DiscordPatches.GOOGLE_ANALYTICS_COMPONENTS.map { component ->
                 BinaryXmlEditor.AttributeOverride(

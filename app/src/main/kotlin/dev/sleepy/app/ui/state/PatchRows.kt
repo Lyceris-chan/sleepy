@@ -164,15 +164,15 @@ object PatchRows {
         }
 
     /**
-     * The reference's own audit note per function, by item key.
+     * The recorded change set's own audit note per function, by item key.
      *
-     * Only the functions the reference suite documents have one; the rest are described by the
+     * Only the functions the recorded change set documents have one; the rest are described by the
      * extracted bodies in [DiscordHermesBundlePatch]. Both kinds of description come from those
      * sources.
      */
     private val HERMES_AUDITS_BY_KEY: Map<String, Map<String, HermesPatch>> =
         DiscordHermesFunctionCatalog.FEATURES.associate { feature ->
-            // A reference note names its function as a string, while the table uses an id, so the
+            // A recorded note names its function as a string, while the table uses an id, so the
             // two are matched by parsing rather than by comparing the two shapes directly.
             val ids: List<String> = feature.functionIds.map { it.toString() }
             val notes: Map<String, HermesPatch> = DiscordPatches.HERMES.hermesPatches
@@ -485,11 +485,11 @@ object PatchRows {
     }
 
     /**
-     * Which functions an item patches, one line each, with the reference's note where it has one.
+     * Which functions an item patches, one line each, with the recorded note where it has one.
      *
      * Read-only: the switch above it is the choice. A feature is several functions often enough
-     * that naming them is the only way to see what an item covers, and the note is the reference's
-     * own words for the functions it documents.
+     * that naming them is the only way to see what an item covers, and the note is the recorded
+     * change set's own words for the functions it documents.
      */
     private fun hermesDetail(item: PatchItem): String? {
         val patches = HERMES_PATCHES_BY_KEY[item.key]?.takeIf { it.isNotEmpty() } ?: return null
@@ -498,7 +498,7 @@ object PatchRows {
             val name = patch.name.ifBlank { "unnamed" }
             val bytes = patch.replacementHex.length / 2
             val note = audits[patch.functionId.toString()]?.let { audit ->
-                // The note's own words, and only the parts it has: a reference entry is free to
+                // The note's own words, and only the parts it has: a recorded entry is free to
                 // carry a title without an explanation, and "null" is not something to show.
                 listOfNotNull(audit.title, audit.explanation).joinToString(" ")
             }

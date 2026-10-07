@@ -5,7 +5,7 @@ import dev.sleepy.app.engine.HermesFunctionTable
 import dev.sleepy.app.engine.HermesPatcher
 import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.StepStatus
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.bundleOf
 import dev.sleepy.app.testing.dexEntries
 import java.security.MessageDigest
@@ -28,7 +28,7 @@ import org.junit.Test
 class DiscordPayloadIntegrationTest {
 
     /** The Discord 349.5 base split, which lives outside the repository. */
-    private val discordBaseApk = ReferenceApks.discordBaseApk
+    private val discordBaseApk = ComparisonApks.discordBaseApk
 
     /**
      * Function id -> (body offset, bytecode size) for every Discord Hermes target in the
@@ -103,7 +103,7 @@ class DiscordPayloadIntegrationTest {
     }
 
     /**
-     * Applies the whole ported native patch set to the real Discord base split.
+     * Applies the whole native patch set to the real Discord base split.
      *
      * This is the end-to-end check for the smali half: every anchor and every method marker
      * must be found on a real disassembly, and the edited classes must reassemble—a label a
@@ -135,7 +135,7 @@ class DiscordPayloadIntegrationTest {
             "every native patch must target a class present in this build, missing: $notApplicable",
             notApplicable.isEmpty()
         )
-        assertEquals("the ported native set is 104 edits", 104, patchesToApply.size)
+        assertEquals("the native set is 105 edits", 105, patchesToApply.size)
         println(
             "Resolved ${patchesToApply.size} Discord native patches across " +
                 "${patchesToApply.groupBy { it.dexName }.size} DEX files"

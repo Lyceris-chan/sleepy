@@ -4,7 +4,7 @@ import dev.sleepy.app.engine.BinaryXmlEditor
 import dev.sleepy.app.model.DeclarationMismatch
 import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.PermissionCheck
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.manifestOf
 import dev.sleepy.app.testing.sourceFile
 import java.io.File
@@ -23,9 +23,9 @@ import org.junit.Test
  */
 class DeclaredPermissionsTest {
 
-    private val discordApk = ReferenceApks.discordBaseApk
+    private val discordApk = ComparisonApks.discordBaseApk
 
-    private val octoGramApk = ReferenceApks.octoGram361Arm64
+    private val octoGramApk = ComparisonApks.octoGram361Arm64
 
     /** Each shipped list against the build it was read from: the package name, and that APK. */
     private val builds: List<Triple<String, String, File>> = listOf(

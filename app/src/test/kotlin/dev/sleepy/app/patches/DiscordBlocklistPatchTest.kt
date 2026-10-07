@@ -5,7 +5,7 @@ import dev.sleepy.app.engine.OkHttpNameResolver
 import dev.sleepy.app.engine.OkHttpResolution
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.model.TargetApk
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.dexEntries
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -16,17 +16,17 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The generated Discord blocklist interceptor, against the reference build.
+ * The generated Discord blocklist interceptor, against the recorded build.
  *
  * A generated patch is only reviewable at its output: the emitted method must match the method
- * the desktop reference build produced for this release, character for character once the
+ * the recorded build produced for this release, character for character once the
  * discovered names are substituted. A separate test assembles the generated method against the
  * real APK, because text that reads correctly does not always assemble.
  */
 class DiscordBlocklistPatchTest {
 
     /**
-     * The comparison: byte-for-byte against the reference build's own method.
+     * The comparison: byte-for-byte against the recorded build's own method.
      *
      * This also pins the three discovered names, because a body that matches by coincidence of
      * names is not the same claim as a body that matches because the names were read correctly.
@@ -43,27 +43,27 @@ class DiscordBlocklistPatchTest {
         )
         val names = (resolution as OkHttpResolution.Resolved).names
 
-        // The expected names come out of the reference build's own generated method rather than
+        // The expected names come out of the recorded build's own generated method rather than
         // a fixed spelling: R8 renames them on every release, and a hardcoded pair turns the next
         // bump into an edit of this test instead of a check of the resolver.
-        val reference = referenceMethodBody()
-        val ctorLine = Regex("Lokhttp3/Response;-><init>(\\([^\\n]*)").find(reference)
-        assertNotNull("the reference method must construct a Response", ctorLine)
-        val protocolLine = Regex("sget-object \\w+, L([^;]+);->(\\w+):L[^;]+;").find(reference)
-        assertNotNull("the reference method must read the Protocol HTTP/1.1 constant", protocolLine)
+        val recorded = recordedMethodBody()
+        val ctorLine = Regex("Lokhttp3/Response;-><init>(\\([^\\n]*)").find(recorded)
+        assertNotNull("the recorded method must construct a Response", ctorLine)
+        val protocolLine = Regex("sget-object \\w+, L([^;]+);->(\\w+):L[^;]+;").find(recorded)
+        assertNotNull("the recorded method must read the Protocol HTTP/1.1 constant", protocolLine)
 
         assertEquals(
-            "the resolved constructor must be the one the reference build calls",
+            "the resolved constructor must be the one the recorded build calls",
             ctorLine!!.groupValues[1],
             names.responseConstructorDescriptor
         )
         assertEquals(
-            "the resolved Protocol class must be the one the reference build names",
+            "the resolved Protocol class must be the one the recorded build names",
             protocolLine!!.groupValues[1],
             names.protocolClass
         )
         assertEquals(
-            "the resolved HTTP/1.1 field must be the one the reference build names",
+            "the resolved HTTP/1.1 field must be the one the recorded build names",
             protocolLine.groupValues[2],
             names.protocolHttp11Field
         )
@@ -74,17 +74,17 @@ class DiscordBlocklistPatchTest {
             protocolField = names.protocolHttp11Field
         )
 
-        val referenceLines = reference.lines()
+        val recordedLines = recorded.lines()
         val generatedLines = generated.lines()
 
         assertEquals(
-            "the generated body must have the reference's line count",
-            referenceLines.size,
+            "the generated body must have the recorded method's line count",
+            recordedLines.size,
             generatedLines.size
         )
-        referenceLines.forEachIndexed { index, line ->
+        recordedLines.forEachIndexed { index, line ->
             assertEquals(
-                "line ${index + 1} of the generated body must match the reference",
+                "line ${index + 1} of the generated body must match the recorded method",
                 line,
                 generatedLines[index]
             )
@@ -92,12 +92,12 @@ class DiscordBlocklistPatchTest {
         // The line walk above pinpoints a difference; this catches the one it cannot see, a
         // trailing newline, which otherwise changes what follows the method in the file.
         assertTrue(
-            "the generated body must equal the reference method body",
-            reference == generated
+            "the generated body must equal the recorded method body",
+            recorded == generated
         )
 
         println(
-            "Blocklist interceptor: ${generatedLines.size} lines, identical to the reference " +
+            "Blocklist interceptor: ${generatedLines.size} lines, identical to the recorded method " +
                 "build's method"
         )
     }
@@ -166,30 +166,30 @@ class DiscordBlocklistPatchTest {
     }
 
     /**
-     * The `requestStatsInterceptor` method out of the reference build's decompiled tree, cut the
-     * way `blocklist.py` cuts it: from the `.method` line through its `.end method`.
+     * The `requestStatsInterceptor` method out of the recorded build's decompiled tree, cut from
+     * the `.method` line through its `.end method`.
      *
-     * A tree that has not been through the reference's blocklist step carries the stock method
-     * instead, which is a different thing to compare against: the comparison is skipped with
-     * that as its reason, rather than reported as a thousand-line mismatch between two methods
-     * that are not meant to be equal.
+     * A tree that has not been through the recorded change set's blocklist step carries the stock
+     * method instead, which is a different thing to compare against: the comparison is skipped
+     * with that as its reason, rather than reported as a thousand-line mismatch between two
+     * methods that are not meant to be equal.
      */
-    private fun referenceMethodBody(): String {
+    private fun recordedMethodBody(): String {
         val relative = "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali"
         val file =
             SMALI_DIRS.map { File(REFERENCE_TREE, "$it/$relative") }.firstOrNull { it.exists() }
-        assumeTrue("the reference tree is not on this machine ($relative)", file != null)
+        assumeTrue("the recorded tree is not on this machine ($relative)", file != null)
 
         val source = file!!.readText(Charsets.UTF_8)
         val start = source.indexOf(INTERCEPTOR_SIGNATURE)
         val end = if (start == -1) -1 else source.indexOf(".end method", start)
         assumeTrue(
-            "the reference tree has no generated $INTERCEPTOR_SIGNATURE",
+            "the recorded tree has no generated $INTERCEPTOR_SIGNATURE",
             start != -1 && end != -1
         )
         val body = source.substring(start, end + ".end method".length)
         assumeTrue(
-            "the reference tree carries the stock interceptor rather than the blocklist",
+            "the recorded tree carries the stock interceptor rather than the blocklist",
             body.contains("img.litix.io")
         )
         return body
@@ -197,10 +197,10 @@ class DiscordBlocklistPatchTest {
 
     private companion object {
         /** The Discord 349.5 base split, which lives outside the repository. */
-        val BASE_APK = ReferenceApks.discordBaseApk
+        val BASE_APK = ComparisonApks.discordBaseApk
 
-        /** The reference build's decompiled tree—the patched one, which is what shipped. */
-        val REFERENCE_TREE = ReferenceApks.discordDecompiledBase
+        /** The recorded build's decompiled tree—the patched one, which is what shipped. */
+        val REFERENCE_TREE = ComparisonApks.discordDecompiledBase
 
         val SMALI_DIRS = listOf("smali", "smali_classes2", "smali_classes3", "smali_classes4")
 

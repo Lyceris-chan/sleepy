@@ -17,14 +17,14 @@ import dev.sleepy.app.model.TargetApk
  * wants the log written to logcat but nothing shipped to Telegram's servers cannot express that
  * behind one switch. The premium rows are the opposite case and are deliberately *one* item over
  * three edits—hiding the premium row alone makes the sections row appear in its place, so a list
- * offering that edit on its own would offer a state the reference scripts document as incorrect.
+ * offering that edit on its own would offer a state that is incorrect.
  *
  * The patches themselves stay in [OctoGramPatches], grouped one list per item, next to the set they
  * belong to: this table pairs a group with the switch that turns it on, and owns the wording. An
  * entry's patches are the same objects the engine applies, so there is one definition of each edit
  * and no second copy to fall out of step.
  *
- * Every entry names a group of patches that exists in the reference scripts, and a test asserts
+ * Every entry names a group of patches in the recorded change set, and a test asserts
  * that the entries and the sets cover each other exactly—a set with no entry would be a set that
  * cannot be selected at all, and an entry with no patch would be a row describing a change it does
  * not make.

@@ -114,9 +114,10 @@ object ZipRepacker {
      *
      * `stamp-cert-sha256` is the Play source stamp: it records which signed build an APK was
      * derived from. A rebuilt APK is signed with a new key, so carrying the stamp forward states a
-     * provenance that the rebuilt file does not have. The desktop reference has no such entry for
-     * the same reason—apktool's decoder groups it with `AndroidManifest.xml` and the META-INF
-     * signature files in `ApkInfo.ORIGINAL_FILES_PATTERN` and does not write it back.
+     * provenance that the rebuilt file does not have. It is also the one entry of the group
+     * below that no rebuild reproduces on its own: the decoder apktool rebuilds with groups
+     * `stamp-cert-sha256` with `AndroidManifest.xml` and the META-INF signature files, so a
+     * relinked archive never writes it back and the entry has to be named explicitly.
      */
     private val STAMP_ENTRIES = setOf("stamp-cert-sha256")
 

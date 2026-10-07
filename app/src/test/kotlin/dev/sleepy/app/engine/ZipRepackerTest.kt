@@ -1,7 +1,7 @@
 package dev.sleepy.app.engine
 
 import dev.sleepy.app.patches.DiscordPatches
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.entryMethods
 import dev.sleepy.app.testing.zipOf
 import dev.sleepy.app.testing.zipOfStored
@@ -226,7 +226,7 @@ class ZipRepackerTest {
      */
     @Test
     fun repackDropsTheMergedSplitsSentryLibraries() {
-        val split = File(ReferenceApks.discordExtracted, "config.arm64_v8a.apk")
+        val split = File(ComparisonApks.discordExtracted, "config.arm64_v8a.apk")
         assumeTrue("the Discord ABI split is not on this machine (${split.path})", split.exists())
 
         val workDir = Files.createTempDirectory("sleepy-merged-drop-test").toFile()

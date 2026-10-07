@@ -63,7 +63,7 @@ object HermesPatcher {
 
     /**
      * In-place length-preserving Sentry DSN neutralization and Hermes bytecode SHA-1 footer
-     * re-hash. Pure Kotlin implementation matching core.py patch_js_sentry_dsn.
+     * re-hash. Pure Kotlin implementation.
      */
     fun nullifySentryDsn(bundleBytes: ByteArray): Pair<ByteArray, StepResult?> {
         val bundleString = String(bundleBytes, Charsets.ISO_8859_1)
@@ -146,8 +146,8 @@ object HermesPatcher {
 
         // The patch states the shape; the patcher does not infer it from the patch's
         // documentation text. Inferring it turned an awaiting caller's promise into
-        // `undefined` with no error reported, which is the failure mode the reference's
-        // PROMISE_TARGETS table exists to prevent.
+        // `undefined` with no error reported, which is the failure mode the recorded change
+        // set's PROMISE_TARGETS table exists to prevent.
         val stub = when (patch.stubShape) {
             HermesStubShape.UNDEFINED -> STUB_LOAD_CONST_UNDEFINED
             HermesStubShape.FALSE -> STUB_LOAD_CONST_FALSE

@@ -1,6 +1,6 @@
 package dev.sleepy.app.engine
 
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
@@ -32,12 +32,12 @@ class MergedDiscordApkTest {
      * deliberately the path that has to keep fitting.
      *
      * The output is left in `/tmp` so it can be passed to the real `zipalign` binary, which is
-     * the reference for whether the alignment is right—see
+     * the authority on whether the alignment is right—see
      * [theRealZipalignAcceptsTheMergedArchive], which makes that second claim on its own.
      */
     @Test
     fun mergedDiscordApkPassesAlignment() {
-        val extracted = ReferenceApks.discordExtracted
+        val extracted = ComparisonApks.discordExtracted
         val base = File(extracted, "base.apk")
         val splits = discordSplits(extracted)
         // An absent fixture skips the test, which JUnit reports as skipped. A `return` here
@@ -74,19 +74,20 @@ class MergedDiscordApkTest {
 
     /**
      * The user-visible claim: the merged APK is missing the resources the base split does not
-     * carry, and merging the density split puts them back—at the paths the desktop build uses.
+     * carry, and merging the density split puts them back—at the paths the recorded build uses.
      *
      * What does not come back with them is the table that names them. Every split ships a
      * partial table naming only the files it carries: this base's names its own 3,640, the
      * density split's names its 1,246, and the two sets share not one path. So the merged
-     * archive's entries and size come to match the desktop build's while those resources stay
-     * unreachable—the desktop relinks the tables with aapt2, and this repack copies files. The
+     * archive's entries and size come to match the recorded build's while those resources stay
+     * unreachable—the recorded build relinks the tables with aapt2, and this repack copies
+     * files. The
      * test below pins the file set and says nothing about resolution, because that is all the
      * merge can claim.
      */
     @Test
     fun mergedDiscordApkGainsTheDensitySplitsResources() {
-        val extracted = ReferenceApks.discordExtracted
+        val extracted = ComparisonApks.discordExtracted
         val base = File(extracted, "base.apk")
         val splits = discordSplits(extracted)
         assumeTrue(
@@ -116,8 +117,8 @@ class MergedDiscordApkTest {
             // rebuilt archive may hold rather than files this merge lost: Discord's own JS patch
             // file, superseded by the "locked bundle" patch, and `stamp-cert-sha256`, the Play
             // source stamp, which describes the signed build this one was derived from—a
-            // provenance an APK signed with a key of our own does not have, and one the desktop
-            // reference build does not carry either. Nothing else may go missing.
+            // provenance an APK signed with a key of our own does not have, and one the recorded
+            // build does not carry either. Nothing else may go missing.
             assertEquals(
                 "only the artifacts the repack drops may leave the archive",
                 setOf("assets/index.android.bundle.patch", "stamp-cert-sha256"),
@@ -134,7 +135,7 @@ class MergedDiscordApkTest {
                 gained.any { it.startsWith("res/drawable-xhdpi-v4/") }
             )
             assertTrue(
-                "the anydpi ExoPlayer aliases the desktop build restores must be in the merged APK",
+                "the anydpi ExoPlayer aliases the recorded build restores must be in the merged APK",
                 gained.any { it.startsWith("res/drawable-anydpi-v21/exo_") }
             )
 
@@ -151,7 +152,7 @@ class MergedDiscordApkTest {
     }
 
     /**
-     * The merged archive read by the real `zipalign`, which is the reference for alignment.
+     * The merged archive read by the real `zipalign`, which is the authority on alignment.
      *
      * Its own test because the binary is not part of this repository: written as a branch inside
      * the test above, a machine without the SDK prints a line nobody reads and reports the
@@ -160,14 +161,14 @@ class MergedDiscordApkTest {
      */
     @Test
     fun theRealZipalignAcceptsTheMergedArchive() {
-        val extracted = ReferenceApks.discordExtracted
+        val extracted = ComparisonApks.discordExtracted
         val base = File(extracted, "base.apk")
         val splits = discordSplits(extracted)
         assumeTrue(
             "the Discord splits are not on this machine (${extracted.path})",
             base.exists() && splits.all { it.exists() }
         )
-        val zipalign = ReferenceApks.buildTool("zipalign")
+        val zipalign = ComparisonApks.buildTool("zipalign")
         assumeTrue("zipalign is not on this machine", zipalign != null)
 
         val workDir = Files.createTempDirectory("sleepy-zipalign-test").toFile()

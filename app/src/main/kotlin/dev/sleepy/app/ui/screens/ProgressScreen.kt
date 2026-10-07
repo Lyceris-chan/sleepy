@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -50,12 +51,12 @@ import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.PatchProgress
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.ui.components.StepLogItem
+import dev.sleepy.app.ui.state.STOPPED_COPY
 import dev.sleepy.app.ui.state.ScrollMotion
 import dev.sleepy.app.ui.state.newestStepIndex
 import dev.sleepy.app.ui.state.phaseCopy
 import dev.sleepy.app.ui.state.resultActionLabel
 import dev.sleepy.app.ui.state.scrollMotionFor
-import dev.sleepy.app.ui.state.STOPPED_COPY
 import dev.sleepy.app.viewmodel.PatchViewModel
 
 /**
@@ -156,7 +157,7 @@ fun ProgressScreen(
                         onClick = onFinished,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
+                            .heightIn(min = 56.dp),
                         shape = MaterialTheme.shapes.large
                     ) {
                         Text(label, style = MaterialTheme.typography.labelLarge)
@@ -372,7 +373,7 @@ private fun StoppedCard(onExit: () -> Unit) {
                 onClick = onExit,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
+                    .heightIn(min = 48.dp),
                 shape = MaterialTheme.shapes.large
             ) {
                 Text(STOPPED_COPY.action, style = MaterialTheme.typography.labelLarge)

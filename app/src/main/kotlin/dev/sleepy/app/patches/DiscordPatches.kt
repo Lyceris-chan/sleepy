@@ -9,12 +9,12 @@ import dev.sleepy.app.model.SmaliPatch
 /**
  * Bytecode and Hermes JavaScript modifications for Discord (Alpha/Release).
  *
- * Transcribed from the reference suite in `quirky-noether/discord/patches/core.py`
- * (Discord 349.5 Alpha). Every entry here corresponds to a symbol in that file.
+ * Transcribed from the recorded change set for Discord 349.5 Alpha. Every entry here
+ * corresponds to a symbol in it.
  *
- * This object is the **core** subset, not the whole reference suite. The remaining smali
- * edits live in [DiscordNativePatches]. The manifest edits the reference makes by rewriting
- * text are here as the facts they match on—element names, attribute values, component
+ * This object is the **core** subset, not the whole recorded change set. The remaining smali
+ * edits live in [DiscordNativePatches]. The manifest edits the recorded change set makes by
+ * rewriting text are here as the facts they match on—element names, attribute values, component
  * names—and are applied by `BinaryXmlEditor`, which edits the compiled document rather than
  * the text form, which is not available to an on-device patcher. The resource table is rebuilt
  * by `ResourceTableMerger` for the same reason. Hermes function ids are per-bundle and shift on
@@ -191,16 +191,17 @@ object DiscordPatches {
     /**
      * The JavaScript stub catalog.
      *
-     * Each entry corresponds to one reference table membership and names the function and the
-     * value its stub returns. The pipeline does **not** apply these entries directly: a Hermes
-     * function id is only meaningful for the bundle it was taken from, and these ids are pinned to
-     * Discord 349.5. What runs is [DiscordHermesBundlePatch], whose entries were extracted from
-     * a paired base/patched bundle of that release, apart from two that edit the React Compiler
-     * copy of the profile components, which the reference leaves alone. They are applied only
-     * when the target bundle's byte length matches the reference bundle's.
+     * Each entry corresponds to one membership of the recorded change set's tables and names the
+     * function and the value its stub returns. The pipeline does **not** apply these entries
+     * directly: a Hermes function id is only meaningful for the bundle it was taken from, and
+     * these ids are pinned to Discord 349.5. What runs is [DiscordHermesBundlePatch], whose entries
+     * were extracted from a paired base/patched bundle of that release, apart from two that edit
+     * the React Compiler copy of the profile components, which the recorded change set leaves
+     * alone. They are applied only when the target bundle's byte length matches the recorded
+     * bundle's.
      *
      * This object is kept because it records why each function is stubbed, which the extracted
-     * bodies cannot, so the entries can be checked against the reference tables.
+     * bodies cannot, so the entries can be checked against the recorded change set's tables.
      */
     val HERMES = PatchSet(
         id = "discord_hermes",
@@ -372,7 +373,7 @@ object DiscordPatches {
      * Files that carry the crash reporter rather than call it, which cannot be neutralized by
      * editing code.
      *
-     * The reference build deletes these alongside stubbing the Sentry SDK. The native shared
+     * The recorded build deletes these alongside stubbing the Sentry SDK. The native shared
      * objects install the signal handlers, and the SDK writes its tombstone through the
      * `unknown/` paths, so leaving them in place leaves the mechanism intact even when every Java
      * entry point is stubbed.
@@ -422,8 +423,8 @@ object DiscordPatches {
     )
 
     /**
-     * The permissions this build declares and has no live code behind, so the reference strips them
-     * from every build it makes.
+     * The permissions this build declares and has no live code behind, so the recorded change set
+     * strips them from every build it makes.
      *
      * These are not a preference, so adding a permission to this list is a decision about the app
      * rather than a switch over it: each was checked against the patched tree before being written
@@ -466,14 +467,15 @@ object DiscordPatches {
     data class ManifestComponent(val element: String, val name: String)
 
     /**
-     * The Google Analytics components the reference build switches off.
+     * The Google Analytics components the recorded build switches off.
      *
      * Google Analytics is inert in this app: the SDK's classes ship in the dex and its components
      * are declared, but every tracker initialization site is on a code path the patches have
-     * already cut. The reference sets `android:enabled="false"` on all three rather than deleting
-     * the declarations, and that is the reason for disabling rather than deleting: the platform
-     * does not instantiate a disabled component, so the broadcast is not delivered to the receiver and the
-     * JobService is not bound, while the manifest still describes the classes the dex holds.
+     * already cut. The recorded change set disables all three with `android:enabled="false"`
+     * rather than deleting the declarations, and that is the reason for disabling rather than
+     * deleting: the platform does not instantiate a disabled component, so the broadcast is not
+     * delivered to the receiver and the JobService is not bound, while the manifest still
+     * describes the classes the dex holds.
      */
     val GOOGLE_ANALYTICS_COMPONENTS = listOf(
         ManifestComponent(
@@ -496,7 +498,7 @@ object DiscordPatches {
     /**
      * The service that publishes Discord's Rich Presence to other applications on the device.
      *
-     * The reference build closes it because it is exported with no permission and checks nothing
+     * The recorded build closes it because it is exported with no permission and checks nothing
      * about the caller, so any installed app can bind it and push arbitrary presence frames as the
      * user. See [dev.sleepy.app.engine.DiscordManifestEdits] for why this one carries no switch.
      */

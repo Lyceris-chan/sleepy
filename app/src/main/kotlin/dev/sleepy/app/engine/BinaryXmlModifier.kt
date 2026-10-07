@@ -141,6 +141,20 @@ object BinaryXmlModifier {
         if (renames.isEmpty()) return manifestBytes
 
         val pool = readPoolChunk(buf, poolOffset)
+        // The pool's declared ranges are read straight out of the document and are used below as
+        // slice bounds, so a pool that says it is larger than the file, or that its string data
+        // starts past the end of itself, would either take a slice past the end of the document
+        // or zero-pad one out to gigabytes. A document whose pool does not describe itself is
+        // left alone, which is the answer this returns for every other pool it cannot account
+        // for.
+        val poolEnd = pool.offset.toLong() + pool.size
+        if (pool.size < 0 || pool.stringsStart < 0 || pool.stylesStart < 0 ||
+            poolEnd > manifestBytes.size ||
+            pool.offset.toLong() + pool.stringsStart > poolEnd ||
+            (pool.stylesStart > 0 && pool.offset.toLong() + pool.stylesStart > poolEnd)
+        ) {
+            return manifestBytes
+        }
         // The appended entries are numbered from the end of the pool as the *header* counts it, so
         // a pool that did not decode in full puts them on top of entries that are still
         // referenced. Nothing is renamed until every index is accounted for.

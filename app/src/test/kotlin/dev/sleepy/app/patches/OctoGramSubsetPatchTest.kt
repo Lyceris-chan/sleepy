@@ -16,7 +16,7 @@ import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.model.SelectivePatchGenerator
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.model.TargetApk
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.dexEntries
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -36,7 +36,7 @@ import org.junit.Test
  */
 class OctoGramSubsetPatchTest {
 
-    private val apkFile = ReferenceApks.octoGram361Arm64
+    private val apkFile = ComparisonApks.octoGram361Arm64
 
     /** The twelve methods of `cn8` that write the log, by name. */
     private val emitters = listOf("a", "b", "d", "e", "f", "g", "h", "k", "m", "n", "o", "p")
@@ -322,8 +322,9 @@ class OctoGramSubsetPatchTest {
     }
 
     /**
-     * The three business edits: the profile row's branch and the two command slugs become jumps at
-     * the sites the reference names, and the rest of each method keeps its instruction counts.
+     * The three business edits: the profile row's branch and the two command slugs become jumps
+     * at the sites the recorded change set names, and the rest of each method keeps its
+     * instruction counts.
      */
     @Test
     fun theBusinessEditsTurnExactlyFourBranchesIntoJumps() = runBlocking {

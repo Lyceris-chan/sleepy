@@ -1,7 +1,7 @@
 package dev.sleepy.app.engine
 
 import dev.sleepy.app.engine.BinaryXmlEditor.ElementSelector
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.assertTilesExactly
 import dev.sleepy.app.testing.chunksOf
 import dev.sleepy.app.testing.endTag
@@ -31,9 +31,9 @@ import org.junit.Test
  */
 class ManifestPermissionRemovalTest {
 
-    private val discordApk = ReferenceApks.discordBaseApk
+    private val discordApk = ComparisonApks.discordBaseApk
 
-    private val octoGramApk = ReferenceApks.octoGram361Arm64
+    private val octoGramApk = ComparisonApks.octoGram361Arm64
 
     private fun declared(xml: ByteArray): List<String> = BinaryXmlEditor.readElementAttributeValues(
         xml = xml,
@@ -308,7 +308,7 @@ class ManifestPermissionRemovalTest {
         // The external parser is a tool rather than a fixture of this repository: without it
         // the test is reported as skipped. The check it makes is the only independent reading
         // of the edited document, so "did not run" must not look like "passed".
-        val aapt2 = ReferenceApks.buildTool("aapt2")
+        val aapt2 = ComparisonApks.buildTool("aapt2")
         assumeTrue("aapt2 is not installed on this machine", aapt2 != null)
 
         val removed = listOf("android.permission.CAMERA", "android.permission.READ_CONTACTS")

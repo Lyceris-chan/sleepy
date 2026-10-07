@@ -57,7 +57,7 @@ import kotlinx.coroutines.withContext
  * native libraries and a 131 MB result, and no two of those are held as bytes at the same time:
  * the download lands in [Context.getCacheDir], the split libraries are merged out to files
  * there, and the archive is rebuilt and signed file to file. That is what keeps the peak
- * inside the heap a phone grants an app rather than the 3 GB a desktop test JVM can be given.
+ * inside the heap a phone grants an app rather than the 3 GB a build machine's JVM can be given.
  */
 class PatchingPipeline(private val context: Context) {
 
@@ -279,7 +279,7 @@ class PatchingPipeline(private val context: Context) {
                             "screen densities it covers, and the base split carries none of " +
                             "them: an App Bundle installs them side by side, and the platform " +
                             "draws each one from whichever split holds it. This puts those files " +
-                            "back at the paths the desktop build's merged APK has them at, " +
+                            "back at the paths its merged APK has them at, " +
                             "which is what the resource table rebuilt just below then points at.",
                         technicalTarget = "$mergedResources resources, " +
                             "~${mergedResourceBytes / (1024 * 1024)} MB",
@@ -608,8 +608,8 @@ class PatchingPipeline(private val context: Context) {
                         explanation = "Discord's JavaScript drives its analytics, its crash " +
                             "reporting and the promotional screens that keep appearing. Each " +
                             "function below was replaced with one that returns a neutral value, " +
-                            "using the same bytes the desktop " +
-                            "reference build produces for this release.",
+                            "using the same bytes the recorded build produces for this " +
+                            "release.",
                         technicalTarget = buildString {
                             append("${outcome.writtenInPlace.size} rewritten in place")
                             if (outcome.relocated.isNotEmpty()) append(", " +
@@ -876,7 +876,7 @@ class PatchingPipeline(private val context: Context) {
                             "switched off rather than deleted because the SDK's classes are " +
                             "still in the dex—android:enabled=\"false\" is what the platform " +
                             "reads to leave a declared component uninstantiated, " +
-                            "and it is the edit the reference makes.",
+                            "and that is the edit made here.",
                         technicalTarget = "$analyticsFound of " +
                             "${analyticsLabels.size} components, android:enabled=false",
                         status = if (analyticsDisabled) StepStatus.OK else StepStatus.SKIP,
@@ -1080,6 +1080,7 @@ class PatchingPipeline(private val context: Context) {
         // still live.
         val rebuiltApk = File(workDir, "rebuilt.apk")
         val repack = FileOutputStream(rebuiltApk).use { output ->
+            currentCoroutineContext().ensureActive()
             ZipRepacker.repackTo(
                 inputApk = sourceApk,
                 output = output,
@@ -1108,6 +1109,7 @@ class PatchingPipeline(private val context: Context) {
         // it is copied by the filesystem rather than by the heap.
         _progress.value = PatchProgress.Signing("Signing the APK")
         val outputFile = File(context.cacheDir, "sleepy_patched_${System.currentTimeMillis()}.apk")
+        currentCoroutineContext().ensureActive()
         ApkSignerHelper.sign(context, rebuiltApk, outputFile)
         log(
             StepResult(
@@ -1366,6 +1368,9 @@ class PatchingPipeline(private val context: Context) {
             // as files and the split itself is deleted on the way out of this call, so a table
             // not read here has to be downloaded again.
             val table = extractEntry(splitApk, RESOURCE_TABLE_ENTRY)
+            // The merge copies the split's entries out to files one at a time, which for an ABI
+            // split is 74 MB of blocking copy with no suspension point inside it.
+            currentCoroutineContext().ensureActive()
             return FetchedSplit(SplitMerger.mergeSplitToDir(splitApk, workDir), table)
         } finally {
             splitApk.delete()

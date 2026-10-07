@@ -24,7 +24,7 @@ import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.patches.PatchRegistry
 import dev.sleepy.app.patches.PermissionCatalog
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.sourceFile
 import dev.sleepy.app.util.HashUtils
 import java.io.BufferedInputStream
@@ -43,7 +43,7 @@ import org.junit.Test
 
 /**
  * Tooling: runs the pipeline's steps over the local Discord 349.5 fixtures and writes the
- * resulting APK to a file for comparison with the desktop reference build.
+ * resulting APK to a file for comparison with the recorded build.
  *
  * This class is not a unit test. It reproduces `PatchingPipeline.execute` with the two steps that
  * need a `Context` replaced by file operations, so the artifact this app produces can be
@@ -139,7 +139,7 @@ class PatchingPipelineHarnessTest {
 
     @Test
     fun buildsTheDiscordAlpha3495ApkTheWayPatchingPipelineDoes() = runBlocking {
-        val extracted = ReferenceApks.discordExtracted
+        val extracted = ComparisonApks.discordExtracted
         val baseApk = File(extracted, "base.apk")
         val splits = SOURCE_SPLITS.map { File(extracted, it) }
         assumeTrue(
@@ -150,7 +150,7 @@ class PatchingPipelineHarnessTest {
 
         println("Heap: max ${Runtime.getRuntime().maxMemory() / (1024 * 1024)} MB")
 
-        val outputDir = ReferenceApks.harnessOutputDir.apply { mkdirs() }
+        val outputDir = ComparisonApks.harnessOutputDir.apply { mkdirs() }
         val outputFile = File(outputDir, "ours.apk")
         // `PatchingPipeline.start` owns a scratch directory for the job and deletes it on the way
         // out. The same directory here, left in place afterward so a follow-up diff can read the
@@ -270,7 +270,7 @@ class PatchingPipelineHarnessTest {
                     StepResult(
                         title = "Merged the resources the base split was missing",
                         explanation = "The density and language splits' res/ trees, put back at " +
-                            "the paths the desktop build's merged APK has them at.",
+                            "the paths the merged APK has them at.",
                         technicalTarget = "$mergedResources resources, " +
                             "~${mergedResourceBytes / (1024 * 1024)} MB",
                         status = StepStatus.OK
@@ -886,7 +886,7 @@ class PatchingPipelineHarnessTest {
         )
         assertNotNull("the resource table must have been rebuilt", mergedResourceTable)
         // A patch step that failed means an edit did not land, which is exactly the kind of
-        // divergence this run exists to surface. The signature step is excluded because an
+        // difference this run exists to surface. The signature step is excluded because an
         // unsigned artifact is the ask, and the Hermes step because its own verdict—how many
         // JavaScript functions were skipped—is reported above rather than asserted away.
         val patchFailures = log.filter {
@@ -896,8 +896,8 @@ class PatchingPipelineHarnessTest {
         }
         assertTrue("no patch step may fail, failures: $patchFailures", patchFailures.isEmpty())
 
-        // ------------------------------------------------- against the desktop reference build
-        // The three ways this artifact used to differ from the desktop build, read back off the
+        // ------------------------------------------------- against the recorded build
+        // The three ways this artifact used to differ from the recorded build, read back off the
         // finished file rather than off the plan that produced it: a plan that asked for an edit
         // is not the same claim as an archive that carries it.
         val shippedEntries = ZipFile(outputFile).use { zip ->
@@ -916,7 +916,7 @@ class PatchingPipelineHarnessTest {
             survivedTheDrop.isEmpty()
         )
         // The source stamp is not in the drop list any caller supplies: the repack leaves it out
-        // because the reference build does, and a rebuilt APK has no provenance to stamp.
+        // because the recorded build does, and a rebuilt APK has no provenance to stamp.
         assertTrue(
             "a repacked APK must carry no source stamp",
             "stamp-cert-sha256" !in shippedEntries
@@ -977,7 +977,7 @@ class PatchingPipelineHarnessTest {
         )
 
         // 5. The Google Analytics components are still declared and switched off, which is the
-        //    shape the reference build has: disabling a component is not the same edit as removing
+        //    shape the recorded build has: disabling a component is not the same edit as removing
         //    one, so both halves of it are asserted—the three elements are in the packaged
         //    manifest, and the pass that produced it found all three and rewrote the flag.
         val shippedComponents = listOf(

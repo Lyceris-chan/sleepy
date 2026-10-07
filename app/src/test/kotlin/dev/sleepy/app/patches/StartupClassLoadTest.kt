@@ -6,7 +6,7 @@ import com.android.tools.smali.dexlib2.DexFileFactory
 import com.android.tools.smali.dexlib2.Opcodes
 import dev.sleepy.app.engine.DexProcessor
 import dev.sleepy.app.model.StepStatus
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.dexEntries
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -23,7 +23,7 @@ import org.junit.Test
  * instance read that loads the class, the `init` call and the experiment-flag call - and the edit
  * removes all three, so nothing in the class references the recorder. The timing label
  * `"JankSessionRecorder.init()"` is a string, not a reference, and is asserted to survive:
- * removing it would be an edit the reference does not make.
+ * removing it would be an edit the recorded change set does not make.
  *
  * `CrashReporting.<clinit>` is rewritten to build its list of ignorable network exceptions from a
  * zero-length array. The assertions read the initializer back out of the class, so the reflective
@@ -66,7 +66,7 @@ class StartupClassLoadTest {
 
     @Test
     fun theLaunchPathStopsLoadingBothClasses() = runBlocking {
-        val baseApk = ReferenceApks.discordBaseApk
+        val baseApk = ComparisonApks.discordBaseApk
         assumeTrue("the Discord fixtures are not on this machine (${baseApk.path})", baseApk.isFile)
 
         val dexEntries = dexEntries(baseApk)

@@ -5,7 +5,7 @@ import dev.sleepy.app.patches.DeclaredPermissions
 import dev.sleepy.app.patches.DiscordNativePatches
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PermissionCatalog
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.assertTilesExactly
 import dev.sleepy.app.testing.chunksOf
 import dev.sleepy.app.testing.manifestOf
@@ -29,9 +29,9 @@ import org.junit.Test
  */
 class DiscordManifestEditsTest {
 
-    private val discordApk = ReferenceApks.discordBaseApk
+    private val discordApk = ComparisonApks.discordBaseApk
 
-    private val octoGramApk = ReferenceApks.octoGram361Arm64
+    private val octoGramApk = ComparisonApks.octoGram361Arm64
 
     /** The application the edits were written for, and one they were not. */
     private val DISCORD = DiscordManifestEdits.PACKAGE_NAME
@@ -435,7 +435,7 @@ class DiscordManifestEditsTest {
      */
     @Test
     fun aapt2SeesExactlyTheseEditsAndNothingElse() {
-        val aapt2 = ReferenceApks.buildTool("aapt2")
+        val aapt2 = ComparisonApks.buildTool("aapt2")
         assumeTrue("aapt2 is not installed on this machine", aapt2 != null)
 
         val original = manifestOf(discordApk)

@@ -1,6 +1,6 @@
 package dev.sleepy.app.engine
 
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.assertTilesExactly
 import dev.sleepy.app.testing.manifestAttributes
 import dev.sleepy.app.testing.manifestClassNames
@@ -29,7 +29,7 @@ import org.junit.Test
  */
 class PackageRenameTest {
 
-    private val discordApk = ReferenceApks.discordBaseApk
+    private val discordApk = ComparisonApks.discordBaseApk
 
     @Test
     fun movesTheApplicationIdAndLeavesEveryOtherStringWhereItWas() {
@@ -202,7 +202,7 @@ class PackageRenameTest {
     fun aapt2ReadsTheRenamedManifest() {
         // The external parser is a tool rather than a fixture of this repository: without it the
         // test is reported as skipped, because "did not run" must not look like "passed".
-        val aapt2 = ReferenceApks.buildTool("aapt2")
+        val aapt2 = ComparisonApks.buildTool("aapt2")
         assumeTrue("aapt2 is not installed on this machine", aapt2 != null)
 
         val renamed = BinaryXmlModifier.modifyPackageName(

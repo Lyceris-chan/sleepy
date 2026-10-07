@@ -62,7 +62,7 @@ jobs:
         run: chmod +x gradlew
 
       # The patcher engine tests self-check the ZIP alignment math and the binary-XML
-      # attribute editor. A test that needs a local reference APK reports itself as skipped when
+      # attribute editor. A test that needs one of the source APKs reports itself as skipped when
       # the file is absent, never as a pass and never as a failure, so a clean runner runs what
       # it can; the skipped count in the report shows how much of the suite did not run here.
       - name: Run unit tests
@@ -125,6 +125,11 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           TAG: ${{ steps.vars.outputs.tag }}
+          # Outside build-out, which is uploaded whole: a certificate dump is not a release asset.
+          CERTS: ${{ runner.temp }}/certs.txt
+          # Read from the environment rather than substituted into the script text, so a secret
+          # is never parsed as shell.
+          EXPECTED: ${{ secrets.RELEASE_CERT_SHA256 }}
         run: |
           set -euo pipefail
           mkdir -p build-out
@@ -165,7 +170,25 @@ jobs:
           rm -f release.jks
 
           # Verify rather than assume, and fail the release if the signature is bad.
-          "$APKSIGNER" verify --verbose --print-certs "$SIGNED_APK"
+          "$APKSIGNER" verify --verbose --print-certs "$SIGNED_APK" | tee "$CERTS"
+
+          # A valid signature is not the same as our signature. An APK signed by any other key
+          # verifies, so without this the workflow would publish it. The expected digest lives in
+          # a repository secret rather than here, because a fingerprint written into the file it
+          # checks proves nothing.
+          #
+          # An unset secret is reported as unchecked rather than as a pass: the release still
+          # publishes, and the warning is on the run. Setting the secret turns the check on.
+          if [ -z "$EXPECTED" ]; then
+            echo "::warning::RELEASE_CERT_SHA256 is not set, so the release signer was not checked against the expected identity. Set it to the SHA-256 of the release certificate."
+          else
+            ACTUAL=$(grep -oE 'SHA-256 digest: [0-9a-f]+' "$CERTS" | head -1 | awk '{print $3}')
+            if [ "$ACTUAL" != "$EXPECTED" ]; then
+              echo "::error::the release is signed by $ACTUAL, not by the expected $EXPECTED"
+              exit 1
+            fi
+            echo "Signed by the expected key: $ACTUAL"
+          fi
 
           sha256sum "$SIGNED_APK" | tee build-out/sha256.txt
 

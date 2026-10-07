@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,6 +70,7 @@ import dev.sleepy.app.ui.theme.statusColors
 import dev.sleepy.app.util.FileUtils
 import dev.sleepy.app.viewmodel.PatchViewModel
 import java.io.File
+import kotlinx.coroutines.launch
 
 /**
  * The end of a patch run.
@@ -96,6 +98,7 @@ fun ResultScreen(
     // Saved rather than remembered: a rotation between the save and the reader seeing the
     // confirmation must not drop the message that states where the file went.
     var savedMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val presentation = resultPresentation((progress as? PatchProgress.Done)?.report?.outcome)
 
     Scaffold(
@@ -143,17 +146,28 @@ fun ResultScreen(
                         sourceName = source?.displayName ?: "The application",
                         savedMessage = savedMessage,
                         onSave = {
-                            val apkFile = File(p.outputUri.path ?: "")
-                            val targetName = "${source?.id ?: "sleepy"}_patched.apk"
-                            val savedUri =
-                                FileUtils.saveApkToDownloads(context, apkFile, targetName)
-                            if (savedUri != null) {
-                                savedMessage = "Saved to Downloads/sleepy/$targetName"
-                                Toast.makeText(context, "Saved to Downloads!", Toast.LENGTH_LONG)
-                                    .show()
-                            } else {
-                                Toast.makeText(context, "Failed to save file", Toast.LENGTH_SHORT)
-                                    .show()
+                            // The copy is over a hundred megabytes and runs on the IO dispatcher,
+                            // so the save is launched rather than called inline.
+                            scope.launch {
+                                val apkFile = File(p.outputUri.path ?: "")
+                                val targetName = "${source?.id ?: "sleepy"}_patched.apk"
+                                val savedUri = FileUtils.saveApkToDownloads(
+                                    context, apkFile, targetName
+                                )
+                                if (savedUri != null) {
+                                    savedMessage = "Saved to Downloads/sleepy/$targetName"
+                                    Toast.makeText(
+                                        context, "Saved to Downloads!", Toast.LENGTH_LONG
+                                    ).show()
+                                } else {
+                                    // Android 9 and earlier refuse the public Downloads write
+                                    // without a storage grant, which this app does not ask for.
+                                    Toast.makeText(
+                                        context,
+                                        "Could not save to Downloads. Use Share instead.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }
                         },
                         onShare = {
@@ -196,7 +210,7 @@ fun ResultScreen(
                     onClick = onRetry,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
+                        .heightIn(min = 56.dp),
                     shape = MaterialTheme.shapes.large
                 ) {
                     Icon(
@@ -299,7 +313,7 @@ private fun BuildSuccessContent(
         onClick = onSave,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .heightIn(min = 56.dp),
         shape = MaterialTheme.shapes.large
     ) {
         Icon(
@@ -315,7 +329,7 @@ private fun BuildSuccessContent(
         onClick = onShare,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .heightIn(min = 56.dp),
         shape = MaterialTheme.shapes.large
     ) {
         Icon(

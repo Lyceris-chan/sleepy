@@ -1,41 +1,52 @@
 package dev.sleepy.app.patches
 
 /**
- * The Discord JavaScript bundle patch set, extracted from the reference desktop build's paired
+ * The Discord JavaScript bundle patch set, extracted from the recorded build's paired
  * Discord 349.5 APKs: the base split at `build/alpha3495/apk/extracted/base.apk` and the patched
- * `build/alpha3495/out/discord-alpha-349.5-patched-unsigned.apk`, both under the
- * `quirky-noether/discord` checkout.
+ * `build/alpha3495/out/discord-alpha-349.5-patched-unsigned.apk`.
  *
  * Most entries are a whole function body taken from that pair: the base supplies the function's
- * size, and the patched build supplies its replacement bytes. The set covers the 204 functions
- * that differ between the two, and applying it reproduces 202 of them byte for byte. The other
- * two, 49956 and 58239, carry a deliberate divergence. The reference stubs both to `undefined`,
- * and the one caller of each function dereferences that return: 49956's caller reads `.result`
- * and 58239's caller reads `.length`. Both reads throw a TypeError on `undefined`, so the
- * reference's own stub throws in the shipped app wherever those paths run. The replacements here
- * return a value of the shape the caller reads instead, and `HermesBundleParityTest` carries a
- * named exception for the two ids that checks each divergence in both directions. The bodies are
- * otherwise the reference build's own output, not a reconstruction of it.
+ * size, and the patched build supplies its replacement bytes. The set names 209 functions, and 203
+ * of them are written to the bytes that build ships. The bodies are the recorded build's own
+ * output, not a reconstruction of it.
  *
- * Two entries are not from that pair. 75719 and 62409 are the React Compiler copies of the two
- * profile content components, which the reference leaves unpatched, so their replacements are
- * this build's own edits to the base body. Each takes the tab list down to Main and Activity: the
- * branch guarding the Board tab is pointed at a register holding `undefined`, and the Wishlist tab
- * is dropped the same way where its push is guarded, or by replacing the unguarded push with a
- * jump over it. Both edits keep the body's size and instruction layout, so both are written in
- * place. `HermesBundleParityTest` carries a named exception for these two ids as well, against the
- * base body the reference still holds.
+ * Six entries carry a deliberate difference, and [HermesBundleComparisonTest] holds a named exception
+ * for each that checks the difference in both directions.
+ *
+ * Two of the six are stubs the recorded change set gets wrong. The recorded change set stubs 49956
+ * and 58239 to `undefined`, and the one caller of each dereferences that return: 49956's caller
+ * reads `.result` and 58239's caller reads `.length`. Both reads throw a TypeError on `undefined`,
+ * so the recorded build's own stub throws in the shipped app wherever those paths run. The
+ * replacements here return a value of the shape the caller reads instead.
+ *
+ * The other four are surfaces the recorded change set leaves reachable. 75719 and 62409 are the
+ * React Compiler copies of the two profile content components, which the recorded change set never
+ * edits, so a flip of the React Compiler experiment brings the Board and Wishlist tabs back. Each
+ * takes the tab list down to Main and Activity: the branch guarding the Board tab is pointed at a
+ * register holding `undefined`, and the Wishlist tab is dropped the same way where its push is
+ * guarded, or by replacing the unguarded push with a jump over it.
+ *
+ * 45447 and 45448 are the two branches of `useIsShopThisLookMobileEnabled`, the Apex experiment
+ * gate in `modules/collectibles/experiments/ShopThisLookMobileExperiment.tsx`. The recorded change
+ * set removes the sheet and the coachmark and deliberately leaves the opener alone, because the
+ * opener's body is deduplicated with an unrelated display-name sheet, so the row that opens an
+ * empty sheet is still built and still on screen. Answering false at the gate takes the menu row,
+ * the coachmark and the sheet together: the overflow menu is the opener's only caller, and it
+ * builds that row only when the gate says yes.
+ *
+ * All four keep their body's instruction layout, so all four are written in place.
  *
  * The set is encoded as data rather than derived from the shapes in [DiscordPatches]. A
  * promise-shaped stub must name "Promise" and "resolve" through the bundle's own string
  * identifiers, which are not the string-table indices and are not resolvable without the
- * identifier table, and the feature-removal edits are whole-body replacements that the reference's
- * own assembler produced. [DiscordPatches] derives the smaller stubs, whose shape the reference's
- * tables describe.
+ * identifier table, and the feature-removal edits are whole-body replacements that the recorded
+ * change set's own assembler produced. [DiscordPatches] derives the smaller stubs, whose shape the
+ * recorded change set's tables describe.
  *
- * Five entries need relocation rather than an in-place write: the replacement bodies at 14786,
- * 14790, 14797 and 15698 are longer than the body they replace, and 62046 shares its body with
- * 62045, which takes the shared region. See [dev.sleepy.app.engine.HermesBundlePatcher] for how
+ * Seven entries need relocation rather than an in-place write: 7762, 14786, 14790, 14797, 15698,
+ * 62046 and 71516. The first five have replacements longer than the body they replace, and the
+ * last two share a body with another entry - 62046 with 62045, 71516 with 71528 - so only one of
+ * each pair can take the shared region. See [dev.sleepy.app.engine.HermesBundlePatcher] for how
  * relocation works.
  */
 object DiscordHermesBundlePatch {
@@ -148,6 +159,8 @@ object DiscordHermesBundlePatch {
         FunctionPatch(45217, "", 461, "96007e7600"),
         FunctionPatch(45218, "", 247, "96007e7e7e7600"),
         FunctionPatch(45222, "", 201, "96007e7600"),
+        FunctionPatch(45447, "useIsShopThisLookMobileEnabled", 101, "96007e7600"),
+        FunctionPatch(45448, "useIsShopThisLookMobileEnabled", 39, "96007e7600"),
         FunctionPatch(45460, "_maybeFetchProductsBySkuIds", 61, "3d00480100001e00450001008c016c0000017e7600"),
         FunctionPatch(45488, "", 260, "94007600"),
         FunctionPatch(45489, "", 107, "94007e7e7e7600"),

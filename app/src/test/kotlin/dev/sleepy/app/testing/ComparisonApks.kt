@@ -5,7 +5,7 @@ import java.io.File
 /**
  * The build outputs and tools this suite reads that are not in the repository.
  *
- * The defaults are the desktop checkout the fixtures were extracted from. A machine that has
+ * The defaults are the checkout the fixtures were recorded from. A machine that has
  * them elsewhere sets `SLEEPY_FIXTURES_ROOT` to a directory holding:
  *
  * ```
@@ -21,7 +21,7 @@ import java.io.File
  * install beside this checkout. Tests that need a file or tool that is not installed report
  * themselves as skipped rather than passing without having read anything.
  */
-object ReferenceApks {
+object ComparisonApks {
 
     private val fixturesRoot: File? = System.getenv("SLEEPY_FIXTURES_ROOT")?.let(::File)
 
@@ -37,20 +37,20 @@ object ReferenceApks {
     /** The Discord 349.5 base split. */
     val discordBaseApk: File = File(discordExtracted, "base.apk")
 
-    /** The desktop build's patched Discord 349.5 APK, the parity reference. */
-    val discordReferenceApk: File = external(
+    /** The recorded build's patched Discord 349.5 APK, used as the comparison build. */
+    val discordRecordedApk: File = external(
         "discord/out/discord-alpha-349.5-patched-unsigned.apk",
         "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3495/out/" +
             "discord-alpha-349.5-patched-unsigned.apk"
     )
 
-    /** The desktop build's decompiled tree for Discord 349.5. */
+    /** The recorded build's decompiled tree for Discord 349.5. */
     val discordDecompiledBase: File = external(
         "discord/decompiled/base",
         "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3495/decompiled/base"
     )
 
-    /** The reference build's Hermes disassembler. */
+    /** The recorded build's Hermes disassembler. */
     val hermesDecomp: File = external(
         "discord/tools/hermes-decomp",
         "/home/sleepy/Documents/antigravity/quirky-noether/discord/tools/hermes-decomp"

@@ -108,13 +108,17 @@ val MaterialTheme.statusColors: SleepyStatusColors
  * @param darkTheme If true, builds the dark scheme. If false, builds the light scheme. Defaults
  *   to the system setting.
  * @param dynamicColor If true, derives colors from the device wallpaper on Android 12 and later.
- *   If false, or on earlier versions, uses the fixed sleepy scheme. Defaults to true.
+ *   If false, or on earlier versions, uses the fixed sleepy scheme. Defaults to false: the
+ *   fixed scheme is the one whose contrast is checked in `OutlineContrastTest`, and a
+ *   wallpaper-derived one is not, so accessibility would otherwise depend on the user's
+ *   wallpaper. Set it to true only where a caller has its own reason to prefer the system
+ *   palette.
  * @param content The composable content that is drawn inside the theme.
  */
 @Composable
 fun SleepyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current

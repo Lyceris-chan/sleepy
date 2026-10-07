@@ -12,7 +12,7 @@ import org.junit.rules.TemporaryFolder
 /**
  * How the fixture readers treat an absent fixture and one that is present but wrong.
  *
- * The reference APKs are build outputs outside the repository. On a machine without them a reader
+ * The recorded APKs are build outputs outside the repository. On a machine without them a reader
  * reports the test as skipped, which JUnit records as a skip rather than a failure, so the suite
  * passes on a clean runner and the skipped count shows what did not run. A file that is present
  * and cannot be read is a different situation: it fails, because a skip there would hide a broken

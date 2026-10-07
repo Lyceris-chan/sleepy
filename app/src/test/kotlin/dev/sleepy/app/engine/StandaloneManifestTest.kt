@@ -1,6 +1,6 @@
 package dev.sleepy.app.engine
 
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -71,7 +71,7 @@ class StandaloneManifestTest {
      */
     @Test
     fun standaloneManifestOnRealDiscordSplit() {
-        val apkFile = File(ReferenceApks.discordExtracted, "base.apk")
+        val apkFile = File(ComparisonApks.discordExtracted, "base.apk")
         assumeTrue("${apkFile.path} is not on this machine", apkFile.exists())
 
         val zip = ZipFile(apkFile)

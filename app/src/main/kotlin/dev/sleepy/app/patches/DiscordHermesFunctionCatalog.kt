@@ -7,29 +7,29 @@ import dev.sleepy.app.patches.DiscordHermesBundlePatch.FunctionPatch
 /**
  * What every function in [DiscordHermesBundlePatch.PATCHES] does to the app, in the user's terms.
  *
- * The Hermes set is one switch over 207 functions, which is too coarse for the choices a
+ * The Hermes set is one switch over 209 functions, which is too coarse for the choices a
  * user can make: "hide the gift button but keep quests" is not expressible when both live behind
  * the same switch. This table supplies the per-item list for those functions: each function's
  * feature group, and a line stating what patching it does.
  *
- * The entries come from the desktop reference's own 349.5 tables in
- * `quirky-noether/discord/patches/core.py` (TARGETS, PROMISE_TARGETS, FALSE_TARGETS, ZERO_TARGETS,
- * NULL_TARGETS, OBJECT_FALSE_TARGETS and the EDITS list), whose comments describe what each id is
- * and what shape its stub has to return. The descriptions this file carried for 348.5 are mapped
- * onto the 349.5 ids by the reference's own id rewrites, by function name where the name survives,
- * and by module and closure chain for the components the React Compiler emitted twice; both halves
- * of a pair carry the same description. Entries are in [DiscordHermesBundlePatch.PATCHES] order
+ * The entries come from the recorded change set's own 349.5 tables (TARGETS, PROMISE_TARGETS,
+ * FALSE_TARGETS, ZERO_TARGETS, NULL_TARGETS, OBJECT_FALSE_TARGETS and the EDITS list), whose
+ * comments describe what each id is and what shape its stub has to return. The descriptions this
+ * file carried for 348.5 are mapped onto the 349.5 ids by the recorded change set's own id
+ * rewrites, by function name where the name survives, and by module and closure chain for the
+ * components the React Compiler emitted twice; both halves of a pair carry the same description.
+ * Entries are in [DiscordHermesBundlePatch.PATCHES] order
  * and cover its function ids; a test asserts both, because a function that this table describes
  * but the patch table does not carry, or one the patch table carries and this table does not
  * describe, is a mismatch the test reports.
  *
- * Five entries are grouped under STALE: the reference's 349.5 table kept those ids from 348.5
- * without retargeting them at the functions the 348.5 entries named, and the desktop build stubbed
- * whatever function sits at each id now. Those entries state the function the id actually holds in
- * 349.5 and what the stub does to it, checked against the bundle's bytecode, instead of repeating
- * an explanation that no longer fits.
+ * Five entries are grouped under STALE: the recorded change set's 349.5 table kept those ids from
+ * 348.5 without retargeting them at the functions the 348.5 entries named, and the recorded build
+ * stubbed whatever function sits at each id now. Those entries state the function the id actually
+ * holds in 349.5 and what the stub does to it, checked against the bundle's bytecode, instead of
+ * repeating an explanation that no longer fits.
  * Three more entries (the anonymous NetworkStats callbacks at 40426-40428) state what the body at
- * the id does, because the reference lists them without names.
+ * the id does, because the recorded change set lists them without names.
  *
  * Function ids identify an entry, and names do not: this bundle has several functions with the
  * same name. The names also change on every release, so they are labels on an item and not its key
@@ -52,7 +52,7 @@ object DiscordHermesFunctionCatalog {
     /**
      * One thing a user can switch on, and the functions that make it happen.
      *
-     * An item used to be one function, which put 207 rows in front of a user with 98 of them
+     * An item used to be one function, which put 209 rows in front of a user with 98 of them
      * unnamed and the rest named after minified JavaScript identifiers. A feature is the unit a
      * person actually chooses between—"guild tags" rather than the seven functions that draw one.
      * The functions stay addressable: they are listed in the item's technical panel, and the
@@ -240,15 +240,23 @@ object DiscordHermesFunctionCatalog {
             "the chips themselves; this also stops them being constructed."),
         entry(45222, "Returns false from the plain guild-tag display predicate, " +
             "so a caller that asks whether to show a guild tag is answered no."),
+        entry(45447, "Answers no from the Shop This Look experiment gate, the " +
+            "check every entry point into the feature reads. Editing the sheet and the " +
+            "coachmark alone leaves the opener, whose body is shared with an unrelated " +
+            "display-name sheet, so the menu row was still built and still opened an empty " +
+            "sheet. Nothing that renders Shop This Look is reachable once this says no."),
+        entry(45448, "Answers no from the Shop This Look experiment gate, the " +
+            "check every entry point into the feature reads. Editing the sheet and the " +
+            "coachmark alone leaves the opener, whose body is shared with an unrelated " +
+            "display-name sheet, so the menu row was still built and still opened an empty " +
+            "sheet. Nothing that renders Shop This Look is reachable once this says no."),
         entry(45460, "Stops the storefront fetching products by SKU id. The " +
             "implementation is stubbed rather than the exported trampoline, whose body Hermes " +
             "shares with dozens of unrelated API calls."),
         entry(45488, "Returns null from the collectible profile frame " +
-            "component, so no profile frame is drawn. The reference lists it by module and " +
-            "name only, with no further detail."),
+            "component, so no profile frame is drawn."),
         entry(45489, "Returns null from the collectible profile frame " +
-            "component, so no profile frame is drawn. The reference lists it by module and " +
-            "name only, with no further detail."),
+            "component, so no profile frame is drawn."),
         entry(45549, "Returns an empty array from the profile badges hook, so the " +
             "badge row has no badges to render. The hook already returns an empty array on its " +
             "own empty paths, so its callers handle the shape."),
@@ -276,11 +284,9 @@ object DiscordHermesFunctionCatalog {
             "the profile card, so the looping video or composite is never drawn. The profile " +
             "picture decoration is a different module and is untouched."),
         entry(47349, "Returns null from the collectible nameplate component, " +
-            "so no nameplate is drawn. The reference lists it by module and name only, with " +
-            "no further detail."),
+            "so no nameplate is drawn."),
         entry(47350, "Returns null from the collectible nameplate component, " +
-            "so no nameplate is drawn. The reference lists it by module and name only, with " +
-            "no further detail."),
+            "so no nameplate is drawn."),
         entry(47611, "Stops the fetch of collections with their products."),
         entry(49760, "No-ops the modal opener every premium upsell modal is " +
             "launched through, across its sixteen call sites."),
@@ -290,7 +296,7 @@ object DiscordHermesFunctionCatalog {
             "RPC interceptor. The stub answers the command with an object carrying the " +
             "{confirmed: false} result the interceptor reads, so an agent that asks for a " +
             "confirmation is told it was not confirmed instead of the call throwing. The " +
-            "reference build stubs this id to undefined, which the interceptor's .result read " +
+            "recorded build stubs this id to undefined, which the interceptor's .result read " +
             "turns into a TypeError."),
         entry(51631, "Returns null from the guild tag badge component, so no " +
             "badge chip is drawn next to a name."),
@@ -339,7 +345,7 @@ object DiscordHermesFunctionCatalog {
             "off, so this is the variant the app runs. The stub returns an empty array, the " +
             "hook's own shape with no typing users, so the chat input's " +
             "hasTypingIndicatorContent read of its length finds 0 instead of throwing. The " +
-            "reference build stubs this id to undefined, which that read turns into a TypeError."),
+            "recorded build stubs this id to undefined, which that read turns into a TypeError."),
         entry(59199, "Removes the chat-input button that is a gift button or a thread " +
             "button depending on the conversation."),
         entry(59200, "Removes the chat-input button that is a gift button or a thread " +
@@ -355,8 +361,8 @@ object DiscordHermesFunctionCatalog {
             "variant only when the React Compiler experiment is enabled, and this build leaves " +
             "the experiment off by default, so the stub changes nothing for a stock client."),
         entry(62045, "The same orb gate under its plain name. Hermes deduplicated the two " +
-            "exports into one body, so patching either one turns orbs off; the reference verifies " +
-            "the alias set on every run."),
+            "exports into one body, so patching either one turns orbs off; the alias set is " +
+            "verified on every run."),
         entry(62046, "Returns {enabled: false} from the gate every orb surface reads, which " +
             "removes orbs at the source rather than hiding each screen that shows them. Hermes " +
             "shares this body with isVirtualCurrencyEnabled, so that name is disabled with it."),
@@ -375,7 +381,7 @@ object DiscordHermesFunctionCatalog {
         entry(62409, "Rebuilds the tab list the React Compiler copy of the other-profile " +
             "content component builds, so it builds Main and Activity only, with no Board and no " +
             "Wishlist tab. The app runs that copy when the React Compiler experiment is on; the " +
-            "reference leaves it unpatched, so both tabs still appear when the experiment is on."),
+            "leaving it unpatched lets both tabs appear when the experiment is on."),
         entry(62435, "349.5 no longer has the quest orb shop carousel at this id: it is " +
             "the compiled variant of the badge row in " +
             "modules/badges/native/BadgeDirectoryNuxCoachmark.tsx, which renders the game-time, " +
@@ -409,8 +415,8 @@ object DiscordHermesFunctionCatalog {
         entry(63722, "Removes the gift purchase button, so a gift cannot be bought from " +
             "the UI."),
         entry(64027, "Stops the gateway READY payload being logged: the " +
-            "payload carries the whole guild list, and the reference records it being stringified " +
-            "around fourteen times on one connect in a hundred."),
+            "payload carries the whole guild list, and it is recorded being stringified around " +
+            "fourteen times on one connect in a hundred."),
         entry(64028, "Stops the connection-path lookup used to label the " +
             "gateway analytics event."),
         entry(64029, "Stops the READY payload being measured for its analytics " +
@@ -438,8 +444,8 @@ object DiscordHermesFunctionCatalog {
             "navigates there renders nothing. Every mobile entry point is gated separately; " +
             "this covers the screen itself, which a route name can still reach."),
         entry(68858, "Returns false from the mobile quest-dock hook, so the dock is not " +
-            "shown. The reference's alternative lever, the broad quest-eligibility check, shares " +
-            "its body with six unrelated capability checks and cannot be patched."),
+            "shown. The broad quest-eligibility check is the other lever, but its body is shared " +
+            "with six unrelated capability checks and cannot be patched."),
         entry(69421, "Returns false from the Server Subscriptions row's visibility " +
             "predicate."),
         entry(69606, "Returns false from the Restore Subscription row's visibility " +
@@ -496,16 +502,15 @@ object DiscordHermesFunctionCatalog {
         entry(75719, "Rebuilds the profile section tab list the React Compiler copy of " +
             "the You screen content component builds, so it builds Main and Activity only, with " +
             "no Board and no Wishlist tab. The app runs that copy when the React Compiler " +
-            "experiment is on; the reference leaves it unpatched, so both tabs still appear when " +
-            "the experiment is on."),
+            "experiment is on; leaving it unpatched lets both tabs appear there too."),
         entry(77257, "Stops the per-request tracker, which ran URL matching and " +
             "appended to the telemetry ring for every HTTP request."),
         entry(77458, "Stops _trackStartSpeaking from computing game metadata and " +
             "packet stats when someone starts speaking in a voice call."),
         entry(77459, "Stops _trackStartListening from computing telemetry payloads " +
             "when someone starts listening in a voice call."),
-        entry(79457, "Stops the app-state update handler the reference lists " +
-            "with the message-cache recorders, so it no longer runs on every app state change."),
+        entry(79457, "Stops the app-state update handler listed with the " +
+            "message-cache recorders, so it no longer runs on every app state change."),
         entry(79491, "Stops the patched global WebSocket being installed, " +
             "whose per-message handler parsed every gateway frame a second time and appended it " +
             "to the disabled telemetry ring."),
@@ -545,10 +550,10 @@ object DiscordHermesFunctionCatalog {
         entry(112455, "Stops the browser-side metrics aggregator flushing them."),
         entry(113052, "Rebuilds the profile activity list without friends' Spotify " +
             "listened-session entries. 349.5 has a second copy of the filter in the same module, " +
-            "reachable through a different parent, and the reference edits both so Spotify " +
-            "entries do not survive on some surfaces."),
+            "reachable through a different parent, and both are edited so Spotify entries do " +
+            "not survive on some surfaces."),
         entry(113177, "Rebuilds other users' profile tab list so it builds Main and " +
-            "Activity only, with no Board and no Wishlist tab. The reference edits the " +
+            "Activity only, with no Board and no Wishlist tab. It edits the " +
             "isReactCompilerEnabled() == false variant of the profile content component."),
         entry(115029, "Stops the voice-quality sampler that ran once a second during a " +
             "call."),
@@ -596,14 +601,16 @@ object DiscordHermesFunctionCatalog {
             label = "Shop buttons and prompts",
             description = "Removes the button that opens the shop, the prompt that points at it, and " +
                 "the settings row that leads there.",
-            functionIds = listOf(15698, 62179, 62180, 75687, 75688, 75689, 75690)
+            functionIds = listOf(15698, 75687, 75688, 75689, 75690)
         ),
         Feature(
             slug = "shop_this_look",
             group = SHOP_GROUP,
             label = "Shop This Look",
-            description = "Empties the Shop This Look sheet, so opening it shows nothing.",
-            functionIds = listOf(62162, 62163)
+            description = "Answers no to the experiment that turns the feature on, so the row " +
+                "that opens the sheet is never built, and empties the sheet and its prompt as " +
+                "well for any path that reaches them.",
+            functionIds = listOf(45447, 45448, 62162, 62163, 62179, 62180)
         ),
         Feature(
             slug = "game_profile_shop",
@@ -877,8 +884,8 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "leftover_stubs",
             group = LEFTOVER_GROUP,
-            label = "Stubs the reference still ships",
-            description = "Five functions the desktop reference stubs by id. This release moved what " +
+            label = "Stubs by function id",
+            description = "Five functions stubbed by id. This release moved what " +
                 "those ids hold, so three of the stubs change nothing you can see; the other two " +
                 "stand in for a confirmation prompt and a typing-indicator hook. Switching this off " +
                 "leaves all five as Discord wrote them.",

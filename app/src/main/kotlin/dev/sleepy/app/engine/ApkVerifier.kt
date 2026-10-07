@@ -267,8 +267,15 @@ object ApkVerifier {
             val localOffset = buf.getInt(index + 42).toLong() and 0xFFFFFFFFL
             val name = String(apkBytes, index + 46, nameLength, Charsets.UTF_8)
 
+            // An entry whose local header is not where the directory says it is cannot be
+            // checked, and skipping it would let a crafted archive keep a misaligned entry out
+            // of the walk while the walk still reported success. The archive is refused instead.
             val dataOffset = localHeaderDataOffset(apkBytes, buf, localOffset)
-            if (dataOffset >= 0) onEntry(name, dataOffset, method)
+            if (dataOffset < 0) {
+                return "central-directory entry $entry of $count names a local header that is " +
+                    "not at offset $localOffset"
+            }
+            onEntry(name, dataOffset, method)
 
             offset = index + 46L + nameLength + extraLength + commentLength
         }
@@ -365,7 +372,11 @@ object ApkVerifier {
                 val name = String(directory, index + 46, nameLength, Charsets.UTF_8)
 
                 val dataOffset = localHeaderDataOffset(file, localOffset)
-                if (dataOffset >= 0) onEntry(name, dataOffset, method)
+                if (dataOffset < 0) {
+                    return "central-directory entry $entry of $count names a local header " +
+                        "that is not at offset $localOffset"
+                }
+                onEntry(name, dataOffset, method)
 
                 offset = index + 46L + nameLength + extraLength + commentLength
             }

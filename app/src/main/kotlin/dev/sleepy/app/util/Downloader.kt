@@ -4,6 +4,8 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -39,6 +41,7 @@ object Downloader {
         if (url.startsWith("file://", ignoreCase = true)) {
             val file = java.io.File(java.net.URI(url).path)
             if (!file.exists()) throw IOException("Local file not found: ${file.absolutePath}")
+            currentCoroutineContext().ensureActive()
             val bytes = file.readBytes()
             if (bytes.size < 4 || bytes[0] != 0x50.toByte() || bytes[1] != 0x4B.toByte()) {
                 throw IOException(
@@ -83,6 +86,11 @@ object Downloader {
             var read: Int
 
             while (inStream.read(chunk).also { read = it } != -1) {
+                // A socket read and a buffer write are both blocking calls with no suspension
+                // point of their own, so this loop would never observe a cancel on its own: the
+                // transfer would run to the end, and on a 96 MB download over a slow connection
+                // that is minutes of pressing Stop with nothing happening.
+                currentCoroutineContext().ensureActive()
                 totalRead += read
                 if (totalRead > MAX_SIZE_BYTES) {
                     throw IOException(

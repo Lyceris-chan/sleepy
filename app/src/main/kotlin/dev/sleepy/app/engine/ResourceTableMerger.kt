@@ -18,15 +18,15 @@ import java.io.ByteArrayOutputStream
  *
  * ## Why this is a chunk merge and not a relink
  *
- * The desktop reference relinks with apktool: decode every split, merge the trees, rebuild with
- * aapt2. That build's `resources.arsc` cannot be spliced into this APK, for a measurable reason.
+ * A relink decodes every split with apktool, merges the trees and rebuilds with aapt2. The
+ * `resources.arsc` it produces cannot be spliced into this APK, for a measurable reason.
  * apktool's *decode* drops resource-configuration qualifiers that are redundant for the build's
  * `minSdkVersion`, so `res/drawable-xhdpi-v4/icon.png` comes out of the decoder as
- * `res/drawable-xhdpi/icon.png` and is written back under that spelling. The desktop build's
- * table matches the APK it was built into, because both came out of the same decode; the base
+ * `res/drawable-xhdpi/icon.png` and is written back under that spelling. The relinked table
+ * matches the APK it was built into, because both came out of the same decode; the base
  * APK's own entries use the original spelling, and so do the files [SplitMerger] copies. A
- * desktop-generated table dropped into this repack names 1,925 files that do not exist in the
- * archive being written, which is worse than the unreachable files it replaces.
+ * relinked table dropped into this repack names 1,925 files that do not exist in the archive
+ * being written, which is worse than the unreachable files it replaces.
  *
  * A chunk merge avoids that problem, because it re-derives nothing. The tables of a base and its
  * own configuration splits already agree on package id, on type ids, on entry indexes and on the
@@ -853,11 +853,20 @@ object ResourceTableMerger {
                     "type 0x%02x has a bag of $count entries".format(typeId)
                 )
             }
-            MAP_ENTRY_HEADER_SIZE + count * MAP_SIZE
+            val lengthLong = MAP_ENTRY_HEADER_SIZE.toLong() + count.toLong() * MAP_SIZE
+            if (lengthLong > Int.MAX_VALUE) {
+                throw TableFormatException(
+                    "type 0x%02x has a bag of $count entries, which does not fit in a chunk"
+                        .format(typeId)
+                )
+            }
+            lengthLong.toInt()
         } else {
             headerSize + VALUE_SIZE
         }
-        if (length <= 0 || offset + length > limit || offset + length > table.size) {
+        // Boxed to Long: `offset + length` is itself a bound check, and two Ints near the top of
+        // the range sum to a negative number that passes it.
+        if (length <= 0 || offset.toLong() + length > limit || offset.toLong() + length > table.size) {
             throw TableFormatException(
                 "type 0x%02x has a $length-byte entry that runs past the end of its chunk"
                     .format(typeId)
@@ -875,7 +884,8 @@ object ResourceTableMerger {
     ) {
         val typeId = u16(table, offset + 8)
         val entryCount = u32(table, offset + 12)
-        if (entryCount < 0 || SPEC_HEADER_SIZE + entryCount * 4 > chunkSize) {
+        val specBytes = SPEC_HEADER_SIZE.toLong() + entryCount.toLong() * 4
+        if (entryCount < 0 || specBytes > chunkSize) {
             throw TableFormatException("type 0x%02x has a truncated spec".format(typeId))
         }
         val flags = IntArray(entryCount) { u32(table, offset + SPEC_HEADER_SIZE + it * 4) }
@@ -940,6 +950,10 @@ object ResourceTableMerger {
     private fun valueOffsets(entry: ByteArray): List<Int> {
         if (u16(entry, 2) and ENTRY_COMPLEX == 0) return listOf(ENTRY_HEADER_SIZE)
         val count = u32(entry, 12)
+        val last = MAP_ENTRY_HEADER_SIZE.toLong() + count.toLong() * MAP_SIZE
+        if (count < 0 || last > entry.size) {
+            throw TableFormatException("an entry claims $count map values but holds ${entry.size} bytes")
+        }
         return (0 until count).map { MAP_ENTRY_HEADER_SIZE + it * MAP_SIZE + MAP_VALUE_OFFSET }
     }
 

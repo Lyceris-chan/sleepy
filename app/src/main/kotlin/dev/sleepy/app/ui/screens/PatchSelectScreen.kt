@@ -214,7 +214,7 @@ fun PatchSelectScreen(
                             packageNameProblem == null,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
+                            .heightIn(min = 56.dp),
                         shape = MaterialTheme.shapes.large
                     ) {
                         Icon(

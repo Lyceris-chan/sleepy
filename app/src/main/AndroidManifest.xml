@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Saving to the Downloads folder is scoped storage from Android 10 on and needs no
+         permission there. Below Q there is no scoped storage, the write goes to the public
+         Downloads directory, and it throws without this. Capped at 28 so it is never
+         requested on a device that does not need it. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:name=".SleepyApp"

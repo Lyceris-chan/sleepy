@@ -229,7 +229,7 @@ def build_body(tag, data, section):
             "",
             "## Known limitations",
             "",
-            f"These builds do not do everything the reference patch suites do, and the {counted} "
+            f"These builds do not cover everything that can be covered, and the {counted} "
             "gaps are stated rather than left out. They belong to the builds rather than to this "
             f"release, so they are written once: in the "
             f"[README]({project_url}#known-limitations), and per source in the `sources.json` "

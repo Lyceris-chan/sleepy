@@ -4,7 +4,7 @@ import dev.sleepy.app.engine.BinaryXmlEditor
 import dev.sleepy.app.patches.DeclaredPermissions
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PermissionCatalog
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.manifestOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,9 +23,9 @@ import org.junit.Test
  */
 class PermissionChoiceTest {
 
-    private val discordApk = ReferenceApks.discordBaseApk
+    private val discordApk = ComparisonApks.discordBaseApk
 
-    private val octoGramApk = ReferenceApks.octoGram361Arm64
+    private val octoGramApk = ComparisonApks.octoGram361Arm64
 
     /** The package names the two builds answer to, as the sources name them. */
     private val DISCORD = "com.discord"

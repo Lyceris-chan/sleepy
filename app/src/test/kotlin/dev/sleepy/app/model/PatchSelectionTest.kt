@@ -229,7 +229,7 @@ class PatchSelectionTest {
 
         assertEquals(
             "these are the only redundant pairs when everything is on, in table order; a change " +
-                "here means the reference's tables moved",
+                "here means the recorded tables moved",
             listOf(
                 "/users/@me/activities/statistics",
                 "/quest-home",

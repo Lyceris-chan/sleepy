@@ -1,6 +1,6 @@
 package dev.sleepy.app.engine
 
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.entryOf
 import java.io.File
 import java.util.zip.ZipEntry
@@ -23,9 +23,9 @@ import org.junit.Test
  */
 class ResourceTableMergeTest {
 
-    private val extracted = ReferenceApks.discordExtracted
+    private val extracted = ComparisonApks.discordExtracted
 
-    private val baseApk = ReferenceApks.discordBaseApk
+    private val baseApk = ComparisonApks.discordBaseApk
 
     /**
      * The configuration splits, in the order the source lists them: the ABI split carries no
@@ -253,9 +253,9 @@ class ResourceTableMergeTest {
      * Every path the table names is the path of a file the merge copies, spelled the way the APK
      * spells it.
      *
-     * This is what a relink with the desktop's toolchain could not do, and the reason this is a
-     * chunk merge: apktool's decoder normalizes `res/drawable-xhdpi-v4/` to `res/drawable-xhdpi/`,
-     * which is not the name of any file in the repacked APK.
+     * A relink through apktool cannot do this, and that is the reason this is a chunk merge: its
+     * decoder normalizes `res/drawable-xhdpi-v4/` to `res/drawable-xhdpi/`, which is not the name
+     * of any file in the repacked APK.
      */
     @Test
     fun namesThePathsInTheirOriginalCompiledSpelling() {
@@ -381,7 +381,7 @@ class ResourceTableMergeTest {
         // The external parser is a tool rather than a fixture of this repository: without it the
         // test is reported as skipped. It is the only independent reading of the merged table, so
         // "did not run" must not look like "passed".
-        val aapt2 = ReferenceApks.buildTool("aapt2")
+        val aapt2 = ComparisonApks.buildTool("aapt2")
         assumeTrue("aapt2 is not installed on this machine", aapt2 != null)
         val merged = mergeFixtures()
 

@@ -40,11 +40,9 @@ sealed interface OkHttpResolution {
  * The blocklist interceptor constructs an `okhttp3.Response` manually, so it has to name the
  * `Response.<init>` descriptor, the `Protocol` enum and that enum's `HTTP_1_1` field. On 346.2
  * they were `Lcs/t;`, `Lcs/q;` and `Lgc/k;`; on 347.5 two of the three had moved, which produced
- * a `NoClassDefFoundError: Lcs/t;` on every request until the desktop reference stopped writing
+ * a `NoClassDefFoundError: Lcs/t;` on every request until the recorded change set stopped writing
  * them down. This is that same lookup, reading the DEX rather than an apktool tree, because an
  * on-device patcher does not have the tree.
- *
- * Reference: `quirky-noether/discord/patches/blocklist.py::discover_okhttp`.
  */
 object OkHttpNameResolver {
 
@@ -131,12 +129,12 @@ object OkHttpNameResolver {
      * Finds the field [classDef] assigns its `HTTP_1_1` constant to, or null when [classDef] is
      * not the enum that holds the protocols.
      *
-     * The class is accepted on the same two facts the reference uses: its `<clinit>` builds a
-     * constant from the `"http/1.1"` string, and it assigns a static field of the class's own
-     * type. The field name then comes from the assignment that *follows* the `"HTTP_1_1"` marker,
-     * because the enum writes six fields of its own type and only that marker identifies which of
-     * them is HTTP/1.1—the marker is the constant's own name, and the enum constructor consumes
-     * it immediately before the field is stored.
+     * The class is accepted on the same two facts the recorded change set uses: its `<clinit>`
+     * builds a constant from the `"http/1.1"` string, and it assigns a static field of the
+     * class's own type. The field name then comes from the assignment that *follows* the
+     * `"HTTP_1_1"` marker, because the enum writes six fields of its own type and only that marker
+     * identifies which of them is HTTP/1.1—the marker is the constant's own name, and the enum
+     * constructor consumes it immediately before the field is stored.
      */
     private fun http11FieldOf(classDef: ClassDef): String? {
         val clinit = classDef.methods.firstOrNull { it.name == "<clinit>" } ?: return null

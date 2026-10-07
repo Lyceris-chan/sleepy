@@ -39,7 +39,7 @@ package dev.sleepy.app.engine
  *
  * The offsets returned by [locate] were compared with `hermes-decomp dump --kind functions`
  * for all 155,429 functions of the Discord 349.5 bundle, including the 14 targets that
- * the patch set uses, and the two outputs matched byte for byte. That dump is the reference:
+ * the patch set uses, and the two outputs matched byte for byte. That dump is what this table is checked against:
  * if this file changes, compare the result against a real bundle rather than against the
  * arithmetic alone.
  *

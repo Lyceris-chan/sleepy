@@ -21,17 +21,17 @@ import dev.sleepy.app.model.SmaliPatch
  * build, and the engine patches only a build identified as [REGISTERED_BUILD], so its entries
  * cannot run on any build this app accepts. A patch that cannot run is a row in the selection
  * list that describes a change it does not make. The edits it describes are noted where they would
- * have gone, so adding a 3.6.0 source means porting them rather than rediscovering them.
+ * have gone, so adding a 3.6.0 source means recording them rather than rediscovering them.
  *
  * Every entry corresponds to an edit in one of those scripts. The engine resolves all DEX
  * container assignments at runtime by inspecting the target APK's DEX headers, so no patch
  * hardcodes a container. Version tags mark an entry for one build, so version-specific obfuscated
  * class names are targeted without conflicting with unrelated classes.
  *
- * Two deliberate divergences from the reference scripts, both behavior-preserving: stub bodies
- * here use `.locals 0` where the scripts reuse the method's original `.registers N`. With a body
- * that only returns, the two assemble to equivalent code. The reference's own line-anchored edits
- * are expressed as unique-string anchors.
+ * Two deliberate differences from the recorded change set, both behavior-preserving: stub bodies
+ * here use `.locals 0` where the recorded change set reuses the method's original `.registers N`.
+ * With a body that only returns, the two assemble to equivalent code. The recorded change set's
+ * line-anchored edits are expressed as unique-string anchors.
  *
  * The user reads an entry's `title` and `explanation` while a patch runs and in the selection
  * screen's technical panel, which lists both for every entry under the class and method it
@@ -58,8 +58,8 @@ object OctoGramPatches {
      *
      * Every entry here is tagged for this one build or left untagged. A tagged entry runs only on
      * a build the engine identifies as this version: an APK whose classes identify no supported
-     * build is refused every tagged entry, with the reason in the step log. The reference
-     * scripts' 3.6.0 entries are therefore not ported at all.
+     * build is refused every tagged entry, with the reason in the step log. The recorded change
+     * set's 3.6.0 entries are therefore not transcribed at all.
      *
      * The entries spell their tags out rather than reading this constant, and this is the value the
      * content test holds every tag to: a tag mistyped in one entry then fails that test, instead of
@@ -116,8 +116,9 @@ object OctoGramPatches {
         )
     )
 
-    // 3.6.1 (build 38275). The reference's 3.6.0 pair for this set—org/telegram/ui/o.ss(Z)V and
-    // org/telegram/messenger/m0.sc(J)—is not ported, for the reason in the header.
+    // 3.6.1 (build 38275). The recorded change set's 3.6.0 pair for this set is
+    // org/telegram/ui/o.ss(Z)V
+    // and org/telegram/messenger/m0.sc(J)—is not transcribed, for the reason in the header.
     /** The set that blocks sponsored posts in channels. */
     val SPONSORED_MSGS = octoGramSet(
         id = "octogram_sponsored_msgs",
@@ -149,8 +150,8 @@ object OctoGramPatches {
         )
     )
 
-    // The reference's 3.6.0 variant for this set—y5l.Q()—is not ported, for the reason in
-    // the header.
+    // The recorded change set's 3.6.0 variant for this set—y5l.Q()—is not transcribed, for the
+    // reason in the header.
 
     /** The set that removes the ads shown between photos. */
     val PHOTO_VIEWER_ADS = octoGramSet(
@@ -188,8 +189,8 @@ object OctoGramPatches {
         )
     )
 
-    // The reference's 3.6.0 variant for this set—be6.m1(TLObject)—is not ported, for the reason
-    // in the header.
+    // The recorded change set's 3.6.0 variant for this set—be6.m1(TLObject)—is not transcribed,
+    // for the reason in the header.
 
     /** The set that filters sponsored channels and bots out of search results. */
     val SEARCH_ADS = octoGramSet(
@@ -228,8 +229,8 @@ object OctoGramPatches {
         )
     )
 
-    // The reference's 3.6.0 variant for this set—hxk.o0(Lhxk$i)—is not ported, for the reason
-    // in the header.
+    // The recorded change set's 3.6.0 variant for this set—hxk.o0(Lhxk$i)—is not transcribed,
+    // for the reason in the header.
 
     /** The set that stops the built-in GitHub update check. */
     val OTA_UPDATER = octoGramSet(
@@ -439,8 +440,8 @@ object OctoGramPatches {
     /**
      * The five uploaders on the app-log path.
      *
-     * The reference describes all five as log-only, so each becomes a return-void; three of them
-     * live in PremiumPreviewFragment.
+     * The recorded change set describes all five as log-only, so each becomes a return-void; three
+     * of them live in PremiumPreviewFragment.
      */
     internal val LOG_UPLOADERS = listOf(
         SmaliPatch(
@@ -509,16 +510,16 @@ object OctoGramPatches {
      * four different classes, and each one is forced independently because any of them can
      * be the one that runs.
      *
-     * In sx0.smali:182 the reference splices the constant before the store, and the register is
-     * then read again a few instructions later by the branch that installs the custom
+     * In sx0.smali:182 the recorded edit splices the constant before the store, and the register
+     * is then read again a few instructions later by the branch that installs the custom
      * uncaught-exception handler, so that handler is no longer installed. This side effect is the
-     * shipped reference behavior, reproduced rather than "fixed".
+     * behavior the recorded build shipped, reproduced rather than "fixed".
      */
     internal val LOGGING_GATE_WRITES = listOf(
         SmaliPatch(
             title = "Forcing the global logging switch off (sx0)",
             explanation = "Stores false instead of the value read from preferences, so logging stays off app-wide. " +
-                "As in the reference build, the same register is reused moments later to decide whether to install the " +
+                "The same register is reused moments later to decide whether to install the " +
                 "custom crash handler, so that handler is skipped as a side effect.",
             versionTag = "3.6.1",
             smaliPath = "sx0.smali",
@@ -686,8 +687,8 @@ object OctoGramPatches {
      * `yb3.e()`—the logs-directory getter the rest of the reporter uses—resolves that
      * directory itself.
      *
-     * The reference keeps the method's original `.registers 5` line. A body that only returns reads
-     * no register, so this entry uses `.locals 0` (see the header).
+     * The recorded change set keeps the method's original `.registers 5` line. A body that only
+     * returns reads no register, so this entry uses `.locals 0` (see the header).
      */
     internal val CRASH_REPORTER_STARTUP = listOf(
         SmaliPatch(

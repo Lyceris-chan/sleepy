@@ -1,9 +1,9 @@
 package dev.sleepy.app.testing
 
 /**
- * Readers the Hermes bundle parity tests share.
+ * Readers the Hermes bundle comparison tests share.
  *
- * A parity test compares two bundles region by region and reports the first byte that differs;
+ * A comparison test compares two bundles region by region and reports the first byte that differs;
  * both the full-table test and the per-item subset test do it the same way, so the comparison
  * lives once.
  */

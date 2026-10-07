@@ -1,7 +1,7 @@
 package dev.sleepy.app.patches
 
 import dev.sleepy.app.engine.HermesBundlePatcher
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.bundleOf
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -14,20 +14,20 @@ import org.junit.Test
  * The two stubs this build gives a shaped return instead of `undefined`.
  *
  * The ids 49956 and 58239 held an upsell button in 348.5 and unrelated functions in 349.5, and
- * the reference's table stubs both to `undefined` without noticing. The one caller of each
- * function dereferences the return, so the reference's value throws: 58216 passes 58239's return
+ * the recorded change set's table stubs both to `undefined` without noticing. The one caller
+ * of each function dereferences the return, so that value throws: 58216 passes 58239's return
  * to `hasTypingIndicatorContent`, which reads `.length`, and 49954 reads `.result` off 49956's
  * return. The patch table returns an empty array and an object respectively.
  *
  * The first test pins the two replacement bodies, which is the change itself. The second applies
- * the whole table to the real base split and reads the result with the reference build's own
+ * the whole table to the real base split and reads the result with the recorded build's own
  * disassembler, so the value that reaches each dereference is checked in the bytes that ship
  * rather than in the table alone. Both fail if either stub goes back to `undefined`.
  */
 class DiscordHermesStubValueTest {
 
-    private val baseApk = ReferenceApks.discordBaseApk
-    private val hermesDecomp = ReferenceApks.hermesDecomp
+    private val baseApk = ComparisonApks.discordBaseApk
+    private val hermesDecomp = ComparisonApks.hermesDecomp
 
     /** 58239: `NewArray r0, 0; AsyncBreakCheck; Ret r0`, an empty array. */
     private val typingHookStub = "080000007e7600"
@@ -42,8 +42,9 @@ class DiscordHermesStubValueTest {
     private val confirmHandlerStub =
         "0100563b78cd9601520001000201573b0000f7c80400520100007e7601"
 
-    /** The reference build's value for both ids: `LoadConstUndefined r0; AsyncBreakCheck; Ret r0`. */
-    private val referenceStub = "93007e7600"
+    /** The recorded build's value for both ids: `LoadConstUndefined r0; AsyncBreakCheck; Ret r0`.
+     */
+    private val recordedStub = "93007e7600"
 
     @Test
     fun theTableReturnsAShapedValueWhereTheReferenceReturnsUndefined() {
@@ -64,8 +65,8 @@ class DiscordHermesStubValueTest {
         for (functionId in listOf(49956, 58239)) {
             val replacement = byId.getValue(functionId).replacementHex
             assertTrue(
-                "fn $functionId must not carry the reference's undefined stub",
-                replacement != referenceStub
+                "fn $functionId must not carry the recorded build's undefined stub",
+                replacement != recordedStub
             )
         }
     }

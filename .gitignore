@@ -22,3 +22,7 @@ RELEASE_CHANGELOG.md
 
 # Kotlin compiler session data
 .kotlin/
+
+# Python bytecode from the release-notes script. A compiled copy was committed once.
+__pycache__/
+*.pyc

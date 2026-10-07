@@ -6,7 +6,7 @@ import com.android.tools.smali.dexlib2.DexFileFactory
 import com.android.tools.smali.dexlib2.Opcodes
 import dev.sleepy.app.engine.DexProcessor
 import dev.sleepy.app.model.StepStatus
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.dexEntries
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -55,7 +55,7 @@ class BrowserManagerExternalBrowserTest {
 
     @Test
     fun everyLinkLeavesTheApp() = runBlocking {
-        val baseApk = ReferenceApks.discordBaseApk
+        val baseApk = ComparisonApks.discordBaseApk
         assumeTrue("the Discord fixtures are not on this machine (${baseApk.path})", baseApk.isFile)
 
         val dexEntries = dexEntries(baseApk)

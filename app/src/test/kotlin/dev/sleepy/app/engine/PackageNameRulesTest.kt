@@ -1,6 +1,6 @@
 package dev.sleepy.app.engine
 
-import dev.sleepy.app.testing.ReferenceApks
+import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.entryOf
 import dev.sleepy.app.testing.source
 import org.junit.Assert.assertEquals
@@ -20,7 +20,7 @@ import org.junit.Test
  */
 class PackageNameRulesTest {
 
-    private val baseApk = ReferenceApks.discordBaseApk
+    private val baseApk = ComparisonApks.discordBaseApk
 
     @Test
     fun acceptsTheNamesACloneIsGiven() {

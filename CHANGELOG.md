@@ -7,13 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-10-07
+
+### Fixed
+
+- **Turning the camera on no longer drops the call.** The media engine keeps a registry of its live connections and refused a connection id it already held, by throwing. The path a camera is turned on through is the one that reaches it, from inside a coroutine nothing catches: the app's own JavaScript is never told, so the callback that carries the result is never invoked and the caller waits forever, and the connection the registry refused had already been built and could no longer be freed. That is the shape of a call that ends while the other end still shows you connected. A repeated id now names the newest connection, the one it replaced is freed rather than leaked, and the event is written to logcat under the `MediaEngineCB` tag the other media diagnostics use.
+
+  This is one identified throw on that path, not proof that it is the one you hit. A throw anywhere else in the media engine's coroutine bodies is still fatal, and the only way to tell them apart is a capture: `adb logcat -s MediaEngineCB` while a camera toggle drops a call.
+
+  The defect was found and the fix written down long before this build, but never applied. This release applies it.
+
+- **Shop This Look is gone from profile menus.** Emptying the sheet removed the sheet and the prompt that points at it, but not the menu row that opens them, so the row stayed on screen and opened an empty sheet. The row is now removed where it is built: the experiment that turns the feature on answers no, and the row's visibility comes from that answer. Nothing that renders Shop This Look is reachable any more.
+
+  The row is left alone elsewhere because the code that opens it is shared with an unrelated display-name sheet. The two functions this changes are recorded as named exceptions in the comparison.
+
+- **Stop stops.** Cancelling a run asks the work to stop at its next suspension point, and the download's read loop had none: it reads a socket and writes a buffer in a loop that never yields, so a Stop pressed during a transfer was ignored until the transfer finished. On a 96 MB download over a slow connection that is minutes of an app that looks like it did not hear you. The loop now checks on every chunk, as do the three steps that hold the disk longest. The same check is what stops a cancelled run writing its progress back over the idle screen.
+- **Saving the patched APK can no longer freeze the app or end it.** The copy is over a hundred megabytes and ran on the interface thread; it now runs on the IO dispatcher, so the screen stays responsive while it runs. And on Android 9 and earlier the write goes to a public Downloads folder the platform refuses without a storage grant, which sleepy does not ask for, so the write raised an exception no caller caught: it now reports that the save did not happen and points at Share, which works on those versions.
+- A save whose output stream could not be opened reported success and left an empty row in Downloads. The row is removed and the failure is reported.
+- **Labels no longer clip when text is enlarged.** Six buttons had a fixed height, which crops the label once the system text size is at 200%, the size WCAG 2.2 asks an app to keep usable. They carry a minimum height instead, so the button grows with the text.
+- Two text roles were the same size, so a heading and a subheading were indistinguishable. Both now follow the Material 3 baseline scale.
+
+### Changed
+
+- **The app draws its own colours on every device.** Android 12 and later can build an app's palette from the wallpaper, and sleepy offered that. The contrast the app checks is checked against its own scheme, so a wallpaper-derived palette made those checks describe colours the app was not drawing, and whether the result met the contrast thresholds came down to which wallpaper the device had. The scheme sleepy ships is now the default.
+
+### Security
+
+- **A release is checked against the key that is supposed to have signed it.** Verifying a signature proves it is valid, not that it is ours, so any correctly signed APK would have been published; the release build now compares the signing certificate's SHA-256 with a repository secret. Until that secret is set, the check reports itself as not run rather than as a pass.
+- An APK whose entry points at a local header that is not there is refused rather than skipped. The skip kept such an entry out of the alignment check while the check still reported success.
+- The resource table and binary XML readers bound their arithmetic before using it as a length or a slice bound. A declared count near the top of the 32-bit range wrapped, passed the check, and asked for a multi-gigabyte allocation, which ends the process rather than failing the run.
+- A compiled copy of the release-notes script is no longer committed, and Python bytecode is ignored.
+
 ## [3.4.1] - 2026-10-05
 
 ### Fixed
 
-- **The Board and Wishlist tabs are gone from profiles for good.** Discord ships every screen twice—one compiled with the React Compiler, one not—and picks between them with an experiment. The changes that remove the tabs were only ever made to the uncompiled copy, here and in the desktop suite this build is ported from, so the tabs came back for anyone whose account runs the other copy. Both copies are edited now.
+- **The Board and Wishlist tabs are gone from profiles for good.** Discord ships every screen twice—one compiled with the React Compiler, one not—and picks between them with an experiment. The changes that remove the tabs were only ever made to the uncompiled copy, so the tabs came back for anyone whose account runs the other one. Both copies are edited now.
 
-  This is a deliberate departure from the desktop suite, which leaves the compiled copy alone. Those two components no longer match that build, and the bundle comparison records them as named exceptions with the reason.
+  Those two components no longer hold the bytes the comparison build does, and the check that compares them records the difference as a named exception with the reason.
 
 ## [3.4.0] - 2026-10-05
 
@@ -61,7 +92,7 @@ No part of the app changed in this release. It carries three build changes, and 
 
 ### Fixed
 
-- The Telegram Premium and Telegram Business rows now leave the app's Settings screen as well as the settings list on your profile. Both were hidden on your profile and stayed visible one screen over, because that screen builds its rows separately and the changes ported from the desktop suite had never covered it.
+- The Telegram Premium and Telegram Business rows now leave the app's Settings screen as well as the settings list on your profile. Both were hidden on your profile and stayed visible one screen over, because that screen builds its rows separately and the changes had never covered it.
 
 ## [3.1.0] - 2026-10-04
 
@@ -78,12 +109,12 @@ No part of the app changed in this release. It carries three build changes, and 
 
 ### Changed
 
-- **Discord support moves to 349.5, and 348.5 can no longer be patched.** Discord renumbered every function in its JavaScript bundle in this release, so the patch set was derived again from the desktop suite: 166 functions, up from 145, of which 164 match that build byte for byte and two are a deliberate divergence (below). A run that has already downloaded 348.5 has to start again.
+- **Discord support moves to 349.5, and 348.5 can no longer be patched.** Discord renumbered every function in its JavaScript bundle in this release, so the patch set was recorded again from the checked build: 166 functions, up from 145, of which 164 match it byte for byte and two do not (below). A run that has already downloaded 348.5 has to start again.
 - A build whose version cannot be identified is refused rather than patched, and says so.
 
 ### Added
 
-- The EmojiCompat load runnable is stubbed, a change the desktop suite makes and this build did not.
+- The EmojiCompat load runnable is stubbed, which this build had missed.
 
 ### Removed
 
@@ -91,7 +122,7 @@ No part of the app changed in this release. It carries three build changes, and 
 
 ### Fixed
 
-- Two Discord JavaScript patches no longer throw when their callers run. The desktop suite stubs two functions to `undefined`, and each has a caller that reads a property off the result, which throws a `TypeError`. One now returns an object carrying `{confirmed: false}` from the confirmation handler and the other an empty array from the typing-indicator hook, which is the shape each caller reads. This is a deliberate divergence from the desktop build.
+- Two Discord JavaScript patches no longer throw when their callers run. Both functions were stubbed to `undefined`, and each has a caller that reads a property off the result, which throws a `TypeError`. One now returns an object carrying `{confirmed: false}` from the confirmation handler and the other an empty array from the typing-indicator hook, which is the shape each caller reads.
 
 ## [2.1.0] - 2026-10-03
 
@@ -126,7 +157,7 @@ No part of the app changed in this release. It carries three build changes, and 
 
 ### Fixed
 
-- The test suite skips the tests that need the reference apps instead of failing, which made continuous integration report a failure on every clean run.
+- The test suite skips the tests that need the second APK instead of failing, which made continuous integration report a failure on every clean run.
 
 ### Security
 
@@ -154,13 +185,13 @@ No part of the app changed in this release. It carries three build changes, and 
 ### Changed
 
 - The permission list no longer offers a switch over a declaration the patch removes from every build. Those rows state that the permission is removed and why, because which permissions sleepy removes is a fact about the build rather than a choice about the run.
-- Three checks that compare the patched JavaScript bundle against the desktop build now run instead of skipping. Each read a bundle out of a temporary directory that a restart emptied, so all three compared nothing while reporting success.
+- Three checks that compare the patched JavaScript bundle against the recorded one now run instead of skipping. Each read a bundle out of a temporary directory that a restart emptied, so all three compared nothing while reporting success.
 
 ### Fixed
 
 - The crash reporter's native libraries are no longer left in the finished APK, along with the Play source stamp. The check ran only against the base APK's own entries, and the libraries arrive from the ABI split, which the merge adds afterward.
-- Six permission declarations the desktop build strips are removed: the contact list, the advertising ID, Privacy Sandbox attribution, and three for services the patched app does not bind. They are removed on Discord builds only, because OctoGram uses the contact list for real.
-- The three Google Analytics components are marked `android:enabled="false"`, which matches the desktop build and stops the platform starting them.
+- Six permission declarations are removed: the contact list, the advertising ID, Privacy Sandbox attribution, and three for services the patched app does not bind. They are removed on Discord builds only, because OctoGram uses the contact list for real.
+- The three Google Analytics components are marked `android:enabled="false"`, which stops the platform starting them.
 - The split-install metadata is removed, along with the resource-table row naming it.
 - Some translated strings in arrays and plurals showed the wrong text, because they kept the string-pool position they held in the split they came from. 48 values were affected.
 
@@ -172,7 +203,7 @@ No part of the app changed in this release. It carries three build changes, and 
 - You can check that list against the build it applies to. Checking downloads the build and reports any difference in full.
 - Settings lists where every target is downloaded from, and marks the one you opened last.
 - The patched build carries the images a density split holds and the strings the language splits hold, and the resource table is rebuilt around them so they are reachable. A set of tables that cannot be reconciled is not used, and the reason is reported.
-- The manifest edits the desktop build makes are applied to the compiled manifest. The crash reporter's two provider declarations, the three Play split markers and the AppsFlyer query go with the switches that make them pointless. The RPC service is no longer exported on any build, because it was exported with no permission on it and no check on its caller.
+- The manifest edits are applied to the compiled manifest. The crash reporter's two provider declarations, the three Play split markers and the AppsFlyer query go with the switches that make them pointless. The RPC service is no longer exported on any build, because it was exported with no permission on it and no check on its caller.
 
 ### Changed
 
@@ -247,7 +278,7 @@ No part of the app changed in this release. It carries three build changes, and 
 
 ### Changed
 
-- Discord's own JavaScript is patched to match the desktop build change for change: 142 functions, each written to the same bytes that build ships.
+- Discord's own JavaScript is patched change for change, 142 functions, each written to the bytes the checked build carries.
 
 ### Removed
 
@@ -281,7 +312,8 @@ No part of the app changed in this release. It carries three build changes, and 
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.1...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.5.0...HEAD
+[3.5.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.1...v3.5.0
 [3.4.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.1...v3.4.0
 [3.3.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.3.0...v3.3.1

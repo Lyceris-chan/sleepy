@@ -47,9 +47,7 @@ data class SmaliPatch(
  *
  * Callers of a patched function still receive whatever the stub produces, so the shape has to
  * match what the original returned: a function whose callers `await` it must still get a resolved
- * promise, and a React component must still get something renderable. These map one-to-one onto
- * the tables in the reference `core.py` (`TARGETS`, `PROMISE_TARGETS`, `ZERO_TARGETS`,
- * `NULL_TARGETS`, `FALSE_TARGETS`, `OBJECT_FALSE_TARGETS`).
+ * promise, and a React component must still get something renderable.
  */
 enum class HermesStubShape {
     /** `LoadConstUndefined r0; Ret r0` */
@@ -75,10 +73,9 @@ enum class HermesStubShape {
  * A bytecode function replacement in a Hermes bundle.
  *
  * [functionId] is per-bundle and changes on every Discord release, so it must be re-mapped
- * against the target bundle before use—the reference does this with `remap_hermes.py`.
- * [hasmStub] records the reference's source text for auditability; the bytes written come from
- * [stubShape], which is explicit, so a shape the engine cannot express produces an error instead
- * of a different value.
+ * against the target bundle before use. [hasmStub] holds the recorded change set's source text
+ * for auditability; the bytes written come from [stubShape], which is explicit, so a shape the
+ * engine cannot express produces an error instead of a different value.
  *
  * @property title The step name shown for this patch, or null to build one from the function name
  *   and id.
@@ -86,7 +83,8 @@ enum class HermesStubShape {
  * @property functionId The Hermes function id to replace.
  * @property functionName The function's name, used in the default step name.
  * @property stubShape The value the stub leaves in the return register.
- * @property hasmStub The reference's source text for this stub, recorded for auditability.
+ * @property hasmStub The recorded change set's source text for this stub, recorded for
+ *   auditability.
  */
 data class HermesPatch(
     val title: String? = null,

@@ -16,8 +16,7 @@ import dev.sleepy.app.model.TargetApk
 import dev.sleepy.app.model.TargetWrittenGenerator
 
 /**
- * The network blocklist interceptor for Discord, transcribed from
- * `quirky-noether/discord/patches/blocklist.py`.
+ * The network blocklist interceptor for Discord.
  *
  * One method—`DeviceResourceUsageRecorder$Companion.requestStatsInterceptor`—is shared by
  * every OkHttp client this patch concerns: the React Native XHR client (which carries all of the
@@ -46,7 +45,7 @@ object DiscordBlocklistPatch {
     private const val RECORDER_CLASS =
         "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali"
 
-    /** The one method, matched as the reference matches it. */
+    /** The one method, matched as the recorded change set matches it. */
     private const val INTERCEPTOR_SIGNATURE =
         ".method private final requestStatsInterceptor(Lokhttp3/Interceptor${'$'}Chain;" +
             "Lcom/discord/resource_usage/DeviceResourceUsageRecorder${'$'}RequestStats;)" +
@@ -180,12 +179,12 @@ object DiscordBlocklistPatch {
     /**
      * Builds the replacement body for `requestStatsInterceptor`.
      *
-     * The reference gates two debug blocks on a `BLOCKLIST_LOG` environment variable, which is
-     * how it was tuned against the live app. An on-device patcher has no such switch and the
-     * shipped desktop build is generated without it, so the body here is what that build's method
-     * contains: the block in full, the debug logging absent. Everything else is reproduced as
-     * written, down to the blank lines and the label names—a subset changes which rules are
-     * emitted and nothing else, so the reference comparison still holds rule for rule.
+     * The recorded change set gates two debug blocks on a `BLOCKLIST_LOG` environment variable,
+     * which is how it was tuned against the live app. An on-device patcher has no such switch
+     * and the recorded build is generated without it, so the body here is what that build's
+     * method contains: the block in full, the debug logging absent. Everything else is
+     * reproduced as written, down to the blank lines and the label names—a subset changes
+     * which rules are emitted and nothing else, so the comparison still holds rule for rule.
      *
      * The labels are the interesting part. `:not_proxied` and `:skip_<n>` bracket each API rule so
      * a rule only blocks when the URL is an API call, and every host rule branches to the shared
