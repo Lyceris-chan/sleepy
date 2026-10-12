@@ -6,6 +6,7 @@ import dev.sleepy.app.testing.bundleOf
 import dev.sleepy.app.testing.readU32Le
 import java.io.File
 import java.security.MessageDigest
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -139,6 +140,37 @@ class HermesBundleApplicationTest {
                 "${base.size} bytes - ${result.writtenInPlace.size} written in place, " +
                 "${result.relocated.size} relocated"
         )
+
+        publishBundleForVerification(patched)
+    }
+
+    /**
+     * Writes the patched bundle where a verifier outside this JVM can read it.
+     *
+     * The check that matters most cannot run here: whether Hermes itself accepts the bundle.
+     * Every assertion in this file, and the disassembler cross-check below, reads the bytes with
+     * a reimplementation. A workflow that has a real Hermes to hand needs the artifact, and this
+     * is the only place it exists, so it is written out when `SLEEPY_PATCHED_BUNDLE_OUT` names a
+     * directory. Unset - which is every normal run - nothing is written and nothing changes.
+     *
+     * The function ids go beside it, taken from the table rather than from the workflow, so a
+     * verifier disassembles exactly the functions this build patches and no others.
+     */
+    private fun publishBundleForVerification(patched: ByteArray) {
+        val dir = System.getenv("SLEEPY_PATCHED_BUNDLE_OUT") ?: return
+        val out = File(dir)
+        out.mkdirs()
+        File(out, "patched.bundle").writeBytes(patched)
+        File(out, "patched-functions.txt").writeText(
+            DiscordHermesBundlePatch.PATCHES.joinToString("\n") { it.functionId.toString() } + "\n"
+        )
+        Properties().also { properties ->
+            properties["bundleSize"] = patched.size.toString()
+            properties["entries"] = DiscordHermesBundlePatch.PATCHES.size.toString()
+            properties["targetBundleSize"] =
+                DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toString()
+        }.store(File(out, "patched.properties").outputStream(), "written by HermesBundleApplicationTest")
+        println("HermesBundleApplicationTest: wrote the patched bundle to ${out.absolutePath}")
     }
 
     /**

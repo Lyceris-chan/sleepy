@@ -1,0 +1,277 @@
+name: Verify the patched bundle
+
+# The release workflow runs the test suite on a clean runner, where every test that needs a real
+# Discord APK reports itself as skipped - so it passes by running less, and it says so only in the
+# skipped count. This job is the other half: it fetches the build the patch set names, runs the
+# whole suite against it, and then hands the patched bundle to Hermes itself.
+#
+# Why Hermes matters, and why this is not redundant with the suite. Everything the suite checks
+# about the bundle reads the bytes with a reimplementation: `hermes-decomp` parses the file, and
+# our own reader parses the function table. Neither is the engine that has to run it. A body can
+# be perfectly well formed to both and still be rejected or mis-executed by Hermes, and a
+# relocated function's header can satisfy our reader and not the real one. `hbcdump` is built
+# from the same tree as Discord's engine, at the bytecode version Discord's bundle declares, and
+# its `BCProvider` is the parser the VM uses.
+#
+# What this still cannot see: Hermes has no semantic bytecode verifier, so a function whose body
+# is valid but does the wrong thing passes here exactly as it passes everywhere else. This job
+# widens the net; it does not close it.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Read access and nothing else. This job downloads, builds a tool and reports; it never writes to
+# the repository.
+permissions:
+  contents: read
+
+# One run per ref. A second push supersedes the first rather than queueing behind it.
+concurrency:
+  group: verify-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The last revision of facebook/hermes whose BYTECODE_VERSION is 98, which is what the Discord
+  # 351.2.0 bundle declares. Hermes compares the version for equality - `header->version !=
+  # hbc::BYTECODE_VERSION` in BCProvider.cpp - so a newer build refuses this bundle outright and
+  # an older one predates the format. This is the commit before "Bump bytecode version to 99",
+  # and the version constant in it was confirmed to read 98.
+  HERMES_REV: 639e5d6afb16ce5018afe5005427a4a85f9bf28b
+  HERMES_CACHE: ${{ github.workspace }}/.hermes-cache
+  FIXTURES: ${{ github.workspace }}/.discord-fixtures
+  OUT: ${{ github.workspace }}/.verify-out
+
+jobs:
+  verify:
+    name: Fetch the build and verify with Hermes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+
+      - name: Install required SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
+
+      # The tool is built once per Hermes revision and reused. It is a C++ project with its own
+      # copy of LLVM's support libraries, so a cold build is the slow part of this job by a wide
+      # margin - worth caching, and the key is the revision, so changing it rebuilds.
+      - name: Restore the Hermes build
+        id: hermes-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ env.HERMES_CACHE }}
+          key: hermes-${{ runner.os }}-${{ env.HERMES_REV }}
+
+      - name: Build hbcdump
+        if: steps.hermes-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake ninja-build
+          mkdir -p "$HERMES_CACHE"
+          git init hermes-src
+          cd hermes-src
+          git remote add origin https://github.com/facebook/hermes.git
+          git fetch --depth 1 origin "$HERMES_REV"
+          git checkout FETCH_HEAD
+          # Intl is off: it changes string handling in the compiler and nothing about the
+          # bytecode format this tool reads, and it is the difference between a build that
+          # finishes comfortably inside the cache window and one that does not.
+          #
+          # NDEBUG is removed from the release flags on purpose. Hermes checks its own bytecode
+          # bounds with `assert`, and CMake's Release flags define NDEBUG, which compiles every
+          # one of those checks out - including the ones that stand between a malformed function
+          # and a silent out-of-bounds read. A build with asserts off would answer "valid" to
+          # exactly the inputs this job is looking for. Optimisation stays on, because a Debug
+          # build of Hermes is the difference between a cached tool and a job that times out.
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS_RELEASE="-O2 -g -UNDEBUG" \
+            -DHERMES_ENABLE_DEBUGGER=OFF \
+            -DHERMES_ENABLE_INTL=OFF
+          cmake --build build --target hbcdump
+          # Where the binary lands is CMake's business, not ours: `add_hermes_tool` decides, and
+          # guessing the directory turns a working build into a failed job for no reason.
+          found="$(find build -type f -executable -name hbcdump | head -1)"
+          test -n "$found" || { echo "the build produced no hbcdump"; find build -name '*hbcdump*' | head; exit 1; }
+          cp "$found" "$HERMES_CACHE/hbcdump"
+          "$HERMES_CACHE/hbcdump" --help > /dev/null
+          echo "built hbcdump for $HERMES_REV at $found"
+
+      - name: Report the tool
+        run: |
+          set -euo pipefail
+          test -x "$HERMES_CACHE/hbcdump"
+          echo "hbcdump: $("$HERMES_CACHE/hbcdump" --version 2>&1 | head -1 || true)"
+
+      # The build the patch set names, taken from sources.json rather than written here, so the
+      # job cannot drift from the manifest the app ships. Verified against the hash the manifest
+      # publishes: a tracker that served something else would otherwise be patched and checked
+      # as if it were this build.
+      - name: Fetch the Discord fixtures
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/sources.tsv
+          import json
+          source = next(s for s in json.load(open("sources.json"))["sources"]
+                        if s["id"] == "discord_351200")
+          print(source["url"], source["sha256_expected"], "base.apk")
+          for split in source["splits"]:
+              name = split["url"].rsplit("/", 1)[1]
+              print(split["url"], split["sha256_expected"], f"{name}.apk")
+          PY
+          mkdir -p "$FIXTURES/discord/extracted"
+          while read -r url sha name; do
+            echo "fetching $name"
+            curl -sSL --fail --retry 3 -A 'sleepy-verify' -o "$FIXTURES/discord/extracted/$name" "$url"
+            echo "$sha  $FIXTURES/discord/extracted/$name" | sha256sum -c -
+          done < /tmp/sources.tsv
+          ls -la "$FIXTURES/discord/extracted"
+
+      # The whole suite, with the fixtures present. This is the difference between a green run
+      # that checked something and a green run that skipped the parts that matter.
+      - name: Run the suite against the real build
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          mkdir -p "$OUT"
+          SLEEPY_FIXTURES_ROOT="$FIXTURES" \
+          SLEEPY_PATCHED_BUNDLE_OUT="$OUT" \
+          SLEEPY_HARNESS_OUT_DIR="$OUT" \
+            ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Report what ran
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          total = skipped = 0
+          for path in glob.glob("app/build/test-results/testDebugUnitTest/*.xml"):
+              root = ET.parse(path).getroot()
+              total += int(root.get("tests", 0))
+              skipped += int(root.get("skipped", 0))
+          print(f"{total} tests, {skipped} skipped")
+          if skipped:
+              print("Skipped tests are ones whose fixture is not on this runner. The Discord")
+              print("APK is fetched above, so a skip here is a fixture that is not covered -")
+              print("the decompiled tree and the OctoGram builds - rather than the base split.")
+          PY
+
+      # The check this workflow exists for. Hermes' own parser reads the bundle the app would
+      # write, and Hermes' own decoder walks every function the patch set touches. The same run
+      # is made against the unpatched bundle first: if Hermes rejects that too, the failure is
+      # this job's toolchain and not the patch, and saying so is the difference between a useful
+      # signal and a red build nobody trusts.
+      #
+      # `disassemble <id>` prints the instruction listing for one function, not its header, so
+      # there is no per-function marker to count. What is asserted instead is the pair of things
+      # that do not depend on the output format: the tool exits zero, and it produced a listing
+      # of a plausible size for the same set of functions in both bundles.
+      - name: Verify with Hermes
+        run: |
+          set -euo pipefail
+          HBC="$HERMES_CACHE/hbcdump"
+          STOCK_APK="$FIXTURES/discord/extracted/base.apk"
+          PATCHED="$OUT/patched.bundle"
+          IDS="$OUT/patched-functions.txt"
+
+          test -s "$PATCHED" || { echo "the suite did not write $PATCHED"; exit 1; }
+          test -s "$IDS" || { echo "the suite did not write $IDS"; exit 1; }
+
+          unzip -p "$STOCK_APK" assets/index.android.bundle > "$OUT/stock.bundle"
+
+          # One command string, so the 68 MB bundle is parsed once rather than once per function.
+          COMMANDS="$(sed 's/^/disassemble /; s/$/;/' "$IDS")quit"
+          COUNT="$(wc -l < "$IDS")"
+          echo "verifying $COUNT patched functions"
+
+          for bundle in stock patched; do
+            echo "=== $bundle ==="
+            # The load on its own: the version gate, the function table and the string table.
+            if ! "$HBC" "$OUT/$bundle.bundle" -c "summary;quit" > "$OUT/$bundle-summary.txt" 2>&1; then
+              echo "Hermes refused to load the $bundle bundle:"
+              cat "$OUT/$bundle-summary.txt"
+              exit 1
+            fi
+            echo "loaded; summary:"
+            sed 's/^/    /' "$OUT/$bundle-summary.txt" | head -20
+
+            # Then every function this build patches, through Hermes' own decoder.
+            if ! "$HBC" "$OUT/$bundle.bundle" -c "$COMMANDS" > "$OUT/$bundle-dump.txt" 2> "$OUT/$bundle-err.txt"; then
+              echo "Hermes failed while disassembling the $bundle bundle:"
+              tail -40 "$OUT/$bundle-err.txt"
+              exit 1
+            fi
+            lines=$(wc -l < "$OUT/$bundle-dump.txt")
+            echo "disassembled $COUNT functions into $lines lines"
+            if [ "$lines" -lt "$COUNT" ]; then
+              echo "$bundle: fewer lines of bytecode than functions asked for"
+              head -20 "$OUT/$bundle-dump.txt"
+              exit 1
+            fi
+            if [ -s "$OUT/$bundle-err.txt" ]; then
+              echo "$bundle: Hermes wrote to stderr while disassembling:"
+              head -20 "$OUT/$bundle-err.txt"
+              exit 1
+            fi
+          done
+
+          # Both runs decode the same functions, so the listings should be the same order of
+          # magnitude. A patched body is at most a few bytes different from the one it replaced;
+          # a listing that collapsed or exploded means the decoder lost its place, which is the
+          # failure this job is here to catch and which a zero exit code would not show.
+          stock_lines=$(wc -l < "$OUT/stock-dump.txt")
+          patched_lines=$(wc -l < "$OUT/patched-dump.txt")
+          if [ "$stock_lines" -eq 0 ]; then
+            echo "the control produced nothing, so this run cannot judge the patch"
+            exit 1
+          fi
+          delta=$(( patched_lines > stock_lines ? patched_lines - stock_lines : stock_lines - patched_lines ))
+          echo "listing lines: stock $stock_lines, patched $patched_lines, differing by $delta"
+          if [ "$delta" -gt $(( stock_lines / 4 )) ]; then
+            echo "the patched listing differs from the control by more than a quarter, which the"
+            echo "patch set is too small to explain"
+            exit 1
+          fi
+
+          echo "Hermes loaded and decoded both bundles, and read every patched function"
+
+      - name: Upload the verification output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bundle-verification
+          path: |
+            ${{ env.OUT }}/patched.properties
+            ${{ env.OUT }}/patched-functions.txt
+            ${{ env.OUT }}/*-dump.txt
+            ${{ env.OUT }}/*-err.txt
+          if-no-files-found: warn
+
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: verify-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
