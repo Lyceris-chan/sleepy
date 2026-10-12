@@ -121,13 +121,13 @@ object DiscordHermesFunctionCatalog {
             "edited, the same lever that removed the other billing rows."),
         entry(18823, "Stops the log aggregator from feeding the in-app debug panel's log " +
             "buffer."),
-        entry(18854, "Stops the time-to-interactive tracker recording a " +
+        entry(18852, "Stops the time-to-interactive tracker recording a " +
             "milestone's start."),
-        entry(18856, "Stops the time-to-interactive tracker recording a " +
+        entry(18854, "Stops the time-to-interactive tracker recording a " +
             "milestone's end."),
-        entry(18858, "Stops the time-to-interactive tracker storing a value for " +
+        entry(18856, "Stops the time-to-interactive tracker storing a value for " +
             "a milestone."),
-        entry(18866, "Stops the time-to-interactive tracker recording a " +
+        entry(18864, "Stops the time-to-interactive tracker recording a " +
             "measurement."),
         entry(18894, "Stops the tracing recorder appending its formatted line to " +
             "the in-memory startup log."),
@@ -477,9 +477,9 @@ object DiscordHermesFunctionCatalog {
             "nothing to render."),
         entry(72869, "Stubs the shop screen's internal component, leaving the screen with " +
             "nothing to render."),
-        entry(72870, "Stubs the collectibles shop screen itself, so there is no shop tab to " +
+        entry(72872, "Stubs the collectibles shop screen itself, so there is no shop tab to " +
             "browse."),
-        entry(72871, "Stubs the collectibles shop screen itself, so there is no shop tab to " +
+        entry(72873, "Stubs the collectibles shop screen itself, so there is no shop tab to " +
             "browse."),
         entry(73022, "Returns false from the usePredicate closure the Quests toggles " +
             "in Data & Privacy carry, so those settings rows are hidden. The two toggles' " +
@@ -591,7 +591,7 @@ object DiscordHermesFunctionCatalog {
             group = SHOP_GROUP,
             label = "The collectibles shop",
             description = "Stops the shop screen drawing, so no tab or route opens it.",
-            functionIds = listOf(72863, 72864, 72868, 72869, 72870, 72871)
+            functionIds = listOf(72863, 72864, 72868, 72869, 72872, 72873)
         ),
         Feature(
             slug = "shop_entry_points",
@@ -843,7 +843,7 @@ object DiscordHermesFunctionCatalog {
             group = STARTUP_GROUP,
             label = "Startup timing",
             description = "Stops the app recording how long startup takes, milestone by milestone.",
-            functionIds = listOf(18854, 18856, 18858, 18866, 18894, 18895, 18896, 18897, 18898, 18899, 18900, 18903)
+            functionIds = listOf(18852, 18854, 18856, 18864, 18894, 18895, 18896, 18897, 18898, 18899, 18900, 18903)
         ),
         Feature(
             slug = "debug_logging",

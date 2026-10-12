@@ -174,6 +174,64 @@ class HermesBundleApplicationTest {
     }
 
     /**
+     * Every entry that names a function must be pointing at that function.
+     *
+     * `HermesBundlePatcher` compares the size an entry declares against the size the bundle
+     * holds, which catches a table built for another release. It does not catch a table built
+     * for *this* release whose ids were resolved wrongly, because the size was read from the
+     * function the id now names - it agrees with itself whatever that function is.
+     *
+     * The bundle names its functions, and those names are Discord's own: `recordStart`,
+     * `recordEnd`, `serializeEnd`. This is the check that would have caught the 351.2.0 table
+     * shipping `recordStart` at the id of `recordEnd`; it was found by hand instead, with the
+     * body in front of it.
+     */
+    @Test
+    fun everyNamedEntryNamesTheFunctionItPatches() {
+        assumeTrue("the Discord base APK is not on this machine (${baseApk.path})", baseApk.isFile)
+        assumeTrue("${hermesDecomp.path} is not executable", hermesDecomp.canExecute())
+
+        val base = bundleOf(baseApk)
+        assumeTrue(
+            "the base bundle is not the build the patch set was extracted from",
+            base.size.toLong() == DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong()
+        )
+
+        val temp = File.createTempFile("hermes-names-", ".bundle")
+        val names: Map<Int, String>
+        try {
+            temp.writeBytes(base)
+            val output = functionTableDump(temp)
+            names = parseFunctionNames(output)
+        } finally {
+            temp.delete()
+        }
+        assertTrue(
+            "the disassembler produced no function names, so this check cannot run",
+            names.size > DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT / 2
+        )
+
+        val wrong = DiscordHermesBundlePatch.PATCHES
+            .filter { it.name.isNotEmpty() }
+            .mapNotNull { patch ->
+                val actual = names[patch.functionId] ?: "<not in the table>"
+                if (actual == patch.name) null
+                else "fn ${patch.functionId}: the table names it ${patch.name}, the bundle " +
+                    "names it $actual"
+            }
+        assertEquals(wrong.take(10), emptyList<String>())
+    }
+
+    /** `id -> name` from `hermes-decomp dump --kind functions`, skipping the unnamed. */
+    private fun parseFunctionNames(dump: String): Map<Int, String> =
+        dump.lineSequence().mapNotNull { line ->
+            val parts = line.trim().split(Regex("\\s+"))
+            if (parts.size < 4 || parts[0].toIntOrNull() == null) return@mapNotNull null
+            val name = parts.subList(1, parts.size - 2).joinToString(" ")
+            if (name.isEmpty()) null else parts[0].toInt() to name
+        }.toMap()
+
+    /**
      * Reads every patched function back with the real disassembler.
      *
      * The failure this is here for is a body that is not valid bytecode at all: a replacement
@@ -221,6 +279,19 @@ class HermesBundleApplicationTest {
                 "functions read back by hermes-decomp, ${rejected.size} rejected"
         )
         assertEquals(rejected.take(10), emptyList<String>())
+    }
+
+    /** Runs `hermes-decomp dump --kind functions` and returns its output. */
+    private fun functionTableDump(bundle: File): String {
+        val process = ProcessBuilder(
+            hermesDecomp.absolutePath, "dump", "--kind", "functions", bundle.absolutePath
+        ).redirectErrorStream(true).start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        if (!process.waitFor(600, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            throw AssertionError("hermes-decomp timed out reading the function table")
+        }
+        return output
     }
 
     private fun disassemble(bundle: File, functionId: Int): Pair<Int, String> {

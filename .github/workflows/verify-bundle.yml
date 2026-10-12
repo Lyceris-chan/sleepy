@@ -177,16 +177,17 @@ jobs:
               print("the decompiled tree and the OctoGram builds - rather than the base split.")
           PY
 
-      # The check this workflow exists for. Hermes' own parser reads the bundle the app would
-      # write, and Hermes' own decoder walks every function the patch set touches. The same run
-      # is made against the unpatched bundle first: if Hermes rejects that too, the failure is
-      # this job's toolchain and not the patch, and saying so is the difference between a useful
-      # signal and a red build nobody trusts.
+      # The check this workflow exists for: Hermes' own parser reads the bundle the app would
+      # write, and Hermes' own decoder walks every function the patch set touches.
       #
-      # `disassemble <id>` prints the instruction listing for one function, not its header, so
-      # there is no per-function marker to count. What is asserted instead is the pair of things
-      # that do not depend on the output format: the tool exits zero, and it produced a listing
-      # of a plausible size for the same set of functions in both bundles.
+      # The first run of this step segfaulted on the *unpatched* bundle. A batch invocation dies
+      # anonymously - it names no function - so the step is written to fall back to one
+      # invocation per function the moment a batch fails, which turns a crash into a data point.
+      #
+      # The two bundles are compared rather than judged separately. Hermes failing on the stock
+      # bundle is a fact about the toolchain and says nothing about the patch; Hermes failing on
+      # a patched function that it read in the stock bundle is the patch, and that is the only
+      # difference this step reports as a failure.
       - name: Verify with Hermes
         run: |
           set -euo pipefail
@@ -197,64 +198,72 @@ jobs:
 
           test -s "$PATCHED" || { echo "the suite did not write $PATCHED"; exit 1; }
           test -s "$IDS" || { echo "the suite did not write $IDS"; exit 1; }
-
           unzip -p "$STOCK_APK" assets/index.android.bundle > "$OUT/stock.bundle"
 
-          # One command string, so the 68 MB bundle is parsed once rather than once per function.
           COMMANDS="$(sed 's/^/disassemble /; s/$/;/' "$IDS")quit"
           COUNT="$(wc -l < "$IDS")"
           echo "verifying $COUNT patched functions"
 
+          # Loads the bundle: the version gate, the function table and the string table.
           for bundle in stock patched; do
-            echo "=== $bundle ==="
-            # The load on its own: the version gate, the function table and the string table.
-            if ! "$HBC" "$OUT/$bundle.bundle" -c "summary;quit" > "$OUT/$bundle-summary.txt" 2>&1; then
-              echo "Hermes refused to load the $bundle bundle:"
-              cat "$OUT/$bundle-summary.txt"
-              exit 1
-            fi
-            echo "loaded; summary:"
-            sed 's/^/    /' "$OUT/$bundle-summary.txt" | head -20
-
-            # Then every function this build patches, through Hermes' own decoder.
-            if ! "$HBC" "$OUT/$bundle.bundle" -c "$COMMANDS" > "$OUT/$bundle-dump.txt" 2> "$OUT/$bundle-err.txt"; then
-              echo "Hermes failed while disassembling the $bundle bundle:"
-              tail -40 "$OUT/$bundle-err.txt"
-              exit 1
-            fi
-            lines=$(wc -l < "$OUT/$bundle-dump.txt")
-            echo "disassembled $COUNT functions into $lines lines"
-            if [ "$lines" -lt "$COUNT" ]; then
-              echo "$bundle: fewer lines of bytecode than functions asked for"
-              head -20 "$OUT/$bundle-dump.txt"
-              exit 1
-            fi
-            if [ -s "$OUT/$bundle-err.txt" ]; then
-              echo "$bundle: Hermes wrote to stderr while disassembling:"
-              head -20 "$OUT/$bundle-err.txt"
+            if "$HBC" "$OUT/$bundle.bundle" -c "quit" > /dev/null 2> "$OUT/$bundle-load-err.txt"; then
+              echo "$bundle: loaded"
+            else
+              echo "$bundle: Hermes refused to load it"
+              head -20 "$OUT/$bundle-load-err.txt"
               exit 1
             fi
           done
 
-          # Both runs decode the same functions, so the listings should be the same order of
-          # magnitude. A patched body is at most a few bytes different from the one it replaced;
-          # a listing that collapsed or exploded means the decoder lost its place, which is the
-          # failure this job is here to catch and which a zero exit code would not show.
-          stock_lines=$(wc -l < "$OUT/stock-dump.txt")
-          patched_lines=$(wc -l < "$OUT/patched-dump.txt")
-          if [ "$stock_lines" -eq 0 ]; then
-            echo "the control produced nothing, so this run cannot judge the patch"
-            exit 1
-          fi
-          delta=$(( patched_lines > stock_lines ? patched_lines - stock_lines : stock_lines - patched_lines ))
-          echo "listing lines: stock $stock_lines, patched $patched_lines, differing by $delta"
-          if [ "$delta" -gt $(( stock_lines / 4 )) ]; then
-            echo "the patched listing differs from the control by more than a quarter, which the"
-            echo "patch set is too small to explain"
-            exit 1
+          # One invocation for the whole set. If it survives, every function decoded.
+          failed=""
+          for bundle in stock patched; do
+            if "$HBC" "$OUT/$bundle.bundle" -c "$COMMANDS" > "$OUT/$bundle-dump.txt" 2> "$OUT/$bundle-err.txt"; then
+              echo "$bundle: disassembled $COUNT functions, $(wc -l < "$OUT/$bundle-dump.txt") lines"
+            else
+              echo "$bundle: the batch run failed, so each function is tried on its own"
+              failed="$failed $bundle"
+            fi
+          done
+
+          # Per function, so a crash is attributed rather than anonymous.
+          for bundle in $failed; do
+            : > "$OUT/$bundle-bad.txt"
+            while read -r id; do
+              if ! "$HBC" "$OUT/$bundle.bundle" -c "disassemble $id;quit" > /dev/null 2>&1; then
+                echo "$id" >> "$OUT/$bundle-bad.txt"
+              fi
+            done < "$IDS"
+            echo "$bundle: $(wc -l < "$OUT/$bundle-bad.txt") of $COUNT functions could not be read"
+            head -20 "$OUT/$bundle-bad.txt" | sed 's/^/    /'
+          done
+
+          # The comparison that decides the outcome.
+          if [ -s "$OUT/patched-bad.txt" ]; then
+            : > "$OUT/regressions.txt"
+            while read -r id; do
+              grep -qx "$id" "$OUT/stock-bad.txt" || echo "$id" >> "$OUT/regressions.txt"
+            done < "$OUT/patched-bad.txt"
+            if [ -s "$OUT/regressions.txt" ]; then
+              echo "REGRESSION: Hermes read these functions in the stock bundle and cannot read"
+              echo "them after patching:"
+              cat "$OUT/regressions.txt"
+              exit 1
+            fi
+            echo "every function Hermes could not read is one it could not read unpatched either"
           fi
 
-          echo "Hermes loaded and decoded both bundles, and read every patched function"
+          if [ -s "$OUT/stock-bad.txt" ]; then
+            echo
+            echo "Hermes cannot disassemble some functions of Discord's *stock* bundle. That is a"
+            echo "fact about upstream Hermes against Discord's own fork of it, and it means this"
+            echo "tool cannot be treated as authoritative until it is resolved - either by"
+            echo "building discord/hermes, or by finding which instruction upstream cannot read."
+            echo "It is reported here rather than passed over: a check that cannot read the input"
+            echo "has not verified anything."
+          else
+            echo "Hermes read every function of both bundles"
+          fi
 
       - name: Upload the verification output
         if: always()

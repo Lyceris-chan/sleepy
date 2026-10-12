@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-10-12
+
+### Fixed
+
+- **Six patches were aimed at the wrong functions, and 3.7.0 shipped that way.** Two modules are affected: the time-to-interactive tracker, where `recordStart` was patched at the id of `recordEnd`, and the collectibles shop, where two entries landed on a pair of loading helpers that did not exist in the previous release. Two of the intended functions were not patched at all.
+
+  The cause is how function ids were carried from one release to the next. Hermes numbers functions per bundle, so each id has to be resolved again, and the resolution identified a function by its ordinal position among the closures of the module it belongs to. That is only stable while the module's closure list is: add or remove one closure anywhere in a module and every later ordinal in it shifts by one. The tracker gained a pair of closures two places before its four targets; the shop gained two in the middle of its block. Everything after them moved, and nothing about the method noticed.
+
+  What made it invisible is that nothing checks *which* function an id names. The patcher compares the size an entry declares against the size the bundle holds, which catches a table built for the wrong release - but the size is read from whatever function the id now names, so it agrees with itself either way. A mis-aimed patch applies cleanly, reads back cleanly, and every test passes.
+
+  It was found by resolving every id a second and third way and comparing: by the **name the bundle itself gives each function**, which for these entries is Discord's own method name (`recordStart`, `recordEnd`, `serializeEnd`, `hasData`), and by how closely the new body's instruction stream matches the old one's. 104 of 107 entries with a name agreed with what shipped; the three that did not were three of the six. The other three were caught by the same two checks.
+
+  A test now enforces the first of those checks against the real build: every entry that records a name must be pointing at a function the bundle names that way. All 111 named entries pass. That would have caught four of the six.
+
+- The patch table is verified against the build it names before release, not only against itself: every entry applies with nothing skipped, every patched body stays inside its function's register frame, and all 208 functions read back through a Hermes disassembler.
+
+### Notes
+
+- **The verification gap this release does not close.** There is still no recorded patched 351.2.0 build to compare against, and no way to run the bundle: Hermes compares its bytecode version for equality and no released desktop build reads this version. A body that is well formed and does something other than what its entry says passes every check the project has. That is the class the six mis-aimed entries belonged to, and the reason this release leans on a second and third independent resolution rather than on one.
+
 ## [3.7.0] - 2026-10-12
 
 ### Changed
@@ -350,7 +370,8 @@ No part of the app changed in this release. It carries three build changes, and 
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...HEAD
+[3.7.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.1...v3.5.0
