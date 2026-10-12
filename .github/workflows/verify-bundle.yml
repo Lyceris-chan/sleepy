@@ -37,12 +37,18 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # The last revision of facebook/hermes whose BYTECODE_VERSION is 98, which is what the Discord
-  # 351.2.0 bundle declares. Hermes compares the version for equality - `header->version !=
-  # hbc::BYTECODE_VERSION` in BCProvider.cpp - so a newer build refuses this bundle outright and
-  # an older one predates the format. This is the commit before "Bump bytecode version to 99",
-  # and the version constant in it was confirmed to read 98.
-  HERMES_REV: 639e5d6afb16ce5018afe5005427a4a85f9bf28b
+  # Discord's own Hermes, on the branch that built the engine their app ships.
+  #
+  # This started as facebook/hermes at the last revision whose BYTECODE_VERSION is 98, which is
+  # what this bundle declares - Hermes compares the version for equality, so no other version
+  # will do. That build segfaulted disassembling the *unpatched* Discord bundle, which is a fact
+  # about upstream against Discord's fork rather than about the patch, and it made the check
+  # worthless: a tool that cannot read the input has verified nothing.
+  #
+  # discord/hermes is public, this branch carries BYTECODE_VERSION 98, and it is the engine the
+  # app actually runs. It is the only build of Hermes whose opinion about this bundle counts.
+  HERMES_REPO: discord/hermes
+  HERMES_REV: 2442bab300d10501dad79ed3830c019728589080
   HERMES_CACHE: ${{ github.workspace }}/.hermes-cache
   FIXTURES: ${{ github.workspace }}/.discord-fixtures
   OUT: ${{ github.workspace }}/.verify-out
@@ -80,7 +86,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.HERMES_CACHE }}
-          key: hermes-${{ runner.os }}-${{ env.HERMES_REV }}
+          key: hermes-${{ runner.os }}-${{ env.HERMES_REPO }}-${{ env.HERMES_REV }}
 
       - name: Build hbcdump
         if: steps.hermes-cache.outputs.cache-hit != 'true'
@@ -91,7 +97,7 @@ jobs:
           mkdir -p "$HERMES_CACHE"
           git init hermes-src
           cd hermes-src
-          git remote add origin https://github.com/facebook/hermes.git
+          git remote add origin "https://github.com/$HERMES_REPO.git"
           git fetch --depth 1 origin "$HERMES_REV"
           git checkout FETCH_HEAD
           # Intl is off: it changes string handling in the compiler and nothing about the
