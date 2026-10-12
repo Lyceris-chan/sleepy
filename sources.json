@@ -4,12 +4,13 @@
   "manifest_url": "https://raw.githubusercontent.com/Lyceris-chan/sleepy/main/sources.json",
   "project_url": "https://github.com/Lyceris-chan/sleepy",
   "known_limitations": {
-    "discord_349205": [
-      "JavaScript patches are recorded for Discord 349.5 and checked against a build that was patched and verified by hand. Every function in the patched bundle is compared against that build's shipped bundle, byte for byte, and 155,423 of the 155,429 are identical. The six that differ are named rather than left to the count. Two of them correct a mistake in that build: it stubs 49956 and 58239 to undefined, and in 349.5 those ids name the SHOW_CONFIRM_MODAL handler registered by modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx and the uncompiled variant of the useTypingUserIdsForDisplay hook, whose only callers dereference the return—49954 reads .result off the handler's and hasTypingIndicatorContent reads .length off the hook's—so its own stub throws a TypeError on the paths those callers run. This build returns {result: {confirmed: false}} from the handler, so an agent asking for a confirmation is told it was not confirmed, and an empty array from the hook, whose length of zero means no typing users; each is the shape its caller reads. The other four are surfaces that build leaves reachable: 62409 and 75719 are the React Compiler copies of the two profile content components, so the Board and Wishlist tabs come back whenever the React Compiler experiment is on, and 45447 and 45448 are the two branches of the Shop This Look experiment gate, which is where the overflow menu's row for that feature is built from, so removing the sheet alone left the row on screen. Those patches are pinned to Discord 349.5's bundle; a different release's bundle is refused rather than patched with stale function ids, because Hermes numbers functions per bundle and an id from one release names an unrelated function in another.",
-      "Four of the functions the JavaScript patch set stubs keep the exception-handler table of the body they had before, which was far larger: five entries naming ranges that end past where the new, much shorter body ends. Those bytes are identical in the unpatched bundle, in the compared build and in this one, so they are inherited rather than introduced here. A stub calls nothing and cannot throw, except at the padding that follows it, which no entry in the table covers, so the entries are believed unreachable—but that is a reading of the bytecode and not something observed on a running app, and it is recorded here rather than left out.",
+    "discord_351200": [
+      "The JavaScript patches are written for Discord 351.2.0 and refuse any other bundle. Hermes numbers functions per bundle, so an id from one release names an unrelated function in another; every entry therefore declares the size of the body it replaces, and the patcher skips an entry whose declaration does not match rather than writing bytes into a function it was not built for. Of the 208 entries, 175 are constant-shaped stubs whose bytes name nothing bundle-specific and carry unchanged, 17 are promise-shaped stubs that are re-assembled against this bundle because they name the strings “Promise” and “resolve” through the bundle’s own string identifiers, and 16 are edits of an original body, re-derived against the body this build has. The set is one entry smaller than the one written for the previous release: entry 49956 lived in modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx, and 351.2.0 ships no modules/vibegrations/ module path at all, so that entry has no target here.",
+      "What the previous release’s set could claim and this one cannot: that set was extracted from a build that had been patched and verified by hand, and every function of the patched bundle was compared against that build’s shipped bundle byte for byte. There is no recorded patched 351.2.0 build, so that comparison has no counterpart here and is gone. What replaces it is narrower and is stated plainly: every entry must apply with nothing skipped to the build it names, and a real Hermes disassembler must read every one of the 208 patched functions back. That catches a body which occupies the right number of bytes but is not valid bytecode, which is the failure that matters most and the one an earlier table was found to carry. It does not catch a body that assembles cleanly and does something other than what its entry says.",
+      "The functions the patch set stubs keep the exception-handler table of the much larger body they had before, and those entries name ranges that end past where the new, shorter body does. The bytes are copied through from the unpatched bundle unchanged, so they are inherited rather than introduced here. A stub calls nothing and cannot throw, except at the padding that follows it, which no entry covers, so the entries are believed unreachable—but that is a reading of the bytecode and not something observed on a running app, and it is recorded here rather than left out.",
       "The network blocklist is generated against the selected APK rather than shipped as fixed text. Three of the names a fixed list would need are renamed by R8 on every release—the okhttp3.Response constructor, the Protocol enum and that enum's HTTP/1.1 field—so this build reads all three out of the target's DEX instead. The method it produces reproduces the compared build's byte for byte; a build where they cannot be resolved is skipped with the reason stated rather than patched with another release's names.",
       "Every AndroidManifest edit is applied. The split declarations, extractNativeLibs, the six dead permissions, the two Sentry providers, the three Play split metadata entries, the AppsFlyer intent query, the RPC service's exported flag and the three Google Analytics components—AnalyticsReceiver, AnalyticsService and AnalyticsJobService, rewritten from android:enabled=true to false—are all edited into the compiled manifest, and each is reported as its own step. The permissions and the Analytics components are the two groups no switch moves, because each is a fact about the build rather than a decision about a run, and the six permission names are removed on Discord builds only: OctoGram declares READ_CONTACTS and WRITE_CONTACTS for real and syncs the address book through them, so an edit that traveled to every app would take a live permission from that one.",
-      "Resources are merged in from the density and language splits, and the resource table is rebuilt around them. Every split ships a partial table naming only the files it carries—the base's names its own 3,640 and not one of the density split's 1,246—so without this the merged-in files would sit in the archive with nothing in the APK's table pointing at them. The table shipped in the result is merged from the base's and the splits' tables at patch time, keeping each source's resource ids, configurations and compiled file paths; the merge is refused, and the base's table kept, when the tables cannot be reconciled. The merged table names 4,885 paths, which is every resource file the merged APK holds and no others. That is one fewer than the tables it is merged from name between them, because res/xml/splits0.xml—the split-install metadata, which describes an installation whose configuration splits have all been merged into one APK—is left out of the table and the archive together: the file goes as a pair with the row that named it, so the table never resolves to a path the APK does not hold.",
+      "Resources are merged in from the density and language splits, and the resource table is rebuilt around them. Every split ships a partial table naming only the files it carries—the base's names its own 3,853 and not one of the density split's 1,239—so without this the merged-in files would sit in the archive with nothing in the APK's table pointing at them. The table shipped in the result is merged from the base's and the splits' tables at patch time, keeping each source's resource ids, configurations and compiled file paths; the merge is refused, and the base's table kept, when the tables cannot be reconciled. The merged table names 5,091 paths, which is every resource file the merged APK holds and no others. That is one fewer than the tables it is merged from name between them, because res/xml/splits0.xml—the split-install metadata, which describes an installation whose configuration splits have all been merged into one APK—is left out of the table and the archive together: the file goes as a pair with the row that named it, so the table never resolves to a path the APK does not hold.",
       "The RPC service is closed without a switch. com.discord.socialrpc.DiscordRpcService is exported with no permission declared on it and no check on its caller, so any app installed on the device can bind it and publish presence frames as the user. There is no switch that re-opens it, because the other position of such a switch would be the unsafe one.",
       "Three media edits stay disabled: one crashes the camera as soon as it opens, one records video below the encoder's minimum, and one passes a value the media engine does not document.",
       "Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates."
@@ -23,14 +24,14 @@
   },
   "sources": [
     {
-      "id": "discord_349205",
-      "display_name": "Discord Alpha 349.5",
+      "id": "discord_351200",
+      "display_name": "Discord Alpha 351.2",
       "package_name": "com.discord",
-      "version_name": "349.5 Alpha",
-      "version_code": 349205,
-      "url": "https://tracker.vendetta.rocks/tracker/download/349205/base",
+      "version_name": "351.0 Alpha",
+      "version_code": 351200,
+      "url": "https://tracker.vendetta.rocks/tracker/download/351200/base",
       "apk_type": "split_base",
-      "sha256_expected": "d0967f0d9aea985ce74336880c2a7da6d8fcf5c2cf5b0c3f6597a23ca9c3488b",
+      "sha256_expected": "0826c70e326b99172859f41e08ab4097bf2ea19209e4c80a4706f548ba1c0043",
       "description": "Discord Alpha from Vendetta tracker. Automatically merges ARM64 native shared libraries and the density and language splits' resources into a universal APK and rebuilds the resource table around them, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, and locks the patched JS bundle.",
       "changelog_url": "https://discord.com/blog",
       "patch_ids": [
@@ -63,23 +64,23 @@
       ],
       "splits": [
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/349205/config.arm64_v8a",
-          "sha256_expected": "7b59a497e9fd620dfa636aa12664b4f8b43537abc549a385ba6c43acc9be8504",
-          "size_bytes": 73875131
+          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.arm64_v8a",
+          "sha256_expected": "93c5d1e8f20dcf76336adb41771b8715c2ca767ec92515565398e54587b58ec5",
+          "size_bytes": 73514771
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/349205/config.hdpi",
-          "sha256_expected": "c8f31fd13e3dfa9c83aa2589bd5b5495f09f88fe19e7dc4b1b3b18333074703b",
-          "size_bytes": 6991441
+          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.hdpi",
+          "sha256_expected": "7c6362b22ea370442f2de49ecee58701a6188d0214c01a0dc60cc4275bac822c",
+          "size_bytes": 6802308
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/349205/config.de",
-          "sha256_expected": "929e7a7f7dc2fc7e67ce80bb402876f8732a2d00b77331ac3150debe4d952807",
+          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.de",
+          "sha256_expected": "7e4d2127480fe429458f3a8f6cda08c26fa77e1cdd3a5f7a8e371373598fd2b6",
           "size_bytes": 37273
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/349205/config.en",
-          "sha256_expected": "c5b76e690b02869f12ae0d692f1b8341bcfb306ca0061ae44d8b4055fd075d59",
+          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.en",
+          "sha256_expected": "c76849d290dbce3b98e6cb43f35a3112163b1eb277a856aab053b291dcb6acba",
           "size_bytes": 70041
         }
       ]

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-10-12
+
+### Changed
+
+- **sleepy patches Discord Alpha 351.2.0.** The list offers this build and no longer offers 349.5: Hermes numbers functions per bundle, so a patch written for one release names unrelated functions in another, and the two cannot be carried side by side. Everything the list did before still happens — the same 38 things, switched on the same way.
+
+  Moving the JavaScript patches to a new build is not a rename. Of the 208 entries, 175 are stubs that name nothing release-specific and carry unchanged; 17 name the strings "Promise" and "resolve" through the bundle's own string identifiers, which are renumbered every release, so each is re-assembled against this bundle rather than carried; and 16 are edits of an original body, where the registers, property names and closure ids all move, so each was re-derived against the body this build actually has.
+
+  One entry is gone. It lived in `modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx`, and 351.2.0 ships no `modules/vibegrations/` module path at all — the feature's screens are not in this build, so there is nothing to patch.
+
+  Two entries that shared a body with another are now given the same replacement as their pair, rather than one of each pair carrying bytes written for a body it no longer matched.
+
+- **Every native edit was re-pointed at this build.** R8 renames what it likes on every release, and ten of the smali patches named classes or methods that had moved: the obfuscated coroutine package, okhttp's obfuscated package, the AndroidX Startup initialiser that loads the emoji font, and the lambda numbering of four experiment delegates and the launch path. Each new name was read out of the build's own code — the emoji initialiser, for instance, by the string its `run()` names — and checked to have the same body at the new name before it was substituted.
+
+### Fixed
+
+- **One entry in the 3.6.0 set carried a truncated body.** Its replacement ended in a `Call2` with two of its four operands written, which is not valid bytecode. Nothing came of it: the entry was an alias of another that was patched correctly, and the two share one body, so the good one was the one that landed. It is fixed rather than carried, and the suite now reads every patched function back with a real Hermes disassembler, which is the check that catches this shape of mistake.
+
+### Security
+
+- The blocklist's generated interceptor no longer trusts a name it did not check. The three obfuscated okhttp names it reads out of the target are now each verified to exist in that target before the method is built from them.
+
+### Notes
+
+- **This release cannot be verified the way 3.6.0 was, and says so.** The 349.5 set was extracted from a build that had been patched and verified by hand, and every function of sleepy's output was compared against that build byte for byte. There is no such build for 351.2.0. What the suite checks instead is that every entry applies to the build it names with nothing skipped, and that every patched function decodes as valid Hermes bytecode. That is a real check and a narrower one: it would not catch a body that assembles cleanly and does something other than what its entry says.
+
 ## [3.6.0] - 2026-10-07
 
 ### Changed
@@ -324,7 +350,8 @@ No part of the app changed in this release. It carries three build changes, and 
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.6.0...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.0...HEAD
+[3.7.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.1...v3.5.0
 [3.4.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.4.0...v3.4.1

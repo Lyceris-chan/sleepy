@@ -65,7 +65,7 @@ class StartupClassLoadTest {
 
         /** The crash-report setup the launch path runs on a thread of its own. */
         const val SETUP_SIGNATURE =
-            ".method private static final performInitialization${'$'}lambda${'$'}10(" +
+            ".method private static final performInitialization${'$'}lambda${'$'}1(" +
                 "Lcom/discord/MainApplication;)" +
                 "Lcom/discord/crash_reporting/CrashReporting${'$'}CrashReportingReady;"
 

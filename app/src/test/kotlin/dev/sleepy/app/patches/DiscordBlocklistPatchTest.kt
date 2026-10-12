@@ -7,34 +7,37 @@ import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.model.TargetApk
 import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.dexEntries
-import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The generated Discord blocklist interceptor, against the recorded build.
+ * The generated Discord blocklist interceptor.
  *
- * A generated patch is only reviewable at its output: the emitted method must match the method
- * the recorded build produced for this release, character for character once the
- * discovered names are substituted. A separate test assembles the generated method against the
- * real APK, because text that reads correctly does not always assemble.
+ * A generated patch is only reviewable at its output: the method the generator emits has to be
+ * built from names the target build really carries, and it has to assemble. The first test checks
+ * the names against that build's own DEX; the second assembles the generated method into it,
+ * because text that reads correctly does not always assemble.
  */
 class DiscordBlocklistPatchTest {
 
     /**
-     * The comparison: byte-for-byte against the recorded build's own method.
+     * The three discovered names, checked against the build they were read from.
      *
-     * This also pins the three discovered names, because a body that matches by coincidence of
-     * names is not the same claim as a body that matches because the names were read correctly.
+     * The resolver reads an `okhttp3.Response` constructor, the `Protocol` class and that class's
+     * HTTP/1.1 field out of the target's own DEX, because R8 renames all three on every release.
+     * The earlier form of this test compared the generated method character for character against
+     * a recorded patched build's copy of it. There is no recorded patched 351.2.0 build, so that
+     * comparison is gone - which makes this the check that has to carry the claim: every name the
+     * generator is handed must be a name the target actually carries, or the generated method is
+     * assembled from another release's spellings and fails on the phone rather than here.
      */
     @Test
-    fun generatedInterceptorMatchesTheReferenceBuild() {
+    fun theDiscoveredNamesAreTheOnesThisBuildCarries() {
         val dexEntries = dexEntries(BASE_APK)
-        val target = TargetApk(DexProcessor.buildClassToDexIndex(dexEntries), dexEntries)
+        val classToDex = DexProcessor.buildClassToDexIndex(dexEntries)
+        val target = TargetApk(classToDex, dexEntries)
 
         val resolution = OkHttpNameResolver.resolve(target)
         assertTrue(
@@ -43,29 +46,32 @@ class DiscordBlocklistPatchTest {
         )
         val names = (resolution as OkHttpResolution.Resolved).names
 
-        // The expected names come out of the recorded build's own generated method rather than
-        // a fixed spelling: R8 renames them on every release, and a hardcoded pair turns the next
-        // bump into an edit of this test instead of a check of the resolver.
-        val recorded = recordedMethodBody()
-        val ctorLine = Regex("Lokhttp3/Response;-><init>(\\([^\\n]*)").find(recorded)
-        assertNotNull("the recorded method must construct a Response", ctorLine)
-        val protocolLine = Regex("sget-object \\w+, L([^;]+);->(\\w+):L[^;]+;").find(recorded)
-        assertNotNull("the recorded method must read the Protocol HTTP/1.1 constant", protocolLine)
+        // The Protocol class has to be in the build, and it has to hold the field the resolver
+        // named: a class name that resolves to something without an HTTP/1.1 constant is worse
+        // than no resolution at all, because the generated method assembles and reads a field
+        // that is not there.
+        val protocolDescriptor = "L${names.protocolClass};"
+        val protocolDex = requireNotNull(classToDex[protocolDescriptor]) {
+            "the resolved Protocol class $protocolDescriptor is not in this build"
+        }
+        assertTrue(
+            "the resolved Protocol class must hold ${names.protocolHttp11Field}",
+            String(dexEntries.getValue(protocolDex), Charsets.ISO_8859_1)
+                .contains(names.protocolHttp11Field)
+        )
 
+        // The descriptor is a parameter list, so the class it constructs is the one it is
+        // written against rather than a name inside it. Every class the parameter list does name
+        // has to be in the build too: a descriptor carrying another release's obfuscated type
+        // assembles into a call the runtime cannot resolve.
+        val named = Regex("L[^;]+;").findAll(names.responseConstructorDescriptor).map { it.value }
+        val unresolved = named
+            .filterNot { it in classToDex || PLATFORM_PREFIXES.any(it::startsWith) }
+            .toList()
         assertEquals(
-            "the resolved constructor must be the one the recorded build calls",
-            ctorLine!!.groupValues[1],
-            names.responseConstructorDescriptor
-        )
-        assertEquals(
-            "the resolved Protocol class must be the one the recorded build names",
-            protocolLine!!.groupValues[1],
-            names.protocolClass
-        )
-        assertEquals(
-            "the resolved HTTP/1.1 field must be the one the recorded build names",
-            protocolLine.groupValues[2],
-            names.protocolHttp11Field
+            "every class the constructor descriptor names must be in this build",
+            emptyList<String>(),
+            unresolved
         )
 
         val generated = DiscordBlocklistPatch.interceptorBody(
@@ -73,32 +79,19 @@ class DiscordBlocklistPatchTest {
             protocolClass = names.protocolClass,
             protocolField = names.protocolHttp11Field
         )
-
-        val recordedLines = recorded.lines()
-        val generatedLines = generated.lines()
-
-        assertEquals(
-            "the generated body must have the recorded method's line count",
-            recordedLines.size,
-            generatedLines.size
-        )
-        recordedLines.forEachIndexed { index, line ->
-            assertEquals(
-                "line ${index + 1} of the generated body must match the recorded method",
-                line,
-                generatedLines[index]
-            )
-        }
-        // The line walk above pinpoints a difference; this catches the one it cannot see, a
-        // trailing newline, which otherwise changes what follows the method in the file.
         assertTrue(
-            "the generated body must equal the recorded method body",
-            recorded == generated
+            "the generated body must construct okhttp3.Response with the resolved descriptor",
+            generated.contains("Lokhttp3/Response;-><init>${names.responseConstructorDescriptor}")
         )
-
+        val protocolReference =
+            "L${names.protocolClass};->${names.protocolHttp11Field}:L${names.protocolClass};"
+        assertTrue(
+            "the generated body must read the resolved protocol field as $protocolReference",
+            generated.contains(protocolReference)
+        )
         println(
-            "Blocklist interceptor: ${generatedLines.size} lines, identical to the recorded method " +
-                "build's method"
+            "Blocklist interceptor: names ${names.responseConstructorDescriptor}, " +
+                "${names.protocolClass}->${names.protocolHttp11Field}, all present in this build"
         )
     }
 
@@ -165,48 +158,12 @@ class DiscordBlocklistPatchTest {
         println("Blocklist interceptor reassembled into $dexName (${patchedDex.size} bytes)")
     }
 
-    /**
-     * The `requestStatsInterceptor` method out of the recorded build's decompiled tree, cut from
-     * the `.method` line through its `.end method`.
-     *
-     * A tree that has not been through the recorded change set's blocklist step carries the stock
-     * method instead, which is a different thing to compare against: the comparison is skipped
-     * with that as its reason, rather than reported as a thousand-line mismatch between two
-     * methods that are not meant to be equal.
-     */
-    private fun recordedMethodBody(): String {
-        val relative = "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali"
-        val file =
-            SMALI_DIRS.map { File(REFERENCE_TREE, "$it/$relative") }.firstOrNull { it.exists() }
-        assumeTrue("the recorded tree is not on this machine ($relative)", file != null)
-
-        val source = file!!.readText(Charsets.UTF_8)
-        val start = source.indexOf(INTERCEPTOR_SIGNATURE)
-        val end = if (start == -1) -1 else source.indexOf(".end method", start)
-        assumeTrue(
-            "the recorded tree has no generated $INTERCEPTOR_SIGNATURE",
-            start != -1 && end != -1
-        )
-        val body = source.substring(start, end + ".end method".length)
-        assumeTrue(
-            "the recorded tree carries the stock interceptor rather than the blocklist",
-            body.contains("img.litix.io")
-        )
-        return body
-    }
-
     private companion object {
-        /** The Discord 349.5 base split, which lives outside the repository. */
+        /** The Discord 351.2.0 base split, which lives outside the repository. */
         val BASE_APK = ComparisonApks.discordBaseApk
 
-        /** The recorded build's decompiled tree—the patched one, which is what shipped. */
-        val REFERENCE_TREE = ComparisonApks.discordDecompiledBase
+        /** Types every Android build carries, so they are not in the APK's own class index. */
+        val PLATFORM_PREFIXES = listOf("Landroid/", "Ljava/", "Ljavax/", "Ldalvik/")
 
-        val SMALI_DIRS = listOf("smali", "smali_classes2", "smali_classes3", "smali_classes4")
-
-        const val INTERCEPTOR_SIGNATURE =
-            ".method private final requestStatsInterceptor(Lokhttp3/Interceptor\$Chain;" +
-                "Lcom/discord/resource_usage/DeviceResourceUsageRecorder\$RequestStats;)" +
-                "Lokhttp3/Response;"
     }
 }

@@ -18,10 +18,10 @@ class PatchItemContentTest {
     fun everyPatchedFunctionHasAFeatureGroupAndADescription() {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
-            "the set is the 209 functions the patch table covers, 205 taken from the recorded " +
-                "build plus the 4 edits it leaves unpatched: the two compiled-copy edits and the " +
-                "two branches of the Shop This Look gate",
-            209,
+            "the set is the 208 functions the patch table covers: 49956's module, " +
+                "modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx, is not in " +
+                "351.2.0 at all, so that entry has no target and is not in the table",
+            208,
             patched.size
         )
         assertEquals(

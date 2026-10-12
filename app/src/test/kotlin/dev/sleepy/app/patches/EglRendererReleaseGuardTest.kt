@@ -32,7 +32,7 @@ class EglRendererReleaseGuardTest {
         const val EGL_RENDERER = "com/discord/media/engine/video/egl_renderer/EglRenderer.smali"
 
         /** The lambda `init()` posts: it creates the context on the render thread. */
-        const val CREATE_LAMBDA = "init\$lambda\$10\$lambda\$9"
+        const val CREATE_LAMBDA = "init\$lambda\$0\$4"
 
         /** The field `release()` nulls, and so the one an "already released" guard reads. */
         const val HANDLER_FIELD = "renderThreadHandler"

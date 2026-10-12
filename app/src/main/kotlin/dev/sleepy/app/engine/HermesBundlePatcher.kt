@@ -4,41 +4,40 @@ import dev.sleepy.app.patches.DiscordHermesBundlePatch.FunctionPatch
 import java.security.MessageDigest
 
 /**
- * Writes whole recorded-build function bodies into a Hermes bundle.
+ * Writes whole replacement function bodies into a Hermes bundle.
  *
  * A function body is a fixed-size region of the bundle: the function header specifies where it
  * starts and how long it is, and nothing else in the file addresses its interior. Replacement
- * therefore depends on size alone. When the recorded body is no longer than the one the
+ * therefore depends on size alone. When the replacement is no longer than the body the
  * bundle already has, the patcher writes it over the old one and fills the remainder—which
  * sits after the body's final `Ret` and is unreachable—with `AsyncBreakCheck` (`0x7E`, a
  * valid one-byte zero-operand opcode in HBC 98), so that no part of the old function's
- * instructions remains. When the recorded body is longer, the patcher appends it to the end
+ * instructions remains. When the replacement is longer, the patcher appends it to the end
  * of the file behind a large `FunctionHeader` and re-points the function's 96-bit table entry
  * at it, because the function's original region cannot contain the extra bytes.
  *
- * ## Bodies are declared at the recorded build's size, not at the bundle's
+ * ## Bodies are declared at the replacement's size, not at the bundle's
  *
- * A replacement is usually shorter than the body it replaces, and the recorded build declares
- * the shorter extent: function 13894's body is 186 bytes in the base bundle and 6 in the
- * recorded build. The declaration is therefore narrowed to the replacement's length, in the 96-bit
- * entry's `bytecodeSizeInBytes` bits or in the large header's `+12` slot, as the recorded change
- * set does. Padding without narrowing the declaration also runs identically, because the padding
- * is unreachable, but it leaves 189 of the patched functions declaring a body longer than the one
- * the recorded build declares for them, and the two bundles cannot then be compared function for
- * function—the comparison this patcher is designed to produce. Applied to the Discord 349.5
- * bundle, the patcher produces 155,427 function bodies that are byte-identical to the
- * recorded build's; [dev.sleepy.app.patches.DiscordHermesBundlePatch] records why the other two
- * differ on purpose.
+ * A replacement is usually shorter than the body it replaces, so the declaration is narrowed to
+ * the replacement's length: in the 96-bit entry's `bytecodeSizeInBytes` bits or in the large
+ * header's `+12` slot, as the recorded change set's output did. Function 14391's body is 186
+ * bytes in the bundle and its replacement is 6. Padding without narrowing the declaration also
+ * runs identically, because the padding is unreachable, but it leaves the function declaring a
+ * body longer than the one that was written. Applied to the Discord 349.5 bundle, the patcher
+ * produced 155,427 function bodies byte-identical to the recorded build's, which is the check
+ * that comparison could make; the current 351.2.0 table has no recorded build, so what is
+ * checked there is the declaration itself and the padding behind it
+ * ([dev.sleepy.app.engine.HermesBundleApplicationTest]).
  *
  * ## One body, two functions
  *
- * Functions 62045 and 62046 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
- * share a single 47-byte body in this bundle but have different replacements, 47 and 19 bytes.
- * One write cannot serve both, so the longer replacement keeps the shared region and the other
- * function is relocated: its own 19 bytes are written at the end of the file, where its large
- * header declares that size. Nothing is overwritten and both bodies are identical to the
- * recorded build's; writing both into the shared region overwrites one of them with
- * `AsyncBreakCheck`.
+ * Functions 62264 and 62265 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
+ * share a single 47-byte body in this bundle, and the table gives each of them the same 19-byte
+ * replacement. So do 73022 and 73034, over a shared 37-byte body and a 5-byte replacement. One
+ * write cannot serve both, so the lower id keeps the shared region and the other function is
+ * relocated: its own replacement bytes are written at the end of the file, where its large header
+ * declares that size. Nothing is overwritten; writing both into the shared region would leave one
+ * of them holding `AsyncBreakCheck`.
  *
  * ## What is not invented
  *
@@ -423,7 +422,7 @@ object HermesBundlePatcher {
 
     /**
      * Index ranges of plans whose bodies overlap, so that at most one of each range can be
-     * written where it is. Overlap is common in this bundle: 6,598 consecutive pairs of its
+     * written where it is. Overlap is common in this bundle: 6,944 consecutive pairs of its
      * functions share a body exactly, and the Discord patch set carries two such pairs.
      */
     private fun overlappingGroups(plans: List<Plan>): List<List<Int>> {

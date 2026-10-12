@@ -326,7 +326,7 @@ class PatchingPipeline(private val context: Context) {
                                 explanation = "An App Bundle deals its resource ids out across " +
                                     "the splits, and each split ships a table naming only what " +
                                     "it holds. The base's table names none of the density " +
-                                    "split's 1,246 files, so without this the merged files would " +
+                                    "split's 1,239 files, so without this the merged files would " +
                                     "be present and unresolvable. The tables are merged chunk by " +
                                     "chunk rather than relinked: the entries are copied across " +
                                     "byte for byte with the configuration and file path they " +

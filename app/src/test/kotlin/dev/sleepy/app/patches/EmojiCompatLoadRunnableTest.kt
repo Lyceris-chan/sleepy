@@ -30,7 +30,7 @@ class EmojiCompatLoadRunnableTest {
 
     private companion object {
         /** The class holding the runnable AndroidX Startup posts. */
-        const val EMOJI_INITIALIZER = "k2/l.smali"
+        const val EMOJI_INITIALIZER = "df/x.smali"
 
         /** The runnable itself, and the only method the class has. */
         const val RUN = "run"

@@ -1,0 +1,210 @@
+package dev.sleepy.app.engine
+
+import dev.sleepy.app.patches.DiscordHermesBundlePatch
+import dev.sleepy.app.testing.ComparisonApks
+import dev.sleepy.app.testing.bundleOf
+import dev.sleepy.app.testing.readU32Le
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+
+/**
+ * The Discord Hermes patch table, applied to the build it names.
+ *
+ * The table is data extracted from one bundle: every entry declares the size of the body it
+ * replaces and carries bytes written for that body. Nothing about the entry is checked at the
+ * point it is used, so a table built for one release and used on another writes plausible bytes
+ * into unrelated functions. [HermesBundlePatcher] refuses an entry whose declared size does not
+ * match, which turns that mistake into a skip rather than a corruption - and this test is the
+ * other half: on the build the table was extracted from, *nothing* may be skipped.
+ *
+ * What it cannot check is whether a replacement does what its table entry says. There is no
+ * recorded build of the patched 351.2.0 bundle to compare against, and the earlier suite's
+ * function-for-function comparison is gone with it. The check that survives is structural and
+ * still catches the failure that matters most - a body that is not valid bytecode, which is how
+ * a truncated replacement would ship - so a real disassembler reads every patched function back.
+ *
+ * The base split is a fixture outside the repository; a machine without it reports the tests as
+ * skipped.
+ */
+class HermesBundleApplicationTest {
+
+    /** The shipped build the patch table was extracted from. */
+    private val baseApk = ComparisonApks.discordBaseApk
+    private val hermesDecomp = ComparisonApks.hermesDecomp
+
+    private val fileLengthOffset = 32
+    private val functionCountOffset = 40
+    private val sha1FooterSize = 20
+
+    /**
+     * The functions whose replacements do not fit where the bodies they replace are.
+     *
+     * Five are longer than the body they replace, which no in-place write can hold: 7762 inserts
+     * the cache clamp into the middle of the function, and the four settings rows append a
+     * `usePredicate` property. The other two share a body with another entry - 62265 with 62264,
+     * and 73034 with 73022 - and a shared region can hold only one replacement, so the lower
+     * function id keeps it and the other is relocated beside it.
+     */
+    private val relocated = listOf(8121, 15264, 15268, 15275, 16197, 62265, 73034)
+
+    @Test
+    fun everyEntryAppliesToTheBuildTheTableNames() {
+        assumeTrue("the Discord base APK is not on this machine (${baseApk.path})", baseApk.isFile)
+
+        val base = bundleOf(baseApk)
+        assertEquals(
+            "the base bundle is not the build the patch set was extracted from",
+            DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong(),
+            base.size.toLong()
+        )
+        assertEquals(
+            "the bundle's function count is not the one the patch set records",
+            DiscordHermesBundlePatch.TARGET_FUNCTION_COUNT,
+            readU32Le(base, functionCountOffset)
+        )
+
+        val result = HermesBundlePatcher.apply(base, DiscordHermesBundlePatch.PATCHES)
+        val patched = result.bundleBytes
+
+        // The bundle passed in must come back unmodified: callers keep using their own copy.
+        val baseDigest = MessageDigest.getInstance("SHA-1")
+        baseDigest.update(base, 0, base.size - sha1FooterSize)
+        assertTrue(
+            "the patcher modified the input bundle it was given",
+            baseDigest.digest()
+                .contentEquals(base.copyOfRange(base.size - sha1FooterSize, base.size))
+        )
+
+        // A skip means a function was left holding the old body, which on this build is a bug in
+        // the table and not a property of the input.
+        assertEquals(
+            emptyList<String>(),
+            result.skipped.map { "${it.functionId} (${it.name}): ${it.detail}" }
+        )
+        assertEquals(DiscordHermesBundlePatch.PATCHES.size, result.appliedCount)
+
+        assertEquals(
+            "in-place: " + result.writtenInPlace.joinToString { it.functionId.toString() },
+            DiscordHermesBundlePatch.PATCHES.size - relocated.size,
+            result.writtenInPlace.size
+        )
+        assertEquals(
+            "relocated: " + result.relocated.joinToString { it.functionId.toString() },
+            relocated,
+            result.relocated.map { it.functionId }
+        )
+
+        // The spec's padding: what a shorter replacement leaves behind is AsyncBreakCheck, and
+        // the function's declaration is narrowed to the replacement so the body it names is the
+        // replacement alone.
+        for (outcome in result.writtenInPlace) {
+            val patch = DiscordHermesBundlePatch.PATCHES
+                .first { it.functionId == outcome.functionId }
+            val located = requireNotNull(HermesFunctionTable.locate(base, patch.functionId)) {
+                "function ${patch.functionId} is not locatable in the base bundle"
+            }
+            assertEquals(
+                "function ${patch.functionId} declares the wrong size after patching",
+                patch.replacement.size,
+                requireNotNull(HermesFunctionTable.locate(patched, patch.functionId)).bytecodeSize
+            )
+            for (offset in (located.bodyOffset + patch.replacement.size) until
+                (located.bodyOffset + patch.originalSize)) {
+                assertEquals(
+                    "function ${patch.functionId} byte $offset is not AsyncBreakCheck padding",
+                    0x7E,
+                    patched[offset].toInt() and 0xFF
+                )
+            }
+        }
+
+        // The bundle has to stay loadable, which means a footer matching the file as it now is.
+        val fileLength = readU32Le(patched, fileLengthOffset)
+        assertEquals("the footer must close the file exactly", patched.size, fileLength)
+        val digest = MessageDigest.getInstance("SHA-1")
+        digest.update(patched, 0, fileLength - sha1FooterSize)
+        assertTrue(
+            "the SHA-1 footer does not cover the patched file",
+            digest.digest()
+                .contentEquals(patched.copyOfRange(fileLength - sha1FooterSize, fileLength))
+        )
+
+        println(
+            "HermesBundleApplicationTest: ${result.appliedCount} entries applied to " +
+                "${base.size} bytes - ${result.writtenInPlace.size} written in place, " +
+                "${result.relocated.size} relocated"
+        )
+    }
+
+    /**
+     * Reads every patched function back with the real disassembler.
+     *
+     * The failure this is here for is a body that is not valid bytecode at all: a replacement
+     * whose last instruction is missing its operands still occupies the right number of bytes and
+     * still passes every check above, because all of them are about *where* the bytes are rather
+     * than whether they parse. The only way to tell is to decode them, and the only decoder here
+     * reads a bundle.
+     *
+     * Every patched function is read, not only the relocated ones: a truncated body can be
+     * written in place just as easily.
+     *
+     * A test of its own because `hermes-decomp` is a tool this machine may not have: as a branch
+     * inside the test above, its absence would be a line of printed output and the cross-check
+     * would be reported as covered.
+     */
+    @Test
+    fun aRealDisassemblerReadsEveryPatchedFunction() {
+        assumeTrue("the Discord base APK is not on this machine (${baseApk.path})", baseApk.isFile)
+        assumeTrue("${hermesDecomp.path} is not executable", hermesDecomp.canExecute())
+
+        val base = bundleOf(baseApk)
+        assertEquals(
+            "the base bundle is not the build the patch set was extracted from",
+            DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong(),
+            base.size.toLong()
+        )
+        val patched = HermesBundlePatcher.apply(base, DiscordHermesBundlePatch.PATCHES).bundleBytes
+
+        val temp = File.createTempFile("hermes-application-", ".bundle")
+        val rejected = ArrayList<String>()
+        try {
+            temp.writeBytes(patched)
+            for (patch in DiscordHermesBundlePatch.PATCHES) {
+                val (exit, output) = disassemble(temp, patch.functionId)
+                if (exit != 0 || !output.contains("function ")) {
+                    rejected += "fn ${patch.functionId}: exit=$exit, " +
+                        output.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+                }
+            }
+        } finally {
+            temp.delete()
+        }
+        println(
+            "HermesBundleApplicationTest: ${DiscordHermesBundlePatch.PATCHES.size} patched " +
+                "functions read back by hermes-decomp, ${rejected.size} rejected"
+        )
+        assertEquals(rejected.take(10), emptyList<String>())
+    }
+
+    private fun disassemble(bundle: File, functionId: Int): Pair<Int, String> {
+        val process = ProcessBuilder(
+            hermesDecomp.absolutePath,
+            "decompile",
+            "--function",
+            functionId.toString(),
+            bundle.absolutePath
+        ).redirectErrorStream(true).start()
+
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        if (!process.waitFor(300, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            return -1 to "timed out after 300s"
+        }
+        return process.exitValue() to output
+    }
+}

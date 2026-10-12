@@ -10,8 +10,11 @@ and a split whose content does not match its configuration all fail the run.
 Identity checks:
 
 - The package name and version code must equal the values the source configures.
-- The version name must match after case and punctuation are removed, because the
-  tracker spells one build as "349.5 - Alpha" where the source records "349.5 Alpha".
+- The version name must match the APK's own after case and punctuation are removed: a
+  build's `versionName` carries a dash the source does not ("349.5 - Alpha" against
+  "349.5 Alpha"), and 351.2.0's carries a series number of its own — the build the tracker
+  publishes as 351.2 declares `versionName="351.0 - Alpha"`, so the source records
+  "351.0 Alpha" while its display name stays the tracker's.
 - A split must declare the name its URL ends with and carry the content its
   configuration implies: an ABI split carries lib/, a density split carries res/,
   and any other resource split carries a resources.arsc.

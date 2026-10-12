@@ -59,10 +59,16 @@ class PatchSelectionTest {
         )
         // A key written by 3.2.0 names one function; an item is a feature now, so reading it
         // resolves to the feature that covers that function instead of matching nothing.
+        val legacyFunction = DiscordHermesFunctionCatalog.feature("analytics_events")
+            ?.functionIds?.first()
+        requireNotNull(legacyFunction) { "the analytics_events feature must name a function" }
         assertEquals(
             "a selection saved before items were features still means the same choice",
             setOf(current),
-            PatchSelection.fromSavedIds(listOf("discord_hermes:fn83581"), PatchItemCatalog).keys
+            PatchSelection.fromSavedIds(
+                listOf("discord_hermes:fn$legacyFunction"),
+                PatchItemCatalog
+            ).keys
         )
         assertEquals(
             "an id whose set no longer exists has no items, so it is kept as it was written",

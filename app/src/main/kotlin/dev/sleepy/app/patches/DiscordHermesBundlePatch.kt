@@ -1,61 +1,98 @@
 package dev.sleepy.app.patches
 
 /**
- * The Discord JavaScript bundle patch set, extracted from the recorded build's paired
- * Discord 349.5 APKs: the base split at `build/alpha3495/apk/extracted/base.apk` and the patched
- * `build/alpha3495/out/discord-alpha-349.5-patched-unsigned.apk`.
+ * The Discord JavaScript bundle patch set for Discord 351.2.0.
  *
- * Most entries are a whole function body taken from that pair: the base supplies the function's
- * size, and the patched build supplies its replacement bytes. The set names 209 functions, and 203
- * of them are written to the bytes that build ships. The bodies are the recorded build's own
- * output, not a reconstruction of it.
+ * ## Where the entries come from, and what changed in this release
  *
- * Six entries carry a deliberate difference, and [HermesBundleComparisonTest] holds a named exception
- * for each that checks the difference in both directions.
+ * The 349.5 set was extracted from a pair of APKs — a base split and a build that had been
+ * patched and verified by hand — so each entry was the recorded build's own output rather than a
+ * reconstruction of it, and every function of sleepy's bundle could be compared against that
+ * build byte for byte. There is no such pair for 351.2.0, and nothing in this file is taken from
+ * one. Each entry is instead carried, re-assembled or re-derived from the 349.5 entry it
+ * replaces:
  *
- * Two of the six are stubs the recorded change set gets wrong. The recorded change set stubs 49956
- * and 58239 to `undefined`, and the one caller of each dereferences that return: 49956's caller
- * reads `.result` and 58239's caller reads `.length`. Both reads throw a TypeError on `undefined`,
- * so the recorded build's own stub throws in the shipped app wherever those paths run. The
- * replacements here return a value of the shape the caller reads instead.
+ * — **175 are constant-shaped stubs** — `LoadConstUndefined; Ret` and its siblings. Their bytes
+ *   name nothing that is numbered per bundle, so they carry unchanged; only the function id and
+ *   the size the entry declares move.
+ * — **17 are promise-shaped stubs.** These read the strings "Promise" and "resolve" through the
+ *   bundle's own string identifiers, which are renumbered every release. Carried unchanged they
+ *   would resolve to a different string and quietly return the wrong thing, so each is
+ *   re-assembled against this bundle and the resulting bytes are baked in here.
+ * — **16 are edits of an original body.** A register, a buffer index and a closure id are all
+ *   per-bundle values, so each was re-derived against the body this build actually has, from the
+ *   difference between the 349.5 function and the 349.5 replacement. Where that difference is a
+ *   one-operand change or a size-preserving swap, nothing shifts and the edit is written in
+ *   place; where it inserts instructions the body grows.
  *
- * The other four are surfaces the recorded change set leaves reachable. 75719 and 62409 are the
- * React Compiler copies of the two profile content components, which the recorded change set never
- * edits, so a flip of the React Compiler experiment brings the Board and Wishlist tabs back. Each
- * takes the tab list down to Main and Activity: the branch guarding the Board tab is pointed at a
- * register holding `undefined`, and the Wishlist tab is dropped the same way where its push is
- * guarded, or by replacing the unguarded push with a jump over it.
+ * The set is one entry smaller than the last one. Entry 49956 lived in
+ * `modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx`, and 351.2.0 ships no
+ * `modules/vibegrations/` module path at all, so that entry has no target here and is not in
+ * the table.
  *
- * 45447 and 45448 are the two branches of `useIsShopThisLookMobileEnabled`, the Apex experiment
- * gate in `modules/collectibles/experiments/ShopThisLookMobileExperiment.tsx`. The recorded change
- * set removes the sheet and the coachmark and deliberately leaves the opener alone, because the
- * opener's body is deduplicated with an unrelated display-name sheet, so the row that opens an
- * empty sheet is still built and still on screen. Answering false at the gate takes the menu row,
- * the coachmark and the sheet together: the overflow menu is the opener's only caller, and it
- * builds that row only when the gate says yes.
+ * ## What is checked, and what is not
  *
- * All four keep their body's instruction layout, so all four are written in place.
+ * [dev.sleepy.app.engine.HermesBundleApplicationTest] applies the whole table to the build it
+ * names and requires every entry to land with nothing skipped, and then reads all 208 patched
+ * functions back with a real Hermes disassembler. That second check is the one that catches a
+ * body which occupies the right number of bytes but is not valid bytecode — a replacement whose
+ * last instruction is missing its operands passes every check about *where* the bytes are and
+ * fails only when something tries to decode them.
  *
- * The set is encoded as data rather than derived from the shapes in [DiscordPatches]. A
- * promise-shaped stub must name "Promise" and "resolve" through the bundle's own string
- * identifiers, which are not the string-table indices and are not resolvable without the
- * identifier table, and the feature-removal edits are whole-body replacements that the recorded
- * change set's own assembler produced. [DiscordPatches] derives the smaller stubs, whose shape the
- * recorded change set's tables describe.
+ * It is a narrower claim than the one the 349.5 set could make. It cannot tell whether a
+ * replacement does what its entry says it does, only that it is well-formed and that it was
+ * written where the entry says. An entry that assembles cleanly and does nothing would pass.
  *
- * Seven entries need relocation rather than an in-place write: 7762, 14786, 14790, 14797, 15698,
- * 62046 and 71516. The first five have replacements longer than the body they replace, and the
- * last two share a body with another entry - 62046 with 62045, 71516 with 71528 - so only one of
- * each pair can take the shared region. See [dev.sleepy.app.engine.HermesBundlePatcher] for how
- * relocation works.
+ * ## The four settings rows
+ *
+ * 15264, 15268, 15275 and 16197 append
+ * `CreateClosureLongIndex` plus `DefineOwnById … "usePredicate"` to the route object they build,
+ * pointing at the closure that `modules/user_settings/defs/native/QuestHomeSetting.tsx` exports
+ * and that this set already stubs to false. `SettingHookHarness` hides any entry whose
+ * `usePredicate()` answers false, so one always-false closure hides all four rows.
+ *
+ * ## The tab lists
+ *
+ * 62639, 77424, 49896 and 114892 are the React Compiler copies of the profile and You-screen
+ * content components. Discord ships each of those screens twice and picks between them with an
+ * experiment, so removing the tabs from one copy alone leaves them reachable whenever the
+ * experiment flips. Each edit points a tab's guard at a register the body has already loaded
+ * `undefined` or `null` into and never writes again, which makes the guard always fire; where a
+ * push is unguarded the push is replaced by a jump over itself, which is size-preserving.
+ *
+ * ## Shop This Look
+ *
+ * 47043 and 47044 are the two branches of `useIsShopThisLookMobileEnabled`, the Apex experiment
+ * gate in `modules/collectibles/experiments/ShopThisLookMobileExperiment.tsx`. An earlier change
+ * set removed the sheet and the coachmark and deliberately left the opener alone, because the
+ * opener's body is deduplicated with an unrelated display-name sheet, so a row that opened an
+ * empty sheet stayed on screen. Answering false at the gate takes the menu row, the coachmark and
+ * the sheet together: the overflow menu is the opener's only caller, and it builds that row only
+ * when the gate says yes.
+ *
+ * ## Relocation
+ *
+ * Seven entries cannot be written where the body they replace is: 8121, 15264, 15268, 15275 and
+ * 16197 have replacements longer than the body. 62265 and 73034 share a body with another entry -
+ * with 62264 and 73022 — and a shared region can hold only one replacement, so the lower id keeps
+ * it and the other is relocated beside it. [dev.sleepy.app.engine.HermesBundlePatcher] describes
+ * how.
+ *
+ * ## Why the set is data
+ *
+ * A promise-shaped stub has to name "Promise" and "resolve" through the bundle's own string
+ * identifiers, which are not the string-table indices and cannot be resolved without the
+ * identifier table, and the body edits are whole-body replacements produced by an assembler.
+ * Both are recorded here as bytes. [DiscordPatches] derives the smaller stubs at patch time,
+ * whose shapes need no identifier table.
  */
 object DiscordHermesBundlePatch {
 
     /** Byte length of the bundle this table was extracted from. */
-    const val TARGET_BUNDLE_SIZE = 67299195
+    const val TARGET_BUNDLE_SIZE = 68515971
 
     /** Function count of that bundle. */
-    const val TARGET_FUNCTION_COUNT = 155429
+    const val TARGET_FUNCTION_COUNT = 158639
 
     /**
      * One function to replace.
@@ -79,280 +116,267 @@ object DiscordHermesBundlePatch {
     /** Every function in the set, in function-id order. */
     val PATCHES: List<FunctionPatch> = listOf(
         FunctionPatch(
-            7762, "", 343,
-            "4003088906023703000689080337030108890406890507370302053d07480b07001800440a0b016690093000020704000000674e080070070a0b0409075e07050093016e0706010745070702802737030307020988090000734309005e0705016e0708010745070703a260450707041a588b000f21000007520900018c00d0070000520900005e0705026e07080107860a0705100f0a100e096b07070288070a07370304075e0705026e07080107860a0705100f0a100e096b07070288070a07370305075e0705026e0b0801070407100e07100d09730a2e03960256070200060a860a0b05100f0a100e076b070b0288070a07370306075e0705026e0708010786080705100f08100e096b07070288070807370307075e05050a6e070601054406070679910563d302006e0506070584050379af4b04050117e08405037aaf4d04050207a104008405037baf4b04050332018403037caf4d040304e1c604007e7e7601"
+            8121, "", 339,
+            "4003088906023703000689080337030108890406890507370302053d07480b07001700440a0b016490092e000207040000004cc0060070070a0b0409075e07050093016e07060107450707024f3e370303070109ff0947125e0705016e0708010745070703cb624507070478598b000f21000007520900018c00d0070000520900005e0705026e07080107860a0705100f0a100e096b07070288070a07370304075e0705026e07080107860a0705100f0a100e096b07070288070a07370305075e0705026e0b0801070407100e07100d09730a2e039602560702002154860a0b05100f0a100e076b070b0288070a07370306075e0705026e0708010786080705100f08100e096b07070288070807370307075e0505096e07060105440607067791057cec02006e0506070584050307b44b0405013be184050308b44d040502cdbb040084050309b44b040503bf5d8403030ab44d0403041cd704007e7e7601"
         ),
-        FunctionPatch(13894, "", 186, "93007e7e7600"),
+        FunctionPatch(14391, "", 186, "93007e7e7600"),
         FunctionPatch(
-            14786, "", 348,
-            "4008078904023708000489050337080105890206890307370802033d01480901001800440709016690063000020104000000674e0800700107090206015e06030093008901046e01010006370803015e0103016e01050001370804015e0103026e01050001370805015e0103036e010400014509010204775e0103046e01040001440101039a370806015e0103086e0504000144010504966c010105b00c01850a08ca0b0100ae09850a08c90b01005e0103086e0504000144010504966c010105b00c01850708cc0b0100ae09850708cb0b01005e01030d6e0604000145050605fdaa0201371b00006f4e0800850b08cd0b010052010b005e0b030e6e0b04000b450b0b06996352010b0252010a03520107040207d5190000b2cc040045090907090952070900850808ce0b01005207080152010705850b08f10b010056010b06edef6e010506015e0303106e05040003440405087991035edc02006e030405034b02010065007e7e7e7600"
-        ),
-        FunctionPatch(
-            14790, "", 205,
-            "40080289040237080004890206890307370801033d01480701001800440607016690053000020104000000674e0800700106070205015e01030093006e01040001450701028b425e0103016e010400014509010304775e0103026e0604000145050604fdaa0201771a0000f7c80400850a08d70b010052010a00450707050909520107010207d5190000b2cc040045090906a06652070900850808d80b01005207080152010702850a08f10b010056010a03edef6e010506015e0303056e0504000344040507799103cf7002006e030405034b02010065007e7e7e7600"
+            15264, "", 348,
+            "4008078904023708000489050337080105890206890307370802033d01480901001700440709016490062e000201040000004cc00600700107090206015e06030093008901046e01010006370803015e0103016e01050001370804015e0103026e01050001370805015e0103036e0104000145090102aa785e0103046e010400014401010399370806015e0103086e0504000144010504956c010105b00c01850a0868110100ae09850a08671101005e0103086e0504000144010504956c010105b00c018507086a110100ae09850708691101005e01030d6e06040001450506052dac0201641b0000c7740800850b086b11010052010b005e0b030e6e0b04000b450b0b06af0652010b0252010a03520107040207f819000078ad040045090907b710520709008508086c1101005207080152010705850b088f11010056010b0631f16e010506015e0303106e0504000344040508779103b0f402006e030405034b02010063007e7e7e7600"
         ),
         FunctionPatch(
-            14797, "", 199,
-            "40080289040237080004890206890307370801033d01480701001800440607016690053000020104000000674e0800700106070205015e01030093006e010400014509010204775e0103016e0604000145050603fdaa0201341a0000fbc80400850708e70b0100520107005e0703036e0704000745070704872e520107020207d5190000b2cc040045090905fe4952070900850808e80b01005207080152010703850908f10b010056010904edef6e010506015e0303056e050400034404050679910359dc02006e030405034b02010065007e7e7e7600"
+            15268, "", 205,
+            "40080289040237080004890206890307370801033d01480701001700440607016490052e000201040000004cc00600700106070205015e01030093006e0104000145070102c1425e0103016e0104000145090103aa785e0103026e06040001450506042dac0201a51a000088ad0400850a087511010052010a0045070705b710520107010207f819000078ad040045090906a26852070900850808761101005207080152010702850a088f11010056010a0331f16e010506015e0303056e0504000344040507779103e38602006e030405034b02010063007e7e7e7600"
         ),
         FunctionPatch(
-            15698, "", 217,
-            "4007038904023707000489010337070101890206890307370702033d01480801001800440608016690053000020104000000674e0800700106080205015e01030093006e010400014509010204775e0103016e0604000145050603fdaa02014f1d0000bf4f0800850807cb160100520108005e0803036e08040008450808045f71520108020208d5190000b2cc040045090905d62a52080900850907cc1601005208090152010803850707cd16010052010704850907f10b010056010905edef6e010506015e0303076e0504000344040506799103e0db02006e030405034b02010065007e7e7e7600"
-        ),
-        FunctionPatch(18172, "report", 203, "93007e7e7e7600"),
-        FunctionPatch(18203, "recordStart", 103, "93007e7e7e7600"),
-        FunctionPatch(18205, "recordEnd", 199, "93007e7e7e7600"),
-        FunctionPatch(18207, "set", 140, "93007600"),
-        FunctionPatch(18215, "record", 147, "93007e7e7e7600"),
-        FunctionPatch(18245, "resumeTracing", 150, "93007e7e7600"),
-        FunctionPatch(18246, "mark", 124, "93007600"),
-        FunctionPatch(18247, "markAndLog", 118, "93007e7e7600"),
-        FunctionPatch(18248, "addImportLogDetail", 86, "93007e7e7600"),
-        FunctionPatch(18249, "markWithDelta", 107, "93007e7e7e7600"),
-        FunctionPatch(18250, "markAt", 187, "93007e7e7e7600"),
-        FunctionPatch(18251, "addDetail", 131, "93007e7e7e7600"),
-        FunctionPatch(18254, "setServerTrace", 28, "93007600"),
-        FunctionPatch(19786, "handleFingerprint", 345, "93007e7600"),
-        FunctionPatch(19937, "getMetricsSampleRate", 81, "8b00007600"),
-        FunctionPatch(19939, "shouldCollectMetrics", 86, "96007e7e7600"),
-        FunctionPatch(20709, "addBreadcrumb", 242, "93007e7e7600"),
-        FunctionPatch(23353, "setUser", 104, "93007600"),
-        FunctionPatch(23354, "clearUser", 78, "93007e7e7600"),
-        FunctionPatch(23355, "setTags", 48, "93007600"),
-        FunctionPatch(23356, "setExtra", 48, "93007600"),
-        FunctionPatch(23357, "captureException", 87, "93007e7e7e7600"),
-        FunctionPatch(23358, "captureCrash", 162, "93007e7e7600"),
-        FunctionPatch(23359, "captureMessage", 90, "93007e7e7600"),
-        FunctionPatch(23360, "addFeatureFlag", 106, "93007e7e7600"),
-        FunctionPatch(23361, "addBreadcrumb", 54, "93007e7e7600"),
-        FunctionPatch(23363, "crash", 27, "93007e7e7e7600"),
-        FunctionPatch(23364, "triggerMemoryWarning", 27, "93007e7e7e7600"),
-        FunctionPatch(23365, "markCrashHandled", 74, "93007e7e7600"),
-        FunctionPatch(23372, "initSentry", 43, "93007e7e7e7600"),
-        FunctionPatch(23431, "debugLogEvent", 79, "93007e7e7e7600"),
-        FunctionPatch(23494, "track", 288, "93007600"),
-        FunctionPatch(23502, "trackNetworkAction", 135, "93007e7e7e7600"),
-        FunctionPatch(25406, "", 189, "94007e7600"),
-        FunctionPatch(25451, "isZoomedExperimentEnabled", 35, "8b00007e7e7600"),
-        FunctionPatch(33861, "trackWithMetadata", 365, "93007e7600"),
-        FunctionPatch(34036, "surveyFetch", 198, "3d00480100001e00450001008c016c0000017e7e7600"),
-        FunctionPatch(34868, "increment", 96, "93007600"),
-        FunctionPatch(34869, "distribution", 114, "93007e7e7600"),
-        FunctionPatch(34870, "_flush", 183, "93007e7e7e7600"),
-        FunctionPatch(38875, "hasSocialLayerStorefront", 204, "96007600"),
-        FunctionPatch(39222, "", 172, "96007600"),
-        FunctionPatch(39223, "", 150, "96007e7e7600"),
-        FunctionPatch(39224, "", 96, "96007600"),
-        FunctionPatch(39225, "", 494, "96007e7e7600"),
-        FunctionPatch(39226, "", 272, "96007600"),
-        FunctionPatch(40422, "handleAppStateChange", 158, "93007e7e7600"),
-        FunctionPatch(40423, "writeExistingEventStorage", 37, "93007e7600"),
-        FunctionPatch(40424, "track", 37, "93007e7600"),
-        FunctionPatch(40426, "", 38, "93007e7e7600"),
-        FunctionPatch(40427, "", 137, "93007e7600"),
-        FunctionPatch(40428, "", 18, "93007e7e7600"),
-        FunctionPatch(40455, "initSessionHeartbeatScheduler", 292, "93007600"),
-        FunctionPatch(40613, "recordChannelFetchStart", 181, "93007e7600"),
-        FunctionPatch(40614, "recordChannelFetchedLocal", 200, "93007600"),
-        FunctionPatch(40615, "recordChannelFetchedNetwork", 200, "93007600"),
-        FunctionPatch(43768, "openPremiumUpsellActionSheet", 114, "93007e7e7600"),
-        FunctionPatch(45217, "", 461, "96007e7600"),
-        FunctionPatch(45218, "", 247, "96007e7e7e7600"),
-        FunctionPatch(45222, "", 201, "96007e7600"),
-        FunctionPatch(45447, "useIsShopThisLookMobileEnabled", 101, "96007e7600"),
-        FunctionPatch(45448, "useIsShopThisLookMobileEnabled", 39, "96007e7600"),
-        FunctionPatch(45460, "_maybeFetchProductsBySkuIds", 61, "3d00480100001e00450001008c016c0000017e7600"),
-        FunctionPatch(45488, "", 260, "94007600"),
-        FunctionPatch(45489, "", 107, "94007e7e7e7600"),
-        FunctionPatch(45549, "", 579, "080000007e7600"),
-        FunctionPatch(45550, "", 243, "080000007e7600"),
-        FunctionPatch(45901, "fetchGuildAffinities", 112, "3d00480100001e00450001008c016c0000017600"),
-        FunctionPatch(47109, "", 196, "93007600"),
-        FunctionPatch(47110, "", 103, "93007e7e7e7600"),
-        FunctionPatch(47123, "trackImpression", 398, "93007e7e7600"),
-        FunctionPatch(
-            47225, "_fetchStorefrontPricesForApplicationId", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
+            15275, "", 199,
+            "40080289040237080004890206890307370801033d01480701001700440607016490052e000201040000004cc00600700106070205015e01030093006e0104000145090102aa785e0103016e06040001450506032dac0201631a000053ad040085070885110100520107005e0703036e0704000745070704d92d520107020207f819000078ad040045090905b44a520709008508088611010052070801520107038509088f1101005601090431f16e010506015e0303056e0504000344040506779103abf402006e030405034b02010063007e7e7e7600"
         ),
         FunctionPatch(
-            47226, "_fetchStorefrontPricesForSkuIds", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
+            16197, "", 217,
+            "4007038904023707000489010337070101890206890307370702033d01480801001700440608016490052e000201040000004cc00600700106080205015e01030093006e0104000145090102aa785e0103016e06040001450506032dac0201921d0000917508008508079c1c0100520108005e0803036e08040008450808040273520108020208f819000078ad0400450909058435520809008509079d1c010052080901520108038507079e1c0100520107048509078f1101005601090531f16e010506015e0303076e050400034404050677910333f402006e030405034b02010063007e7e7e7600"
         ),
-        FunctionPatch(47308, "", 468, "94007600"),
-        FunctionPatch(47309, "", 218, "94007e7e7600"),
-        FunctionPatch(47349, "", 204, "94007600"),
-        FunctionPatch(47350, "", 87, "94007e7e7e7600"),
+        FunctionPatch(18823, "report", 203, "93007e7e7e7600"),
+        FunctionPatch(18854, "recordStart", 199, "93007e7e7e7600"),
+        FunctionPatch(18856, "recordEnd", 163, "93007e7e7e7600"),
+        FunctionPatch(18858, "set", 61, "93007600"),
+        FunctionPatch(18866, "record", 17, "93007e7e7e7600"),
+        FunctionPatch(18894, "resumeTracing", 150, "93007e7e7600"),
+        FunctionPatch(18895, "mark", 124, "93007600"),
+        FunctionPatch(18896, "markAndLog", 118, "93007e7e7600"),
+        FunctionPatch(18897, "addImportLogDetail", 86, "93007e7e7600"),
+        FunctionPatch(18898, "markWithDelta", 107, "93007e7e7e7600"),
+        FunctionPatch(18899, "markAt", 187, "93007e7e7e7600"),
+        FunctionPatch(18900, "addDetail", 131, "93007e7e7e7600"),
+        FunctionPatch(18903, "setServerTrace", 28, "93007600"),
+        FunctionPatch(20435, "handleFingerprint", 345, "93007e7600"),
+        FunctionPatch(20586, "getMetricsSampleRate", 81, "8b00007600"),
+        FunctionPatch(20588, "shouldCollectMetrics", 86, "96007e7e7600"),
+        FunctionPatch(21358, "addBreadcrumb", 242, "93007e7e7600"),
+        FunctionPatch(24043, "setUser", 104, "93007600"),
+        FunctionPatch(24044, "clearUser", 78, "93007e7e7600"),
+        FunctionPatch(24045, "setTags", 48, "93007600"),
+        FunctionPatch(24046, "setExtra", 48, "93007600"),
+        FunctionPatch(24047, "captureException", 87, "93007e7e7e7600"),
+        FunctionPatch(24048, "captureCrash", 158, "93007e7e7600"),
+        FunctionPatch(24049, "captureMessage", 90, "93007e7e7600"),
+        FunctionPatch(24050, "addFeatureFlag", 106, "93007e7e7600"),
+        FunctionPatch(24051, "addBreadcrumb", 54, "93007e7e7600"),
+        FunctionPatch(24053, "crash", 27, "93007e7e7e7600"),
+        FunctionPatch(24054, "triggerMemoryWarning", 27, "93007e7e7e7600"),
+        FunctionPatch(24055, "markCrashHandled", 74, "93007e7e7600"),
+        FunctionPatch(24062, "initSentry", 43, "93007e7e7e7600"),
+        FunctionPatch(24121, "debugLogEvent", 79, "93007e7e7e7600"),
+        FunctionPatch(24184, "track", 288, "93007600"),
+        FunctionPatch(24192, "trackNetworkAction", 135, "93007e7e7e7600"),
+        FunctionPatch(26098, "", 189, "94007e7600"),
+        FunctionPatch(26143, "isZoomedExperimentEnabled", 35, "8b00007e7e7600"),
+        FunctionPatch(33314, "trackWithMetadata", 365, "93007e7600"),
+        FunctionPatch(35577, "increment", 96, "93007600"),
+        FunctionPatch(35578, "distribution", 114, "93007e7e7600"),
+        FunctionPatch(35579, "_flush", 183, "93007e7e7e7600"),
+        FunctionPatch(40190, "hasSocialLayerStorefront", 204, "96007600"),
+        FunctionPatch(40492, "", 172, "96007600"),
+        FunctionPatch(40493, "", 150, "96007e7e7600"),
+        FunctionPatch(40494, "", 96, "96007600"),
+        FunctionPatch(40495, "", 494, "96007e7e7600"),
+        FunctionPatch(40496, "", 272, "96007600"),
+        FunctionPatch(41715, "handleAppStateChange", 158, "93007e7e7600"),
+        FunctionPatch(41716, "writeExistingEventStorage", 37, "93007e7600"),
+        FunctionPatch(41717, "track", 37, "93007e7600"),
+        FunctionPatch(41719, "", 38, "93007e7e7600"),
+        FunctionPatch(41720, "", 137, "93007e7600"),
+        FunctionPatch(41721, "", 18, "93007e7e7600"),
+        FunctionPatch(41748, "initSessionHeartbeatScheduler", 292, "93007600"),
+        FunctionPatch(41904, "recordChannelFetchStart", 181, "93007e7600"),
+        FunctionPatch(41905, "recordChannelFetchedLocal", 200, "93007600"),
+        FunctionPatch(41906, "recordChannelFetchedNetwork", 200, "93007600"),
+        FunctionPatch(43895, "surveyFetch", 198, "3d00480100001d004500010057876c0000017e7e7600"),
+        FunctionPatch(46810, "", 461, "96007e7600"),
+        FunctionPatch(46811, "", 247, "96007e7e7e7600"),
+        FunctionPatch(46815, "", 201, "96007e7600"),
+        FunctionPatch(47043, "useIsShopThisLookMobileEnabled", 101, "96007e7600"),
+        FunctionPatch(47044, "useIsShopThisLookMobileEnabled", 39, "96007e7600"),
+        FunctionPatch(47053, "_maybeFetchProductsBySkuIds", 61, "3d00480100001d004500010057876c0000017e7600"),
+        FunctionPatch(47081, "", 260, "94007600"),
+        FunctionPatch(47082, "", 107, "94007e7e7e7600"),
+        FunctionPatch(47142, "", 579, "080000007e7600"),
+        FunctionPatch(47143, "", 243, "080000007e7600"),
+        FunctionPatch(47477, "fetchGuildAffinities", 112, "3d00480100001d004500010057876c0000017600"),
+        FunctionPatch(49053, "", 312, "94007e7e7e7600"),
+        FunctionPatch(49054, "", 160, "94007e7e7e7600"),
+        FunctionPatch(49055, "", 569, "94007e7600"),
+        FunctionPatch(49056, "", 311, "94007e7e7e7600"),
+        FunctionPatch(49057, "", 301, "94007e7600"),
+        FunctionPatch(49322, "", 196, "93007600"),
+        FunctionPatch(49323, "", 103, "93007e7e7e7600"),
+        FunctionPatch(49336, "trackImpression", 398, "93007e7e7600"),
         FunctionPatch(
-            47611, "_maybeFetchCollectionsWithProducts", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
+            49438, "_fetchStorefrontPricesForApplicationId", 61,
+            "3d00480100001d004500010057876c0000017e7600"
         ),
-        FunctionPatch(49760, "openPremiumModal", 82, "93007e7e7600"),
-        FunctionPatch(49956, "", 133, "0100563b78cd9601520001000201573b0000f7c80400520100007e7601"),
-        FunctionPatch(51631, "", 303, "94007e7e7e7600"),
-        FunctionPatch(51632, "", 151, "94007e7e7e7600"),
-        FunctionPatch(51633, "", 569, "94007e7600"),
-        FunctionPatch(51634, "", 311, "94007e7e7e7600"),
-        FunctionPatch(51635, "", 301, "94007e7600"),
-        FunctionPatch(52476, "", 442, "93007e7e7600"),
-        FunctionPatch(52477, "", 217, "93007e7600"),
-        FunctionPatch(53460, "_fetchCurrentQuests", 61, "3d00480100001e00450001008c016c0000017e7600"),
-        FunctionPatch(53461, "_sendHeartbeat", 61, "3d00480100001e00450001008c016c0000017e7600"),
-        FunctionPatch(53469, "_fetchClaimedQuests", 61, "3d00480100001e00450001008c016c0000017e7600"),
-        FunctionPatch(53470, "_fetchQuestToDeliver", 61, "3d00480100001e00450001008c016c0000017e7600"),
-        FunctionPatch(53471, "_fetchEarnedQuestToDeliver", 61, "3d00480100001e00450001008c016c0000017e7600"),
+        FunctionPatch(49439, "_fetchStorefrontPricesForSkuIds", 61, "3d00480100001d004500010057876c0000017e7600"),
+        FunctionPatch(49519, "", 468, "94007600"),
+        FunctionPatch(49520, "", 218, "94007e7e7600"),
+        FunctionPatch(49560, "", 204, "94007600"),
+        FunctionPatch(49561, "", 87, "94007e7e7e7600"),
         FunctionPatch(
-            55149, "_fetchSocialLayerStorefrontConfig", 61,
-            "3d00480100001e00450001008c016c0000017e7600"
-        ),
-        FunctionPatch(
-            55153, "fetchSocialLayerStorefrontSkuForApplication", 49,
-            "3d00480100001e00450001008c016c0000017e7600"
-        ),
-        FunctionPatch(55351, "isListeningOnSpotify", 148, "8b00007e7e7e7600"),
-        FunctionPatch(56206, "", 337, "8b00007600"),
-        FunctionPatch(56456, "", 1721, "93007e7600"),
-        FunctionPatch(56457, "", 1221, "93007e7600"),
-        FunctionPatch(57616, "SpotifyTrack", 51, "96007e7e7e7600"),
-        FunctionPatch(
-            57635, "subscribePlayerStateNotifications", 118,
-            "3d00480100001e00450001008c016c0000017e7e7600"
-        ),
-        FunctionPatch(57640, "fetchIsSpotifyProtocolRegistered", 101, "96007e7600"),
-        FunctionPatch(58239, "", 173, "080000007e7600"),
-        FunctionPatch(59199, "", 365, "93007e7600"),
-        FunctionPatch(59200, "", 254, "93007e7e7600"),
-        FunctionPatch(59211, "", 1827, "93007e7e7e7600"),
-        FunctionPatch(59212, "", 1089, "93007e7600"),
-        FunctionPatch(61440, "", 328, "93007600"),
-        FunctionPatch(
-            62045, "isVirtualCurrencyEnabled", 47,
-            "34020001011f0378cd9600520100007e7e76013402003b0402013b0102025e03010093006e05040003450405003060"
-        ),
-        FunctionPatch(62046, "useVirtualCurrencyMobileEnabled", 47, "34020001011f0378cd9600520100007e7e7601"),
-        FunctionPatch(62162, "", 1124, "93007600"),
-        FunctionPatch(62163, "", 555, "93007e7e7e7600"),
-        FunctionPatch(62179, "", 732, "93007600"),
-        FunctionPatch(62180, "", 265, "93007e7600"),
-        FunctionPatch(
-            62409, "", 9076,
-            "340b0040312c890e013b180b003b0a0b025e0c0a1893036e0d18030c440c0d00128c001e0100006e0c0c0d0044170e01f637310017440d0e024b3731010d44280e03883731022845330e0407993731033345250e05a9023731042545450e06318a3731054545440e07059537310644452e0e089ba045260e0941d33731072645110e0a3f9644430e0ba93731084345510e0cbcdc37310951451e0e0dc0dc37310a1e45200e0e2ecf451f0e0ffc7d3b130b015e0e0a106e0e13030e6c1c0e0337310b1c5e0e0a376e0f13030e3b0e0b126e3d0f030e5e0e0c00d5120e3d5e0e0c01d50a0e1f5e0f0c02ae2b020ed3360000b2cc0400520e1f00520e3d019700610c003d8b0001610c001f8b0002610c000e100f0e5e0e0a386e0e13030e6e0e0e030f45350e106123453c0e11e59745120e1236a8453b0e13459a453a0e14ea905e0e0a396e0e13030e6c0e0e0344160e15495e0e0a196e0f18030e450e0f1603f16c0e0e0f451d0e173f5f37310c1d5e0f0c033d2f48102f182300440e10197e9153399402006e0e0e1053d30e0f0e5e140c035e100c04ae293b0f0b0b080e01005a0e0f00850f0bf3b901008b0003610c000e8b0004610c000f10100f10140e5e0e0a116e0f18030e440e0f1af56f340e0f141037310d34940416093404930fb00809440f341b4e440e171b4e17070f0e39310e075e0f0c0548102f182300440e10197e6e0e0e1053d30a0f0e5e140c05ae183b0f0b0a080e01005a0e0f008b0005610c000e10140e5e0f0c06440e171b4ed50a0f0e5e100c07ae1f850e31f4b90100440f171b4e8b0006610c000f8b0007610c000e10100e5e0e0a116e0f18030e450e0f1cb9f06f0e0e0f141045370e1da4de37310f3745420e1e96ab373110425e0e0a3a6e1018030e450f101fe7ee440e171b4e6e3e0f100e3731113e5e0e0a3b6e1018030e450f10201aef440e171b4e6e380f100e373112385e0f0c08440e171b4ed50a0f0e5e100c09ae27010ea73678cd440f171b4e520e0f00440f171b4e8b0008610c000f8b0009610c000e10100e5e0e0a3c6e0f18030e450e0f2106f16e540e0f10373113545e0e0a286e1013030e450f1022a7ef16090d04930eb00809440e0d1b4e70550f10280e17373114555e0e0c0ad5120e285e0e0c0bd50a0e175e100c0cae3dcf080428d1080417040eae19040f4415171b4e081401005a1415005c0f142801100e0f8b000a610c00288b000b610c00178b000c610c000e10100e5e0e0a3d6e0f18030e450e0f23ab4291195c5b02006f0e0e0f10195e0e0a3e6e0f13030e440e171b4e6e290f030e5e0f0c0d48102f182300440e10197e6e0e0e1053d30e0f0e5e140c0d5e100c0eae293b0f0b0c080e01005a0e0f00850f0bf5b901008b000d610c000e8b000e610c000f10100f10140e5e0e0a116e0f18030e450e0f1cb9f06f0f0e0f141045360f24a9e0451a0f25a6e045240f26a7e0453f0f27ef9b3731153f45390f28e9cd37311639454a0f29fdb23731174a452b0f2ad478450e0f2bc3e045150f2c545c45400f2d534d3731184045140f2ea93c45100f2fa8e05e0f0c0fd5170f1a5e1b0c10440f171b4ed50a1b0f5e2a0c11ae4a5e0f0a3f6e2118030f451b2130a29f020f4d360000b2cc04004422171b4e520f2200520f1a016e0f1b210f8b000f610c001a441a171b4e8b0010610c001a8b0011610c000f102a0f5e0f0a236e0f13030f6f1a0f0333155e150c12481b2f182300440f1b197e6e0f0f1b53d30a150f5e220c12ae183b150b07080f01005a0f15008b0012610c000f10220f5e150c13440f171b4ed50e150f5e210c145e1b0c15ae36850f31f6b901004423171b4e081501005a1523004423171b4e8b0013610c00238b0014610c000f8b0015610c0015101b1510210f5e0f0a116e1518030f450f1531d10570150f1522211b5e1b0c1648212f182300440f21197e6e0f0f2153d30a1b0f5e210c16ae16020fdb010000c9e52c008b0016610c000f10210f5e0f0a406e1b18030f450f1b32535c6e230f1b21373119235e0f0c17d51b0f235e1b0c18440f171b4ed50e1b0f5e210c195e1b0c1aae41850f31f7b901004427171b4e082202005a2227005a2223018b0017610c00234423171b4e8b0018610c00238b0019610c000f8b001a610c0022101b2210210f3b490b04440f4933ea6f0f0f49211b5e0f0c1bd5220f1a5e0f0c1cd51a0f155e0f0c1dd5120f145e0f0c1ed50a0f105e410c1fae505e0f0a426e2118030f451b2134b545020f1f4f0000b2cc0400520f1400520f1001700f1b211a150f8b001b610c001a8b001c610c00158b001d610c00148b001e610c00108b001f610c000f10410f37311a419314b2062610140e5e0f0c20d51a0f335e0f0c21d5120f145e0f0c22d50a0f175e100c23ae37020fb2360000f7c80400520f1700520f3301520f14028b0020610c00338b0021610c00148b0022610c00178b0023610c000f10100f5e0f0a436e0f13030f6e100f031044141035e5450f103604db451a103708db1809040f39311b095e100c24d51a100f5e100c25d512101a5e100c26d50a10145e150c27ae370210ce360000f7c804005210140052100f0152101a028b0024610c000f8b0025610c001a8b0026610c00148b0027610c00101015105e100a446e141803104510143805f16e10101415454610394d5f37311c464530103a50484515103b25544410493cf26e2c1049044410493cf26e2d1049045e140c28481a2f18230044101a197e6e10101a53d30a14105e1b0c28ae183b140b0d081001005a1014008b0028610c0010101b105e140c294410171b4ed50a14105e1a0c2aae1f851031f8b901004414171b4e8b0029610c00148b002a610c0010101a105e100a116e141803104410141af56f5010141b1a37311d505e140c2b4410171b4ed51214105e100c2cd50a10505e1a0c2dae360210c6380000b2cc0400521050004414171b4e521014014414171b4e8b002b610c00148b002c610c00508b002d610c0010101a105e100a456e141803104510143d75ee6e1010141a5e140c2e481a2f18230044101a197e6e10101a53d30a14105e210c2eae183b140b08081001005a1014008b002e610c00101021105e100c2fd50e10505e1b0c305e1a0c31ae2c851031f9b90100081401005a1450008b002f610c00508b0030610c00108b0031610c0014101a14101b105e100a116e141803104410141af570141014211b1a5e100c32d52010075e1a0c33160514049310b008054410143e98d50a1a105e100c34ae4f16051404931ab019054422143e984421223f32851b31fab901006e1a21221bd1081a04081a00008b0032610c000716051404931bb00805441b143e988b0033610c001b8b0034610c001a10101a100507b0180518060414b20e0644101040a497001c0610001005065e100a476e1a18031045141a414cee4410171b4e6e14141a105e100a486e1a18031045101a42a4726f10101a190744141440a497011c4c1401b0064c104c105e100a496e141803104510144335ef6e48101419b2074818480434101b05b0061b101b4cb0061b101b485e100a4a6e141803104510144401f0701010144c4805454e1045e25c37311e4e454f1046177f37311f4f45141047de9d3731201444104948f46e191049013b100b038b00026f10100319005e1910005e101001373121105e1a0c3548212f182300441021197e6e10102153d30a1a105e270c35ae13851031fbb901008b0035610c00101027105e100a4b6e1a18031045101a49d9ef6c10101a4547104a15b8454d104b41c93731224d5e100c36d51210075e100c37d50a10055e210c38ae2c0210204f0000b2cc040052100700521005018b0036610c00078b0037610c00058b0038610c00101021105e100a4c6e1a18031045101a4c38f16e10101a214522104d9781373123224521104edac7373124215e100c39d51a10225e100c3ad51210215e100c3bd50a101d5e1a0c3cae28851031fcb901008b0039610c00228b003a610c00218b003b610c001d8b003c610c0010101a105e100c3dd52a104f5e100c3ed522104e5e100c3fd51a10205e100c40d512101a5e100c41d50a10145e1d0c42ae4d0210214f0000bf4f0800521020005210140152104e0252104f0352101a048b003d610c004f8b003e610c004e8b003f610c00208b0040610c001a8b0041610c00148b0042610c0010101d105e100a4a6e1a18031045101a4f00f06e10101a1d451a10506e8b453210514a893731253245201052d073454b1053e0e53731264b452310546f8b3b100b0e451d1055251017061a1d3931270645101056f12d5e1d0c43d50a1d515e520c44ae1a851d31fdb901008b0043610c00518b0044610c001d10521d373128525e1d0c45d50a1d1e5e510c46ae1a851d31feb901008b0045610c001e8b0046610c001d10511d373129515e1d0c47d6ae0000001d0d5e1d0c48d6a30000001d465e1d0c49d6980000001d345e1d0c4ad68d0000001d555e1d0c4bd6820000001d335e1d0c4cd5771d545e1d0c4dd56f1d285e1d0c4ed5671d525e1d0c4fd55f1d515e1d0c50d5571d095e1d0c51d54f1d265e1d0c52d5471d4a5e1e0c53451d1c572809d5391e1d5e1e0c54451d1c5841a0d52b1e1d5e1e0c55451d1c5904e3d51d1e1d5e1d0c56d5151d255e1d0c57d50d1d175e1d0c58af9f000000851e31ffb901008b0047610c000d8b0048610c00468b0049610c00348b004a610c00558b004b610c00338b004c610c00548b004d610c00288b004e610c00528b004f610c00518b0050610c00098b0051610c00268b0052610c004a454a1c5728098b0053610c004a454a1c5841a08b0054610c004a454a1c5904e38b0055610c004a8b0056610c00258b0057610c00178b0058610c001e101d1e5e1e0c59d5351e075e1e0c5ad52d1e065e4a0c5b451e1c5904e3d51f4a1e5e4a0c5c441e171b4ed5124a1e5e1e0c5dd50a1e505e4a0c5eae41851e3100ba01008b0059610c00078b005a610c000645511c5904e38b005b610c00514451171b4e8b005c610c00518b005d610c00508b005e610c001e104a1e5e500c5f48512f182300441e51197e6e1e1e5153d30a501e5e540c5fae385e1e0a1e6e1e18031e44511e5a954450515be05e1e0a1e6e1e18031e441e1e5c0a451e1e5d71276e1e50511e8b005f610c001e10541e5e1e0c60d50a1e4d5e520c61ae1a851e3101ba01008b0060610c004d8b0061610c001e10521e5e1e0c62d50a1e1d5e510c63ae176c1e1d038b0062610c001d8b0063610c001e10511e5e1e0c64d5121e525e1e0c65d50a1e515e1e0c66ae480250684c00006cc70c00525054013b560b143b550b050154224f6ca952545201525451026f5456035554525054028b0064610c00528b0065610c00518b0066610c0050101e5017061a105e100c67d699000000104f5e100c68d68e000000104e5e1a0c6916080d049310b0080844100d1b4ed5751a105e100c6ad56d10465e100c6bd56510345e100c6cd55d10285e100c6dd555104d5e100c6ed54d104c5e100c6fd54510065e100c70d53d10075e100c71d535104a5e100c72d52d10055e100c73d52510485e100c74d51d101e5e100c75d51510175e100c76d50d10145e1a0c77afe6040000081001005a101e00b388010000035e510c7848522f182300445052197e6e50505253d30a51505e550c78ae385e500a1e6e501803504452505a954451525be05e500a1e6e501803504450505c0a4550505e480a6e505152508b0078610c00501055505e500c79d512504e5e500c7ad50a504d5e540c7bae2185503102ba01008b0079610c004e8b007a610c004d8b007b610c00501054505e500c7cd52750465e500c7dd51f50065e500c7ed51750075e510c7f4450171b4ed50a51505e520c80ae5a3b560b143b510b1c0250234f0000fbc804004457171b4e525057005250060152500702525046036f50560351508b007c610c00468b007d610c00068b007e610c00074451171b4e8b007f610c00518b0080610c00501052505e500c81d51a504e5e500c82d51250545e500c83d50a50525e510c84ae500250684c0000ae1f0a00525055013b570b143b560b050155224f6ca952555401525552027055570356554e525055028b0081610c004e8b0082610c00548b0083610c00528b0084610c00501051504450105fc66e50501051b3a101000048d09b01000004345e510c8548522f182300445052197e6e50505253d30a51505e550c85ae385e500a1e6e501803504452505a954451525be05e500a1e6e501803504450505c0a45505060f1a26e505152508b0085610c00501055505e500c86d512504f5e500c87d50a504d5e540c88ae2185503103ba01008b0086610c004f8b0087610c004d8b0088610c005010545016080d049351b0080844510d1b4e5e500c89d52a50465e500c8ad52250345e500c8bd51a50285e500c8cd51250515e500c8dd50a50175e520c8eae5b3b570b143b560b1d0250244f0000bf4f080052501700525034015250280252505103525046046f50570356508b0089610c00468b008a610c00348b008b610c00288b008c610c00518b008d610c00178b008e610c00501052505e500c8fd51a504f5e500c90d51250545e500c91d50a50525e510c92ae500250684c000031ee0c00525055013b570b143b560b050155224f6ca952555401525552027055570356554f525055028b008f610c004f8b0090610c00548b0091610c00528b0092610c00501051504450105fc66e50501051b328010000035e510c9348522f182300445052197e6e50505253d30a51505e540c93ae385e500a1e6e501803504452505a954451525be05e500a1e6e501803504450505c0a45505061940e6e505152508b0093610c00501054505e500c94d512504d5e500c95d50a50145e530c96ae2185503104ba01008b0094610c004d8b0095610c00148b0096610c00501053505e500c97d50a504a5e520c98ae176c504a038b0097610c004a8b0098610c00501052505e500c99d51a50535e500c9ad51250525e500c9bd50a50145e510c9cae500250684c000084c70c00525054013b560b143b550b050154224f6ca9525453015254520270545603555414525054028b0099610c00538b009a610c00528b009b610c00148b009c610c00501051504450105fc66e505010518b0067610c004f8b0068610c004e16080d04934eb00808444e0d1b4e8b0069610c004e8b006a610c00468b006b610c00348b006c610c00288b006d610c004d8b006e610c004c8b006f610c00068b0070610c00078b0071610c004a8b0072610c00058b0073610c00488b0074610c001e8b0075610c00178b0076610c00148b0077610c0010101a105e100c9dd52210235e100c9ed51a10205e100c9fd51210195e100ca0d50a101a5e1e0ca1ae5a0210254f0000bf4f080052101900521023015e480a306e4813034844484862d845484863e6675210480252101a03521020048b009d610c00238b009e610c00208b009f610c00198b00a0610c001a8b00a1610c0010101e105e100a596e19180310451019645bf06e1910191e37312a195e100a4b6e1e18031045101e6564c56e10101e1f451f10669a8d4523106714b845201068efda5e100ca2d516104b5e100ca3d50e10195e480ca45e1e0ca5ae3785103105ba0100084a02005a4a19005a4a4b018b00a2610c004b8b00a3610c00198b00a4610c00108b00a5610c004a101e4a1048104510496969ef6f101049481e5e100a4b6e1e18031045101e6adaef701e101e1947235e100ca6d52210215e100ca7d51a10325e100ca8d51210195e100ca9d50a10145e230caaae2f85103106ba01008b00a6610c00218b00a7610c00328b00a8610c00198b00a9610c00148b00aa610c0010102310d0340d00000417d02d0d000004345e100cabd50a10465e320cacae1d0110bd0178cd521046008b00ab610c00468b00ac610c001010321037312b325e100cadd60901000010325e470cae16050d049310b0080544100d1b4ed6f000000047105e100cafd6e500000010465e100cb0d6da00000010345e100cb1d6cf00000010455e100cb2d6c400000010445e100cb3d6b900000010335e100cb4d6ae00000010285e100cb5d6a300000010095e100cb6d69800000010075e100cb7d68d00000010265e100cb8d68200000010435e100cb9d57710425e100cbad56f10415e100cbbd56710405e100cbcd55f103f5e100cbdd557103e5e100cbed54f10395e100cbfd54710375e470cc045101c6b043ad53947105e470cc145101c6cb7e2d52b47105e470cc245101c5904e3d51d47105e100cc3d51510255e100cc4d50d10175e100cc5afde0000008b00ad610c003216050d049347b0080544470d1b4e85323107ba01008b00ae610c00478b00af610c00468b00b0610c00348b00b1610c00458b00b2610c00448b00b3610c00338b00b4610c00288b00b5610c00098b00b6610c00078b00b7610c00268b00b8610c00438b00b9610c00428b00ba610c00418b00bb610c00408b00bc610c003f8b00bd610c003e8b00be610c00398b00bf610c003745391c6b043a8b00c0610c003945391c6cb7e28b00c1610c003945391c5904e38b00c2610c00398b00c3610c00258b00c4610c00178b00c5610c00321010325e320cc6d52232345e320cc7d51a32385e320cc8d51232375e320cc9d50a32175e320ccaae2f85313108ba01008b00c6610c00348b00c7610c00388b00c8610c00378b00c9610c00178b00ca610c00311032315e370a5eb010266e311803374531316da526ae076e311303379339b206261039369338b2062610382a9337b20f261805042b9337b2060510372b9336b20f261805040e9336b2060510360e5e2b0ccb16053304930eb00905450e336ed684d5122b0e5e0e0cccd50a0e0f5e2b0ccdae5d16053304933eb00905453e336ed6849505930ed521053e3b400b145e3e0a5f6e3f13033e013e264f78cd523e0f006f0e40033f3e16053304933eb00905453e336ed6848b00cb610c003e8b00cc610c000f8b00cd610c000e102b0e5e0e0cced56d0e355e0e0ccfd5650e3d5e0e0cd0d55d0e3c5e0e0cd1d5550e3b5e0e0cd2d54d0e335e0e0cd3d5450e265e0e0cd4d53d0e3a5e0e0cd5d5350e395e0e0cd6d52d0e385e0e0cd7d5250e375e0e0cd8d51d0e365e0e0cd9d5150e2b5e0e0cdad50d0e175e0f0cdbafbb0000003b3f0b145e0e0a606e3e13030e020e274f000009630800520e1700520e3301520e3d02520e3903520e3804520e3705520e3606520e2607520e3508520e3c09520e3b0a520e3a0b520e2b0c6f0e3f033e0e8b00ce610c00358b00cf610c003d8b00d0610c003c8b00d1610c003b8b00d2610c00338b00d3610c00268b00d4610c003a8b00d5610c00398b00d6610c00388b00d7610c00378b00d8610c00368b00d9610c002b8b00da610c00178b00db610c000e100f0e5e0e0cdcd5590e355e0e0cddd5510e0d5e0e0cded5490e345e0e0cdfd5410e335e0e0ce0d5390e265e0e0ce1d5310e325e2b0ce2450e1c6fd797d5232b0e5e2b0ce3450e1c70d897d5152b0e5e0e0ce4d50d0e175e0e0ce5aff8000000132b26b19b000000263b380b165e360a616e36130336443736712945361c6fd797083903005a39360016053304933ab00905453a336ed684b2093a453a1c70d89702360f240000b2cc04005a393a015a393502523639006c3a3203083902005a393a003b3c0b145e3a0a626e3b13033a023a284f0000fbc80400523a1700523a3401523a3302523a0d036f3a3c033b3a5a393a01523639016f2b380337368b00dc610c00358b00dd610c000d8b00de610c00348b00df610c00338b00e0610c00268b00e1610c003245321c6fd7978b00e2610c003245321c70d8978b00e3610c00328b00e4610c00178b00e5610c002b100e2b932bb20626102b2a932ab20d26d1071104101124102a115e110ce6d50a11155e240ce7ae1d0111bd0178cd521115008b00e6610c00158b00e7610c00111024115e110ce8d54211315e110ce9d53a11305e110cead532112e5e110cebd52a11285e110cecd522112b5e110cedd51a112a5e110ceed51211245e110cefd50a11175e110cf0ae743b320b140215294f0000ce7a0800521517005215280152152e0252152b0352152a0452153005521524066f15320331158b00e8610c00318b00e9610c00308b00ea610c002e8b00eb610c00288b00ec610c002b8b00ed610c002a8b00ee610c00248b00ef610c00178b00f0610c0015101115b20807972ab2102618070429972ab007073b2a0b103b150b0f1e1616155e150cf1d512152a5e150cf2d50a15165e240cf3ae2c0215ad060000b2cc040052152a00521516018b00f1610c002a8b00f2610c00168b00f3610c00151024155e160cf445151c726b74d51216155e150cf5d50a15245e160cf6ae32452a1c726b74081502005a152a005a152401452a1c726b748b00f4610c002a8b00f5610c00248b00f6610c001510161516070d049324b0080744240d1b4e5e0d0cf7d53a0d295e0d0cf8d5320d285e0d0cf9d52a0d095e0d0cfad5220d265e0d0cfbd51a0d255e0d0cfcd5120d245e0d0cfdd50a0d175e150cfeae713b2b0b143b2a0b17010d2a4f3100520d2900520d1701520d2802520d2403520d0904520d2505520d2606520d2c076f0d2b032a0d8b00f7610c00298b00f8610c00288b00f9610c00098b00fa610c00268b00fb610c00258b00fc610c00248b00fd610c00178b00fe610c000d10150d5e0d0cffd5100d108c00000100005d170c00ae1a6c0d10038b00ff610c00108c0000010000610c000d10170d8c00010100005d0d0c00d6d00000000d238c02020100005d0d0c02d6bf0000000d098c02030100005d0d0c02d6ae0000000d228c02040100005d0d0c02d69d0000000d218c02050100005d0d0c02d68c0000000d208c02060100005d0d0c02d57b0d1f8c02070100005d0d0c02d56d0d1e8c02080100005d0d0c02d55f0d1d8c02090100005d100c02450d1c734760d54b100d8c020a0100005d0d0c02d53d0d1b8c020b0100005d0d0c02d52f0d1a8c020c0100005d0d0c02d5210d198c020d0100005d0d0c02d5130d148c020e0100005d100c02af12020000b00c1b6c0d1d03af770100003b260b143b250b06022436380000b2cc0400522427003b290b165e270a636e2718032745282774235c022a0f240000b2cc040045271c734760522a27005e270a646e27180327452c2775e052022b2b4f0000b2cc0400522b1900932eb20709902e8a650127252178cd522b2e016f2c26032c2b082b02005a2b2c00022c2c4f000034f12c00522c2d00022ec4090000a5fb2c0048302f761500442f3077ad6f302f301401442f1a40a4232f302f8b016421012f01902f4f081e2f012f522e2f01522c2e016f2c2603252c5a2b2c01522a2b016f2b2903252a082a03005a2a2b005e2b0a616e2b13032b442c2b7129022b452f0000fbc80400522b1f00522b2001522b1e025e2e0a656e2e18032e452f2e78f270012ee20778cd522e19006f2e26032f2e522b2e036f2b26032c2b5a2a2b015e2b0a666e2c13032b022b2d4f0000fbc80400522b2d00522b2201522b2102522b23036f2b26032c2b5a2a2b0252272a006f2729032827522427016f0d26032524610c00238c0002010000610c00098c0003010000610c00228c0004010000610c00218c0005010000610c00208c0006010000610c001f8c0007010000610c001e8c0008010000610c001d451c1c7347608c0009010000610c001c8c000a010000610c001b8c000b010000610c001a8c000c010000610c00198c000d010000610c00148c000e010000610c000d10100d8c000f0100005d0d0c00d51e0d178c01100100005d0d0c01d5100d108c01110100005d140c01ae4c3b190b165e0d0a636e0d18030d45180d74235c010d252178cd081a02005a1a17005a1a1001520d1a006f0d1903180d610c00178c0010010000610c00108c0011010000610c000d10140d8c00120100005d0d0c00d52c0d168c01130100005d0d0c01d51e0d158c01140100005d0d0c01d5100d148c01150100005d100c01ae533b180b163b170b06020d0f240000b2cc0400520d1600081902005a1915005a191401520d19016f0d1803170d610c00168c0013010000610c00158c0014010000610c00148c0015010000610c000d10100d8c00160100005d0d0c00d52c0d128c01170100005d0d0c01d51e0d118c01180100005d0d0c01d5100d108c01190100005d0d0c01ae5d3b140b165e0a0a616e0a13030a44130a7129020a0f240000b2cc0400520a1200081502005a1511005a151001520a15016f0a1403130a610c00128c0017010000610c00118c0018010000610c00108c0019010000610c000a100d0a8c001a0100005d0a0c00d52c0a0f8c011b0100005d0a0c01d51e0a0e8c011c0100005d0a0c01d5100a0d8c011d0100005d0a0c01ae4f3b110b163b100b15010b252178cd081203005a120f005a120e015a120d02520b12006f0b1103100b610c000f8c001b010000610c000e8c001c010000610c000d8c001d010000610c000b100a0b760a7604"
-        ),
-        FunctionPatch(62435, "", 393, "93007e7600"),
-        FunctionPatch(
-            62714, "useProfileTabIndices", 79,
-            "8b04018c02ffffffff890501100104100002b209058b01021000048906020205994f0000f7c8040052050000100001100302b20a061f00010410030189060352050301b20606100202520502027605"
-        ),
-        FunctionPatch(62758, "", 1931, "94007e7e7e7600"),
-        FunctionPatch(62766, "", 130, "94007e7e7600"),
-        FunctionPatch(62767, "", 72, "94007600"),
-        FunctionPatch(62778, "", 401, "93007e7600"),
-        FunctionPatch(62779, "", 110, "93007e7e7600"),
-        FunctionPatch(62783, "AddToWishlistItemCard", 417, "93007e7600"),
-        FunctionPatch(62880, "", 405, "93007e7600"),
-        FunctionPatch(62881, "", 183, "93007e7e7e7600"),
-        FunctionPatch(62907, "", 498, "93007e7e7600"),
-        FunctionPatch(62908, "", 260, "93007600"),
-        FunctionPatch(63721, "", 1101, "93007e7600"),
-        FunctionPatch(63722, "", 564, "93007600"),
-        FunctionPatch(64027, "logReadyPayloadReceived", 509, "93007e7600"),
-        FunctionPatch(64028, "getConnectionPath", 101, "93007e7600"),
-        FunctionPatch(64029, "getReadyPayloadByteSizeAnalytics", 892, "93007600"),
-        FunctionPatch(64030, "logGatewayConnected", 184, "93007600"),
-        FunctionPatch(66426, "handleTrack", 257, "93007e7600"),
-        FunctionPatch(67311, "", 449, "93007e7600"),
-        FunctionPatch(67312, "", 216, "93007600"),
-        FunctionPatch(68573, "", 139, "96007e7e7e7600"),
-        FunctionPatch(68574, "", 70, "96007e7e7600"),
-        FunctionPatch(68590, "usePredicate", 34, "96007e7e7600"),
-        FunctionPatch(68593, "usePredicate", 34, "96007e7e7600"),
-        FunctionPatch(68600, "", 688, "93007600"),
-        FunctionPatch(68601, "", 298, "93007e7e7600"),
-        FunctionPatch(68628, "", 3920, "94007600"),
-        FunctionPatch(68629, "", 1917, "94007e7600"),
-        FunctionPatch(68858, "", 426, "96007e7e7600"),
-        FunctionPatch(69421, "", 42, "96007e7e7600"),
-        FunctionPatch(69606, "", 208, "96007600"),
-        FunctionPatch(69607, "", 94, "96007e7e7600"),
-        FunctionPatch(70912, "BalanceWidgetMenu", 233, "93007e7600"),
-        FunctionPatch(70917, "", 418, "93007e7e7600"),
-        FunctionPatch(70918, "", 229, "93007e7600"),
-        FunctionPatch(70961, "overrideSurvey", 58, "93007e7e7600"),
-        FunctionPatch(70962, "surveyHide", 153, "93007e7600"),
-        FunctionPatch(70963, "surveySeen", 243, "3d00480100001e00450001008c016c0000017e7e7e7600"),
-        FunctionPatch(71374, "", 303, "93007e7e7e7600"),
-        FunctionPatch(71375, "", 221, "93007e7600"),
-        FunctionPatch(71379, "", 4164, "93007600"),
-        FunctionPatch(71380, "", 2196, "93007600"),
-        FunctionPatch(71381, "", 662, "93007e7e7600"),
-        FunctionPatch(71382, "", 445, "93007e7600"),
-        FunctionPatch(71516, "", 37, "96007e7600"),
-        FunctionPatch(
-            71528, "", 37,
-            "96007e76003407003b0307003b0207015e04020293016e0503010444040500128b00026e08"
-        ),
-        FunctionPatch(72534, "", 871, "94007e7e7e7600"),
-        FunctionPatch(72535, "", 369, "94007e7600"),
-        FunctionPatch(75525, "componentDidMount", 405, "93007e7600"),
-        FunctionPatch(75526, "componentDidUpdate", 1503, "93007e7e7e7600"),
-        FunctionPatch(
-            75650, "", 1566,
-            "400409890301450f0300bfdc3704000f450a0301bcdc3704010a45130302c0dc45160303d4b746110304148b040045120305d46d9301d50612019712340300390402013904030139040401390405013904060139040701390408013b060306850503bdf101006e0e0601053b0c03003b0603025e0506106e090c010544080906f53b050307080701005a070500850503bef101006f0d080907053b0703015e0506116e09070105940816020d089305b0080244050d074e6e0b0901055e0506126e090701050205d4360000b2cc040052050d0052050b016e0909010544170908e54505090904db450d090a08db5e0906136e100c0109450b100b05f10209ce360000f7c80400520917005209050152090d026e0b0b100945090b0c4d5f45100b0db602450b0b0e16c73704020b5e1406146e150c01144514150f6f5c6e14141517b21514180208059405b20f021802080d9405b20602100509370403053b0d030344140d10f1080902005a090b005a090501850504bff101006f20140d05093b05030c9322102112101f0b101e106a0b05055e0506166e090c0105450509116ee16c1205093b05030d6c050501370404055e0906176e090701096c090901451409122d90370405144509091373b0370406095e1006186e150c0110451015145fc16c1510155e1006196e180c0110461718152d0405009110ae7802006e171718105e10060c6e190c011045181916f7f03b1003096e10181910180208103904070244180d17f0081003005a1005005a100f015a100202850f04c0f101006f10180d0f1044180d17f0080f01005a0f0a00850a04c1f101006f0f180d0a0f44180d17f0080a02005a0a14005a0a0901850904c2f101006f19180d090a44180d17f0080a0000850903c3f101006f09180d090a940ab267173b1a030a5e1706206e180701170217f7630000f7c804005e1b06216e1b0c011b451b1b188c5f52171b005e1b060f6e1b0c011b441d1b1995441c1d1ae05e1b06226e1b07011b451b1b1b6d196e1b1c1d1b52171b01521709029009430a700a1a01181709080905005a090a00940ab2700a3b18030a5e1506206e170701150215f8630000fbc804005e1a06236e1a0c011a451a1a1c5b6b52151a005e1a060f6e1a0c011a441c1a1995441b1c1ae05e1a060f6e1a0c011a441a1a1d0a451a1a1ebd0d6e1a1b1c1a52151a01521519025215140390142b2f700a18011715145a090a013b0a030a5e1406246e150701140214f9630000b2cc040052141600521413019013a84170130a011514135a0913029408b19b000000125e1206206e130701120212fa630000fbc804005e1406256e140c01144514141f9963521214005e14060f6e140c011444161419954415161ae05e14060f6e140c01144414141d0a4514142038366e14151614521214015e14060f6e140c011444161419954415161ae05e14060f6e140c01144414141d0a4514142038366e141516145212140252120f03900f09dd70080a0113120f5a0908035e0806206e0f0701080208fb630000bf4f0800520811005e1106266e110c011145111121d160520811015e11060f6e110c011144131119954412131ae05e11060f6e110c01114411111d0a451111223e0c6e111213115208110252081003520805049005ec8670050a010f08055a0905044408092332850501c4f101006e0f0809053b0503040208072400005b30240046090b24702a0400520809005e0906276e090c0109460c0925d8cf04000109252178cd52090f0070090a010c090e520809026f0c0a01050845080b26079e440e0827543704080e44090d10f1080801005a080e00850404c5f101006f20090d04083b04030b0203072400005b30240046090b28bc880400520309005e0606286e070701060106ae0178cd45090b26079e5206090010210673082e0390088c1156060800d1226f070a010706080602005a06070002070f240000b2cc040046080b29fb7e0400520708000208d02f0000229a1e0045090b2a639f520809006f090a010508080803005a08090002090f240000b2cc0400460d0b2bdbea040052090d0052090c016f090a0105095a0809010209d02f0000229a1e00450b0b2a639f52090b006f090a0105095a080902520708016f07040105075a060701520306026f03040105037603"
-        ),
-        FunctionPatch(75687, "", 731, "93007e7e7e7600"),
-        FunctionPatch(75688, "", 477, "93007e7600"),
-        FunctionPatch(75689, "", 735, "93007e7e7e7600"),
-        FunctionPatch(75690, "", 349, "93007e7600"),
-        FunctionPatch(
-            75719, "", 5752,
-            "340e00400f1e8908013b140e003b090e025e0a090c93026e0b14020a440a0b00128b00b66e0a0a0b00441d0801f6370f001d440c0802e145170803fc7d451c0804006a453a0805b8dc370f013a45390806bcdc370f023945380807c0dc370f03384529080832cf370f0429450808097a9017250208b006251025083b0d0e015e0809116e080d02086c1b0802370f051b5e08092b6e0b14020845080b0a19636c28080b370f06285e0809186e0b14020845080b0b03f16c08080b4523080c3f5f370f07235e08092c6e0b0d020844081d0d4e6e100b0208370f08105e08092d6e0b14020845080b0e2eee6c24080b370f09245e08092e6e080d02086e220802105e110a003d084812080f2300440b12107e9119399402006e0b0b1219d30e110b5e130a005e120a01ae283b110e08080b01005a0b110085110e0ff201009700610a000b8b0001610a001110121110130b5e0b092f6e1114020b440b1111f56f150b1113125e0b0a02d5120b105e0b0a03d50a0b1d5e110a04ae2c020bd4360000b2cc0400520b1d00520b10018b0002610a00108b0003610a001d8b0004610a000b10110b5e0b09306e0b0d020b6e0b0b021144110b12e545160b1304db45130b1408db940318070316390f0a075e0b0a05d51a0b165e0b0a06d5120b135e0b0a07d50a0b115e120a08ae37020bce360000f7c80400520b1100520b1601520b13028b0005610a00168b0006610a00138b0007610a00118b0008610a000b10120b5e0b09316e1114020b450b111505f16e0b0b111245210b164d5f370f0b2145340b17b602370f0c34451e0b18504845120b1925543b2d0e04440b2d1af26e270b2d035e0b0a09d50a0b235e200a0aae1a850b0f10f201008b0009610a00238b000a610a000b10200b5e0b09326e1114020b450b111b26f16c0b0b1144310b1c74370f0d31440b2d1df46e0b0b2d033b110e038b00026f0b11020b005e1f0b005e0b0b01370f0e0b5e0b09336e1314020b450b131e88f06c370b13370f0f375e130a0b4816080f2300440b16107e6e0b0b1619d30a130b5e180a0bae183b130e09080b01005a0b13008b010b610a010b10180b5e130a0c440b1d0d4ed50a130b5e160a0dae1f850b0f11f2010044131d0d4e8b010c610a01138b010d610a010b10160b5e0b092f6e1314020b440b1311f56f130b131816370f10135e0b09346e1814020b4516181f4cee440b1d0d4e6e0b16180b5e1609356e1814021645161820a472911ab07802006e1616181a440b0b21a497011c0b0b01b0060b100b165e1609366e181402164516182235ef6e3016181a5e1609376e181402164516182301f09504701616180b300445351624e25c370f113545361625177f370f123645161626de9d370f131610320b102629cf4003295e0b09376e1a14020b45181a2790b5020b1a640000f7c80400520b1600520b3501520b36026f0b181a290b102629b90e0b013b0b0e0a45260b285513370f1426440b2d1df46e0b0b2d016f0b11020b005e1a0b00370f151a5e0b0b01370f160b5e110a0e4818080f2300440b18107e6e0b0b1819d30a110b5e180a0eae13850b0f12f201008b000e610a000b10180b5e0b09386e1114020b450b1129d9ef6c0b0b11452b0b2a15b845330b2b41c9370f17335e0b0a0fd51a0b295e0b0a10d5120b285e0b0a11d50a0b235e110a12ae28850b0f13f201008b000f610a00298b0010610a00288b0011610a00238b0012610a000b10110b5e0b0a13d52a0b365e0b0a14d5220b355e0b0a15d51a0b115e0b0a16d5120b265e0b0a17d50a0b165e230a18ae4d020b214f0000bf4f0800520b2600520b1601520b3502520b3603520b11048b0013610a00368b0014610a00358b0015610a00118b0016610a00268b0017610a00168b0018610a000b10230b5e0b09376e1114020b450b112c00f06e0b0b112345290b2d6e8b370f182945110b2e4a89370f1911452a0b2fd073452f0b30e0e5370f1a2f452c0b316f8b3b0b0e0a450b0b3225101705290b390f1b055e0b0a19d50a0b245e3c0a1aae1a850b0f14f201008b0019610a00248b001a610a000b103c0b370f1c3c5e0b0a1bd50e0b3c5e2e0a1c5e230a1dae2c850b0f15f20100083b01005a3b3c008b001b610a003c8b001c610a000b8b001d610a003b10233b102e0b440b2d33ea6f0b0b2d2e235e0b0a1ed50a0b1f5e230a1fae251806031f930bb20c06442e1f34a16c0b2e1f8b001e610a001f8b001f610a000b10230b5e0b0a20d6820000000b215e0b0a21d5770b345e0b0a22d56f0b105e0b0a23d5670b075e0b0a24d55f0b3a5e0b0a25d5570b395e0b0a26d54f0b385e2e0a27450b1b352809d5412e0b5e2e0a28450b1b3641a0d5332e0b5e2e0a29450b1b3704e3d5252e0b5e0b0a2ad51d0b375e0b0a2bd5150b1d5e0b0a2cd50d0b315e2e0a2daf83000000850b0f16f201008b0020610a00218b0021610a00348b0022610a00108b0023610a00078b0024610a003a8b0025610a00398b0026610a003845381b3528098b0027610a003845381b3641a08b0028610a003845381b3704e38b0029610a00388b002a610a00378b002b610a001d8b002c610a00318b002d610a000b102e0b5e0b0a2ed5350b055e0b0a2fd52d0b1a5e310a30450b1b3704e3d51f310b5e310a31440b1d0d4ed512310b5e0b0a32d50a0b135e310a33ae41850b0f17f201008b002e610a00058b002f610a001a45371b3704e38b0030610a003744371d0d4e8b0031610a00378b0032610a00138b0033610a000b10310b5e130a344837080f2300440b37107e6e0b0b3719d30a130b5e380a34ae385e0b091c6e0b14020b44370b389544133739e05e0b091c6e0b14020b440b0b3a0a450b0b3b71276e0b13370b8b0034610a000b10380b5e0b0a35d50a0b335e370a36ae1a850b0f18f201008b0035610a00338b0036610a000b10370b5e0b0a37d50a0b2e5e130a38ae176c0b2e028b0037610a002e8b0038610a000b10130b5e0b0a39d5120b375e0b0a3ad50a0b135e2e0a3bae48020b684c00006cc70c00520b38013b3a0e0e3b390e050138224f6ca952383701523813026f383a023938520b38028b0039610a00378b003a610a00138b003b610a000b102e0b5e0b0a3cd5650b295e0b0a3dd55d0b365e0b0a3ed5550b355e0b0a3fd54d0b215e0b0a40d5450b345e0b0a41d53d0b335e0b0a42d5350b325e0b0a43d52d0b315e0b0a44d5250b305e0b0a45d51d0b2e5e0b0a46d5150b1d5e0b0a47d50d0b165e130a48af7b040000080b01005a0b2e00b388010000025e380a494839080f2300443739107e6e37373919d30a38375e3b0a49ae385e37091c6e37140237443937389544383939e05e37091c6e371402374437373a0a4537373c480a6e373839378b0049610a0037103b375e370a4ad51237355e370a4bd50a37335e3a0a4cae2185370f19f201008b004a610a00358b004b610a00338b004c610a0037103a375e370a4dd52737295e370a4ed51f37215e370a4fd51737345e380a5044371d0d4ed50a38375e390a51ae5a3b3c0e0e3b380e1302371b640000fbc80400443d1d0d4e52373d005237290152372102523734036f373c0238378b004d610a00298b004e610a00218b004f610a003444381d0d4e8b0050610a00388b0051610a00371039375e370a52d51a37355e370a53d512373a5e370a54d50a37395e380a55ae500237684c0000ae1f0a0052373b013b3d0e0e3b3c0e05013b224f6ca9523b3a01523b3902703b3d023c3b3552373b028b0052610a00358b0053610a003a8b0054610a00398b0055610a003710383744370b3dc66e37370b38b366010000305e380a564839080f2300443739107e6e37373919d30a38375e3b0a56ae385e37091c6e37140237443937389544383939e05e37091c6e371402374437373a0a4537373ef1a26e373839378b0056610a0037103b375e370a57d51237365e370a58d50a37335e3a0a59ae2185370f1af201008b0057610a00368b0058610a00338b0059610a0037103a375e370a5ad51a37215e370a5bd51237345e370a5cd50a371d5e390a5dae453b3c0e0e3b380e1402371c640000f7c8040052371d0052372101523734026f373c0238378b005a610a00218b005b610a00348b005c610a001d8b005d610a00371039375e370a5ed51a37365e370a5fd512373a5e370a60d50a37395e380a61ae500237684c000031ee0c0052373b013b3d0e0e3b3c0e05013b224f6ca9523b3a01523b3902703b3d023c3b3652373b028b005e610a00368b005f610a003a8b0060610a00398b0061610a003710383744370b3dc66e37370b385e380a624839080f2300443739107e6e37373919d30a38375e3b0a62ae385e37091c6e37140237443937389544383939e05e37091c6e371402374437373a0a4537373f940e6e373839378b0062610a0037103b375e370a63d51237335e370a64d50a37165e3a0a65ae2185370f1bf201008b0063610a00338b0064610a00168b0065610a0037103a375e370a66d50a37315e390a67ae176c3731028b0066610a00318b0067610a00371039375e370a68d51a373a5e370a69d51237395e370a6ad50a37165e380a6bae500237684c000084c70c0052373b013b3d0e0e3b3c0e05013b224f6ca9523b3a01523b3902703b3d023c3b1652373b028b0068610a003a8b0069610a00398b006a610a00168b006b610a003710383744370b3dc6af050000008b003c610a00298b003d610a00368b003e610a00358b003f610a00218b0040610a00348b0041610a00338b0042610a00328b0043610a00318b0044610a00308b0045610a002e8b0046610a001d8b0047610a00168b0048610a000b10130b5e0b0a6cd5220b2c5e0b0a6dd51a0b2a5e0b0a6ed5120b1a5e0b0a6fd50a0b135e160a70ae5a020b254f0000bf4f0800520b1a00520b2c015e2e09176e2e0d022e442e2e40d8452e2e41e667520b2e02520b1303520b2a048b006c610a002c8b006d610a002a8b006e610a001a8b006f610a00138b0070610a000b10160b5e0b09456e1314020b450b13425bf06e0b0b1316370f1d0b5e1309386e161402134513164364c56e13131617451713449a8d452a134514b8451a1346efda5e130a71d516132f5e130a72d50e130b5e2c0a735e160a74ae3785130f1cf20100082e02005a2e0b005a2e2f018b0071610a002f8b0072610a000b8b0073610a00138b0074610a002e10162e102c1345132d4769ef6f13132d2c165e1309386e1614021345131648daef701613160b2b2a5e130a75d52213295e130a76d51a13285e130a77d51213265e130a78d50a13115e130a79ae2f850f0f1df201008b0075610a00298b0076610a00288b0077610a00268b0078610a00118b0079610a000f10130f5e0f092b6e1114020f450f1149c4056e0f0f11135e110a7a4813080f2300440f13107e6e0f0f1319d30a110f5e110a7aae16020fd6000000824e08008b007a610a000f10110f5e130a7b450f1b4a6b74d50a130f5e130a7cae2b45261b4a6b74080f02005a0f26005a0f110145111b4a6b748b007b610a00118b007c610a000f10130f5e0f0a7dd50a0f125e110a7eae1d010fbd0178cd520f12008b007d610a00128b007e610a000f10110f5e0f0a7fd5220f255e0f0a80d51a0f1e5e0f0a81d5120f115e0f0a82d50a0f1d5e120a83ae503b280e0e3b260e11020f1d640000fbc80400520f1d00520f1e01520f1102520f25036f0f2802260f8b007f610a00258b0080610a001e8b0081610a00118b0082610a001d8b0083610a000f10120f5e110a84450f1b4bc0acd518110f5e110a85450f1b4cc1acd50a110f5e1e0a86ae3e45111b4bc0ac080f02005a0f110045111b4cc1ac5a0f110145111b4bc0ac8b0084610a001145111b4cc1ac8b0085610a00118b0086610a000f101e0f5e0f0a87d5380f245e0f0a88d5300f075e0f0a89d5280f235e0f0a8ad5200f1f5e110a8b450f1b4d0474d512110f5e0f0a8cd50a0f1e5e110a8dae7b3b260e0e5e0f09466e250d020f020f1e640000f6552c00520f2700520f2401520f0702520f1e0345271b4d0474520f2704520f2306520f1f076f0f2602250f8b0087610a00248b0088610a00078b0089610a00238b008a610a001f451f1b4d04748b008b610a001f8b008c610a001e8b008d610a000f10110f16051003930fb00905450f104e64d216031003931fb00903451f104fc1975e100a8ed50a10155e240a8fae605e10091c6e10140210442510389544232550815e10091c6e101402104410103a0a461e1051d43f04000110730b78cd5e2609476e271402264526275239c56e26262715521026006f1023251e108b008e610a00158b008f610a00101024105e150a90481e080f230044101e107e6e10101e19d30a15105e230a90ae385e10091c6e10140210441e10389544151e39e05e10091c6e101402104410103a0a45101053bf2f6e10151e108b0090610a0010102310481008540f00441e1055569115660401009010ff00701e1e102415235e100a91d53210225e100a92d52a10215e100a93d52210205e100a94d51a101f5e100a95d512101e5e100a96d50a101d5e150a97ae6602101f640000d9eb0a0052101d0052101f0152102202521021035210200452101e053b230e0b452323569a39521023068b0091610a00228b0092610a00218b0093610a00208b0094610a001f8b0095610a001e8b0096610a001d8b0097610a00101015101704040f5e0f0a98d51a0f1c5e0f0a99d5120f045e0f0a9ad50a0f155e100a9bae453b1e0e0e3b1d0e16020f20640000f7c80400520f0400520f1c01520f15026f0f1e021d0f8b0098610a001c8b0099610a00048b009a610a00158b009b610a000f10100f5e0f0a9c4815080f2300440815107e6e08081519d30a0f085e190a9cae1602086b000000eb4e08008b009c610a00081019089315b2070790158a655e080a9dd51208155e080a9ed50a080b5e0f0a9fae453b1d0e0e5e0809486e08140208451c0857e05202082b4f0000b2cc040052080b00520815016f081d021c088b009d610a00158b009e610a000b8b009f610a0008100f085e150aa045081b584760d51215085e080aa1d50a080f5e150aa2ae463b1d0e0e3b1c0e0602080f240000b2cc0400451e1b58476052081e0052080f016f081d021c08451b1b5847608b00a0610a001b8b00a1610a000f8b00a2610a00081015085e080aa3d50a080b5e0f0aa4ae363b1c0e0e5e0809496e08140208451b0859f2700108e20778cd52080b006f081c021b088b00a3610a000b8b00a4610a0008100f085e080aa5d522081a5e080aa6d51a08175e080aa7d51208165e080aa8d50a080f5e0b0aa9ae5a3b1c0e0e5e08094a6e080d0208441b085a290208452f0000fbc804005208170052081a015208160252080f036f081c021b088b00a5610a001a8b00a6610a00178b00a7610a00168b00a8610a000f8b00a9610a0008100b085e080aaad51208155e080aabd50a080b5e0f0aacae4a3b170e0f3b160e060208db2c0000f7c804005208190052081801081802005a1815005a180b01520818026f08170216088b00aa610a00158b00ab610a000b8b00ac610a0008100f085e080aadd52d08135e080aaed52508125e080aafd51d08115e080ab0d51508105e080ab1d50d080f5e0b0ab2af8d0000003b150e0e5e08094b6e081402084514085b235c0208355e0000cdb008003b180e0f3b170e0602160f240000b2cc040052161300081904005a1912005a1911015a1910025a190f03521619016f1618021716520816016f08150214088b00ad610a00138b00ae610a00128b00af610a00118b00b0610a00108b00b1610a000f8b00b2610a0008100b085e080ab3d512080c5e080ab4d50a080b5e080ab5ae443b0e0e0e5e09094a6e090d0209440d095a2902090f240000b2cc040052090c0052090b016f090e020d098b00b3610a000c8b00b4610a000b8b00b5610a00091008097608"
-        ),
-        FunctionPatch(77257, "trackHttpRequest", 220, "93007600"),
-        FunctionPatch(77458, "_trackStartSpeaking", 238, "93007e7e7600"),
-        FunctionPatch(77459, "_trackStartListening", 237, "93007e7600"),
-        FunctionPatch(79457, "handleAppStateUpdate", 230, "93007e7e7600"),
-        FunctionPatch(79491, "installWebsocketTelemetryHook", 183, "93007e7e7e7600"),
-        FunctionPatch(79533, "setupLibdiscoreTimersMonitor", 39, "93007e7e7e7600"),
-        FunctionPatch(79599, "logDangerously", 146, "93007e7e7600"),
-        FunctionPatch(79600, "log", 206, "93007e7e7600"),
-        FunctionPatch(79601, "verboseDangerously", 146, "93007e7e7600"),
-        FunctionPatch(79602, "verbose", 206, "93007e7e7600"),
-        FunctionPatch(79603, "info", 206, "93007e7e7600"),
-        FunctionPatch(79606, "trace", 146, "93007e7e7600"),
-        FunctionPatch(79608, "fileOnly", 148, "93007600"),
-        FunctionPatch(83581, "track", 544, "3d00480100001e00450001008c016c0000017600"),
-        FunctionPatch(
-            83586, "submitEventsImmediately", 251,
-            "3d00480100001e00450001008c016c0000017e7e7e7600"
-        ),
-        FunctionPatch(83707, "", 134, "93007e7e7600"),
-        FunctionPatch(89454, "_handleVoiceQualityPeriodicsStats", 508, "93007600"),
-        FunctionPatch(112318, "flush", 82, "93007e7e7600"),
-        FunctionPatch(112429, "add", 511, "93007e7e7e7600"),
-        FunctionPatch(112432, "_flush", 374, "93007e7e7600"),
-        FunctionPatch(112433, "_captureMetrics", 97, "93007e7600"),
-        FunctionPatch(112454, "add", 443, "93007e7e7e7600"),
-        FunctionPatch(112455, "flush", 114, "93007e7e7600"),
-        FunctionPatch(
-            113052, "", 213,
-            "34030142050301000000890701370500073b0803003b0403025e03040a93016e06080103450306005bd16e06030607130306b1a1000000063406005e09040b6e0a08010945090a0159d26e09090a07b04b095e09040b6e0a08010945090a02cdd46e09090a07b019095e04040b6e080801044504080381d36e04040807ae1b3b0a060145090a04bdbd850805532d02006e08090a08130408ae3845070705167f45070706a5b444070707a497001c010000b21c013b07060145060704bdbd850505522d02006e050607051301051004011003047603"
+            49828, "_maybeFetchCollectionsWithProducts", 61,
+            "3d00480100001d004500010057876c0000017e7600"
         ),
         FunctionPatch(
-            113177, "", 624,
-            "3405000203684c00006cc70c003409013b0b09003b0609025e02061e93006e020b0002440702009544040701e05e02061e6e020b0002440202020a4502020371276e02040702520302013b0809143b0709050102224f6ca98504056c2d0200520204013b0405286c040400520204026f020800070252030202080201005a0203003b030519b3a70000000044040204c60203684c0000ae1f0a005e0a061e6e0a0b000a440d0a0095440c0d01e05e0a061e6e0a0b000a440a0a020a450a0a05480a6e0a0c0d0a52030a01010c224f6ca9850a056d2d0200520c0a013b0d091c020a234f0000fbc804003b0e0500440e0e064e520a0e003b010525520a01013b01050b520a01023b0e0515520a0e036f0a08000d0a520c0a023b0a051b700a0800070c0a52030a026e030402033b03051ab20d033b04050a940118030104b3ba0000000344040204c60203684c000031ee0c005e0a061e6e0a0b000a440d0a0095440c0d01e05e0a061e6e0a0b000a440a0a020a450a0a07f1a26e0a0c0d0a52030a01010a224f6ca9850c056e2d0200520a0c013b0c091d0209244f0000bf4f08003b0d050052090d003b0d050a52090d013b0d050252090d023b0e0501940116010e01930db00801440d0e064e52090d033b0d051552090d046f0908000c09520a09023b09051c70090800070a09520309026e030402033b010518b2730044040204c60203684c000084c70c005e09061e6e090b0009440a09009544090a01e05e06061e6e060b0006440606020a45060608940e6e06090a06520306010106224f6ca98509056f2d0200520609013b0905296c090900520609023b05051d70050800070605520305026e030402037602"
+            49896, "", 1567,
+            "400409890301450f0300cedd3704000f450a0301e07e3704010a45130302fab94516030321b94611030483a604004512030504e19301d50612019712340300390402013904030139040401390405013904060139040701390408013b060306850503798801006e0e0601053b0c03003b0603025e0506106e090c010544080906f53b050307080701005a0705008505037a8801006f0d080907053b0703015e0506116e09070105940816020d089305b0080244050d074c6e0b0901055e0506126e090701050205a737000078ad040052050d0052050b016e09090105451709083d8945050909664f450d090af3315e0906136e100c0109450b100b49f20209a137000088ad0400520917005209050152090d026e0b0b100945090b0c676145100b0db802450b0b0e5ac93704020b5e1406146e150c01144514150f3f5e6e14141517b21514180208059405b20f021802080d9405b20602100509370403053b0d030344140d10f1080902005a090b005a0905018505047b8801006f20140d05093b05030c9322102112101f0b101e106a0b05055e0506166e090c01054505091175e26c1205093b05030d6c050501370404055e0906176e090701096c0909014514091290923704051445090913b9b1370406095e1006186e150c0110451015148e7b6c1510155e1006196e180c0110461718150b2105009110599202006e171718105e10060c6e190c01104518191637f23b1003096e10181910180208103904070244180d17ef081003005a1005005a100f015a100202850f047c8801006f10180d0f1044180d17ef080f01005a0f0a00850a047d8801006f0f180d0a0f44180d17ef080a02005a0a14005a0a09018509047e8801006f19180d090a44180d17ef080a00008509037f8801006f09180d090a940ab269173b1a030a5e1706206e180701170217d83b000088ad04005e1b06216e1b0c011b451b1b18a96152171b005e1b060f6e1b0c011b441d1b1994441c1d1ae15e1b06226e1b07011b451b1b1bdced6e1b1c1d1b52171b0152170902910983190100700a1a01181709080905005a090a00940ab2700a3b18030a5e1506206e170701150215d93b000053ad04005e1a06236e1a0c011a451a1a1c106d52151a005e1a060f6e1a0c011a441c1a1994441b1c1ae15e1a060f6e1a0c011a441a1a1d0a451a1a1ee70d6e1a1b1c1a52151a0152151902521514039014454d700a18011715145a090a013b0a030a5e1406246e150701140214da3b000078ad040052141600521413019013856a70130a011514135a0913029408b19b000000125e1206206e130701120212db3b000053ad04005e1406256e140c01144514141faf06521214005e14060f6e140c011444161419944415161ae15e14060f6e140c01144414141d0a4514142021366e14151614521214015e14060f6e140c011444161419944415161ae15e14060f6e140c01144414141d0a4514142021366e141516145212140252120f03900f31de70080a0113120f5a0908035e0806206e0f0701080208dc3b000091750800520811005e1106266e110c011145111121234a520811015e11060f6e110c011144131119944412131ae15e11060f6e110c01114411111d0a45111122610c6e1112131152081102520810035208050490058c8870050a010f08055a090504440809232d850501808801006e0f0809053b050304020879240000a589240046090b24ac420400520809005e0906276e090c0109450c0925a77b01099021f5d552090f0070090a010c090e520809026f0c0a01050845080b260909440e0827523704080e44090d10f1080801005a080e00850404818801006f20090d04083b04030b020379240000a589240046090b286b6f0400520309005e0606286e070701060106af01f5d545090b2609095206090010210673082e039008992056060800a5226f070a010706080602005a06070002078124000078ad040046080b295643040052070800020877300000e6950c0045090b2a2e07520809006f090a010508080803005a08090002098124000078ad0400460d0b2b5306050052090d0052090c016f090a0105095a080901020977300000e6950c00450b0b2a2e0752090b006f090a0105095a080902520708016f07040105075a060701520306026f03040105037603"
         ),
-        FunctionPatch(115029, "sampleStats", 395, "93007e7e7e7600"),
-        FunctionPatch(115037, "sampleStats", 68, "93007600"),
-        FunctionPatch(115050, "sampleStats", 112, "93007600"),
+        FunctionPatch(50253, "", 337, "8b00007600"),
+        FunctionPatch(50277, "_fetchCurrentQuests", 61, "3d00480100001d004500010057876c0000017e7600"),
+        FunctionPatch(50278, "_sendHeartbeat", 61, "3d00480100001d004500010057876c0000017e7600"),
+        FunctionPatch(50286, "_fetchClaimedQuests", 61, "3d00480100001d004500010057876c0000017e7600"),
+        FunctionPatch(50287, "_fetchQuestToDeliver", 61, "3d00480100001d004500010057876c0000017e7600"),
+        FunctionPatch(50288, "_fetchEarnedQuestToDeliver", 61, "3d00480100001d004500010057876c0000017e7600"),
+        FunctionPatch(50875, "openPremiumUpsellActionSheet", 107, "93007e7e7600"),
+        FunctionPatch(51395, "openPremiumModal", 82, "93007e7e7600"),
+        FunctionPatch(52519, "", 446, "93007e7e7600"),
+        FunctionPatch(52520, "", 221, "93007e7600"),
         FunctionPatch(
-            127527, "", 572,
-            "3404000202684c00006cc70c003408013b0a08003b0508025e01051c93006e010a0001440601009544030601e05e01051c6e010a0001440101020a4501010371276e01030601520201013b07080e3b0608050101224f6ca98503041e400200520103013b03041f6c030300520103026f010700060152020102080101005a0102003b020411b3a70000000044030104c60202684c0000ae1f0a005e09051c6e090a0009440c090095440b0c01e05e09051c6e090a0009440909020a45090905480a6e090b0c0952020901010b224f6ca98509041f400200520b09013b0c081302091b640000fbc804003b0d0400440d0d064e52090d003b0d041a52090d013b0d040b52090d023b0d040c52090d036f0907000c09520b09023b09041370090700060b09520209026e020301023b020412b39a0000000244030104c60202684c000031ee0c005e09051c6e090a0009440c090095440b0c01e05e09051c6e090a0009440909020a45090907f1a26e090b0c09520209010109224f6ca9850b042040020052090b013b0b081402081c640000f7c804003b0c040052080c003b0c040b52080c013b0c040c52080c026f0807000b08520908023b08041470080700060908520208026e0203010244030104c60202684c000084c70c005e08051c6e080a0008440908009544080901e05e05051c6e050a0005440505020a45050508940e6e05080905520205010105224f6ca985080421400200520508013b0804206c080800520508023b0404157004070006050452020402af050000007601"
+            53481, "_fetchSocialLayerStorefrontConfig", 61,
+            "3d00480100001d004500010057876c0000017e7600"
         ),
-        FunctionPatch(132693, "handlePostConnectionOpen", 373, "93007e7600"),
         FunctionPatch(
-            142676, "", 213,
-            "34030142050301000000890701370500073b0803003b0403025e03040a93016e06080103450306005bd16e06030607130306b1a1000000063406005e09040b6e0a08010945090a0159d26e09090a07b04b095e09040b6e0a08010945090a02cdd46e09090a07b019095e04040b6e080801044504080381d36e04040807ae1b3b0a060045090a04bdbd8508058e5302006e08090a08130408ae3845070705167f45070706a5b444070707a497001c010000b21c013b07060045060704bdbd8505058d5302006e050607051301051004011003047603"
+            53485, "fetchSocialLayerStorefrontSkuForApplication", 49,
+            "3d00480100001d004500010057876c0000017e7600"
         ),
-        FunctionPatch(148336, "", 31, "93007e7e7e7600"),
+        FunctionPatch(53703, "isListeningOnSpotify", 148, "8b00007e7e7e7600"),
+        FunctionPatch(55262, "SpotifyTrack", 51, "96007e7e7e7600"),
+        FunctionPatch(
+            55281, "subscribePlayerStateNotifications", 118,
+            "3d00480100001d004500010057876c0000017e7e7600"
+        ),
+        FunctionPatch(55286, "fetchIsSpotifyProtocolRegistered", 101, "96007e7600"),
+        FunctionPatch(57893, "", 173, "080000007e7600"),
+        FunctionPatch(58817, "", 365, "93007e7600"),
+        FunctionPatch(58818, "", 254, "93007e7e7600"),
+        FunctionPatch(58829, "", 1928, "93007e7e7e7600"),
+        FunctionPatch(58830, "", 1180, "93007e7600"),
+        FunctionPatch(61076, "", 328, "93007600"),
+        FunctionPatch(62072, "", 1713, "93007e7600"),
+        FunctionPatch(62073, "", 1213, "93007e7600"),
+        FunctionPatch(62187, "", 731, "93007e7e7e7600"),
+        FunctionPatch(62188, "", 477, "93007e7600"),
+        FunctionPatch(62189, "", 735, "93007e7e7e7600"),
+        FunctionPatch(62190, "", 349, "93007e7600"),
+        FunctionPatch(62264, "isVirtualCurrencyEnabled", 47, "34020001012103f5d59600520100007e7e7601"),
+        FunctionPatch(62265, "useVirtualCurrencyMobileEnabled", 47, "34020001012103f5d59600520100007e7e7601"),
+        FunctionPatch(62388, "", 1124, "93007600"),
+        FunctionPatch(62389, "", 555, "93007e7e7e7600"),
+        FunctionPatch(62405, "", 732, "93007600"),
+        FunctionPatch(62406, "", 265, "93007e7600"),
+        FunctionPatch(
+            62639, "", 9077,
+            "340b0040312c890e013b180b003b0a0b025e0c0a1893036e0d18030c440c0d00128c001e0100006e0c0c0d0044170e01f637310017440d0e02493731010d44280e03863731022845330e04999a3731033345250e053ea93731042545450e061e8c3731054545440e079d9637310644452e0e084fa145260e096bd53731072645110e0ab89744430e0ba83731084345510e0ce07e37310951451e0e0dfab937310a1e45200e0e17d1451f0e0feb873b130b015e0e0a106e0e13030e6c1c0e0337310b1c5e0e0a376e0f13030e3b0e0b126e3d0f030e5e0e0c00d5120e3d5e0e0c01d50a0e1f5e0f0c02ae2b020ea637000078ad0400520e1f00520e3d019700610c003d8b0001610c001f8b0002610c000e100f0e5e0e0a386e0e13030e6e0e0e030f45350e108201453c0e11dc2e45120e125b3e453b0e13c59b453a0e14f4925e0e0a396e0e13030e6c0e0e0344160e15475e0e0a196e0f18030e450e0f1647f26c0e0e0f451d0e17107037310c1d5e0f0c033d2f48102f182200440e10197c9153bf2701006e0e0e1053d30e0f0e5e140c035e100c04ae293b0f0b0b080e01005a0e0f00850f0ba6c001008b0003610c000e8b0004610c000f10100f10140e5e0e0a116e0f18030e440e0f1af56f340e0f141037310d34940416093404930fb00809440f341b4c440e171b4c17070f0e39310e075e0f0c0548102f182200440e10197c6e0e0e1053d30a0f0e5e140c05ae183b0f0b0a080e01005a0e0f008b0005610c000e10140e5e0f0c06440e171b4cd50a0f0e5e100c07ae1f850e31a7c00100440f171b4c8b0006610c000f8b0007610c000e10100e5e0e0a116e0f18030e450e0f1c5f5f6f0e0e0f141045370e1de5e537310f3745420e1eb8ac373110425e0e0a3a6e1018030e450f101f23f0440e171b4c6e3e0f100e3731113e5e0e0a3b6e1018030e450f102052f0440e171b4c6e380f100e373112385e0f0c08440e171b4cd50a0f0e5e100c09ae27010e7a37f5d5440f171b4c520e0f00440f171b4c8b0008610c000f8b0009610c000e10100e5e0e0a3c6e0f18030e450e0f214af26e540e0f10373113545e0e0a286e1013030e450f1022e7f016090d04930eb00809440e0d1b4c70550f10280e17373114555e0e0c0ad5120e285e0e0c0bd50a0e175e100c0cae3dcf080428d1080417040eae19040f4415171b4c081401005a1415005c0f142801100e0f8b000a610c00288b000b610c00178b000c610c000e10100e5e0e0a3d6e0f18030e450e0f2304f29119e46902006f0e0e0f10195e0e0a3e6e0f13030e440e171b4c6e290f030e5e0f0c0d48102f182200440e10197c6e0e0e1053d30e0f0e5e140c0d5e100c0eae293b0f0b0c080e01005a0e0f00850f0ba8c001008b000d610c000e8b000e610c000f10100f10140e5e0e0a116e0f18030e450e0f1c5f5f6f0f0e0f141045360f24aee1451a0f2513c345240f2614c3453f0f27cca43731153f45390f28c1e137311639454a0f292bda3731174a452b0f2aabe1450e0f2b67da45150f2c1d5e45400f2db6e13731184045140f2ecc3c45100f2fade15e0f0c0fd5170f1a5e1b0c10440f171b4cd50a1b0f5e2a0c11ae4a5e0f0a3f6e2118030f451b21306c58020f2137000078ad04004422171b4c520f2200520f1a016e0f1b210f8b000f610c001a441a171b4c8b0010610c001a8b0011610c000f102a0f5e0f0a236e0f13030f6f1a0f0333155e150c12481b2f182200440f1b197c6e0f0f1b53d30a150f5e220c12ae183b150b07080f01005a0f15008b0012610c000f10220f5e150c13440f171b4cd50e150f5e210c145e1b0c15ae36850f31a9c001004423171b4c081501005a1523004423171b4c8b0013610c00238b0014610c000f8b0015610c0015101b1510210f5e0f0a116e1518030f450f15319d0570150f1522211b5e1b0c1648212f182200440f21197c6e0f0f2153d30a1b0f5e210c16ae16020fdd010000cb072d008b0016610c000f10210f5e0f0a406e1b18030f450f1b3236f06e230f1b21373119235e0f0c17d51b0f235e1b0c18440f171b4cd50e1b0f5e210c195e1b0c1aae41850f31aac001004427171b4c082202005a2227005a2223018b0017610c00234423171b4c8b0018610c00238b0019610c000f8b001a610c0022101b2210210f3b490b04440f4933f06f0f0f49211b5e0f0c1bd5220f1a5e0f0c1cd51a0f155e0f0c1dd5120f145e0f0c1ed50a0f105e410c1fae505e0f0a426e2118030f451b213436aa020fba4f000078ad0400520f1400520f1001700f1b211a150f8b001b610c001a8b001c610c00158b001d610c00148b001e610c00108b001f610c000f10410f37311a419314b2062610140e5e0f0c20d51a0f335e0f0c21d5120f145e0f0c22d50a0f175e100c23ae37020f8537000088ad0400520f1700520f3301520f14028b0020610c00338b0021610c00148b0022610c00178b0023610c000f10100f5e0f0a436e0f13030f6e100f0310451410353d89450f1036664f451a1037f3311809040f39311b095e100c24d51a100f5e100c25d512101a5e100c26d50a10145e150c27ae370210a137000088ad04005210140052100f0152101a028b0024610c000f8b0025610c001a8b0026610c00148b0027610c00101015105e100a446e141803104510143849f26e1010141545461039676137311c464530103a5e2c4515103bbc934410493cf26e2c1049044410493cf26e2d1049045e140c28481a2f18220044101a197c6e10101a53d30a14105e1b0c28ae183b140b0d081001005a1014008b0028610c0010101b105e140c294410171b4cd50a14105e1a0c2aae1f851031abc001004414171b4c8b0029610c00148b002a610c0010101a105e100a116e141803104410141af56f5010141b1a37311d505e140c2b4410171b4cd51214105e100c2cd50a10505e1a0c2dae360210173b000078ad0400521050004414171b4c521014014414171b4c8b002b610c00148b002c610c00508b002d610c0010101a105e100a456e141803104510143d657a6e1010141a5e140c2e481a2f18220044101a197c6e10101a53d30a14105e210c2eae183b140b08081001005a1014008b002e610c00101021105e100c2fd50e10505e1b0c305e1a0c31ae2c851031acc00100081401005a1450008b002f610c00508b0030610c00108b0031610c0014101a14101b105e100a116e141803104410141af570141014211b1a5e100c32d52010075e1a0c33160514049310b008054410143e97d50a1a105e100c34ae4f16051404931ab019054422143e974421223f2d851b31adc001006e1a21221bd1081a04081a00008b0032610c000716051404931bb00805441b143e978b0033610c001b8b0034610c001a10101a100507b0180518060414b20e0644101040a397001c0610001005065e100a476e1a18031045141a4179ef4410171b4c6e14141a105e100a486e1a18031045101a425dbe6f10101a190744141440a397011c4c1401b0064c104c105e100a496e1418031045101443a2e86e48101419b2074818480434101b05b0061b101b4cb0061b101b485e100a4a6e141803104510144445f1701010144c4805454e1045ce5e37311e4e454f1046b88d37311f4f45141047b88f3731201444104948f46e191049013b100b038b00026f10100319005e1910005e101001373121105e1a0c3548212f182200441021197c6e10102153d30a1a105e270c35ae13851031aec001008b0035610c00101027105e100a4b6e1a18031045101a4918f16c10101a4547104a52b9454d104b74693731224d5e100c36d51210075e100c37d50a10055e210c38ae2c0210bb4f000078ad040052100700521005018b0036610c00078b0037610c00058b0038610c00101021105e100a4c6e1a18031045101a4c6af26e10101a214522104d4c83373123224521104e6ea3373124215e100c39d51a10225e100c3ad51210215e100c3bd50a101d5e1a0c3cae28851031afc001008b0039610c00228b003a610c00218b003b610c001d8b003c610c0010101a105e100c3dd52a104f5e100c3ed522104e5e100c3fd51a10205e100c40d512101a5e100c41d50a10145e1d0c42ae4d0210bc4f000091750800521020005210140152104e0252104f0352101a048b003d610c004f8b003e610c004e8b003f610c00208b0040610c001a8b0041610c00148b0042610c0010101d105e100a4a6e1a18031045101a4f44f16e10101a1d451a1050238d45321051a99137312532452010528c6a454b1053cd093731264b45231054248d3b100b0e451d10550f1017061a1d3931270645101056dd585e1d0c43d50a1d515e520c44ae1a851d31b0c001008b0043610c00518b0044610c001d10521d373128525e1d0c45d50a1d1e5e510c46ae1a851d31b1c001008b0045610c001e8b0046610c001d10511d373129515e1d0c47d6ae0000001d0d5e1d0c48d6a30000001d465e1d0c49d6980000001d345e1d0c4ad68d0000001d555e1d0c4bd6820000001d335e1d0c4cd5771d545e1d0c4dd56f1d285e1d0c4ed5671d525e1d0c4fd55f1d515e1d0c50d5571d095e1d0c51d54f1d265e1d0c52d5471d4a5e1e0c53451d1c57e47ed5391e1d5e1e0c54451d1c581ca1d52b1e1d5e1e0c55451d1c59103dd51d1e1d5e1d0c56d5151d255e1d0c57d50d1d175e1d0c58af9f000000851e31b2c001008b0047610c000d8b0048610c00468b0049610c00348b004a610c00558b004b610c00338b004c610c00548b004d610c00288b004e610c00528b004f610c00518b0050610c00098b0051610c00268b0052610c004a454a1c57e47e8b0053610c004a454a1c581ca18b0054610c004a454a1c59103d8b0055610c004a8b0056610c00258b0057610c00178b0058610c001e101d1e5e1e0c59d5351e075e1e0c5ad52d1e065e4a0c5b451e1c59103dd51f4a1e5e4a0c5c441e171b4cd5124a1e5e1e0c5dd50a1e505e4a0c5eae41851e31b3c001008b0059610c00078b005a610c000645511c59103d8b005b610c00514451171b4c8b005c610c00518b005d610c00508b005e610c001e104a1e5e500c5f48512f182200441e51197c6e1e1e5153d30a501e5e540c5fae385e1e0a1e6e1e18031e44511e5a944450515be15e1e0a1e6e1e18031e441e1e5c0a451e1e5d00276e1e50511e8b005f610c001e10541e5e1e0c60d50a1e4d5e520c61ae1a851e31b4c001008b0060610c004d8b0061610c001e10521e5e1e0c62d50a1e1d5e510c63ae176c1e1d038b0062610c001d8b0063610c001e10511e5e1e0c64d5121e525e1e0c65d50a1e515e1e0c66ae480250874b000084ba0c00525054013b560b143b550b050154bd4f29ab52545201525451026f5456035554525054028b0064610c00528b0065610c00518b0066610c0050101e5017061a105e100c67d699000000104f5e100c68d68e000000104e5e1a0c6916080d049310b0080844100d1b4cd5751a105e100c6ad56d10465e100c6bd56510345e100c6cd55d10285e100c6dd555104d5e100c6ed54d104c5e100c6fd54510065e100c70d53d10075e100c71d535104a5e100c72d52d10055e100c73d52510485e100c74d51d101e5e100c75d51510175e100c76d50d10145e1a0c77afe6040000081001005a101e00b388010000035e510c7848522f182200445052197c6e50505253d30a51505e550c78ae385e500a1e6e501803504452505a944451525be15e500a1e6e501803504450505c0a4550505e040a6e505152508b0078610c00501055505e500c79d512504e5e500c7ad50a504d5e540c7bae21855031b5c001008b0079610c004e8b007a610c004d8b007b610c00501054505e500c7cd52750465e500c7dd51f50065e500c7ed51750075e510c7f4450171b4cd50a51505e520c80ae5a3b560b143b510b1c0250be4f000053ad04004457171b4c525057005250060152500702525046036f50560351508b007c610c00468b007d610c00068b007e610c00074451171b4c8b007f610c00518b0080610c00501052505e500c81d51a504e5e500c82d51250545e500c83d50a50525e510c84ae500250874b000097642400525055013b570b143b560b050155bd4f29ab52555401525552027055570356554e525055028b0081610c004e8b0082610c00548b0083610c00528b0084610c00501051504450105fc76e50501051b3a101000048d09b01000004345e510c8548522f182200445052197c6e50505253d30a51505e550c85ae385e500a1e6e501803504452505a944451525be15e500a1e6e501803504450505c0a45505060e9a36e505152508b0085610c00501055505e500c86d512504f5e500c87d50a504d5e540c88ae21855031b6c001008b0086610c004f8b0087610c004d8b0088610c005010545016080d049351b0080844510d1b4c5e500c89d52a50465e500c8ad52250345e500c8bd51a50285e500c8cd51250515e500c8dd50a50175e520c8eae5b3b570b143b560b1d0250bf4f00009175080052501700525034015250280252505103525046046f50570356508b0089610c00468b008a610c00348b008b610c00288b008c610c00518b008d610c00178b008e610c00501052505e500c8fd51a504f5e500c90d51250545e500c91d50a50525e510c92ae500250874b000006ef0c00525055013b570b143b560b050155bd4f29ab52555401525552027055570356554f525055028b008f610c004f8b0090610c00548b0091610c00528b0092610c00501051504450105fc76e50501051b328010000035e510c9348522f182200445052197c6e50505253d30a51505e540c93ae385e500a1e6e501803504452505a944451525be15e500a1e6e501803504450505c0a45505061ad0e6e505152508b0093610c00501054505e500c94d512504d5e500c95d50a50145e530c96ae21855031b7c001008b0094610c004d8b0095610c00148b0096610c00501053505e500c97d50a504a5e520c98ae176c504a038b0097610c004a8b0098610c00501052505e500c99d51a50535e500c9ad51250525e500c9bd50a50145e510c9cae500250874b0000e9bb0c00525054013b560b143b550b050154bd4f29ab525453015254520270545603555414525054028b0099610c00538b009a610c00528b009b610c00148b009c610c00501051504450105fc76e505010518b0067610c004f8b0068610c004e16080d04934eb00808444e0d1b4c8b0069610c004e8b006a610c00468b006b610c00348b006c610c00288b006d610c004d8b006e610c004c8b006f610c00068b0070610c00078b0071610c004a8b0072610c00058b0073610c00488b0074610c001e8b0075610c00178b0076610c00148b0077610c0010101a105e100c9dd52210235e100c9ed51a10205e100c9fd51210195e100ca0d50a101a5e1e0ca1ae5a0210c04f00009175080052101900521023015e480a306e4813034844484862d945484863d2695210480252101a03521020048b009d610c00238b009e610c00208b009f610c00198b00a0610c001a8b00a1610c0010101e105e100a596e19180310451019649df16e1910191e37312a195e100a4b6e1e18031045101e65108c6e10101e1f451f106601934523106751b94520106836dc5e100ca2d516104b5e100ca3d50e10195e480ca45e1e0ca5ae37851031b8c00100084a02005a4a19005a4a4b018b00a2610c004b8b00a3610c00198b00a4610c00108b00a5610c004a101e4a10481045104969327c6f101049481e5e100a4b6e1e18031045101e6a19f1701e101e1947235e100ca6d52210215e100ca7d51a10325e100ca8d51210195e100ca9d50a10145e230caaae2f851031b9c001008b00a6610c00218b00a7610c00328b00a8610c00198b00a9610c00148b00aa610c0010102310d0340d00000417d02d0d000004345e100cabd50a10465e320cacae1d0110bf01f5d5521046008b00ab610c00468b00ac610c001010321037312b325e100cadd60901000010325e470cae16050d049310b0080544100d1b4cd6f000000047105e100cafd6e500000010465e100cb0d6da00000010345e100cb1d6cf00000010455e100cb2d6c400000010445e100cb3d6b900000010335e100cb4d6ae00000010285e100cb5d6a300000010095e100cb6d69800000010075e100cb7d68d00000010265e100cb8d68200000010435e100cb9d57710425e100cbad56f10415e100cbbd56710405e100cbcd55f103f5e100cbdd557103e5e100cbed54f10395e100cbfd54710375e470cc045101c6b093cd53947105e470cc145101c6cbfc1d52b47105e470cc245101c59103dd51d47105e100cc3d51510255e100cc4d50d10175e100cc5afde0000008b00ad610c003216050d049347b0080544470d1b4c853231bac001008b00ae610c00478b00af610c00468b00b0610c00348b00b1610c00458b00b2610c00448b00b3610c00338b00b4610c00288b00b5610c00098b00b6610c00078b00b7610c00268b00b8610c00438b00b9610c00428b00ba610c00418b00bb610c00408b00bc610c003f8b00bd610c003e8b00be610c00398b00bf610c003745391c6b093c8b00c0610c003945391c6cbfc18b00c1610c003945391c59103d8b00c2610c00398b00c3610c00258b00c4610c00178b00c5610c00321010325e320cc6d52232345e320cc7d51a32385e320cc8d51232375e320cc9d50a32175e320ccaae2f853131bbc001008b00c6610c00348b00c7610c00388b00c8610c00378b00c9610c00178b00ca610c00311032315e370a5eb010266e311803374531316d5226ae076e311303379339b206261039369338b2062610382a9337b20f261805042b9337b2060510372b9336b20f261805040e9336b2060510360e5e2b0ccb16053304930eb00905450e336e7086d5122b0e5e0e0cccd50a0e0f5e2b0ccdae5d16053304933eb00905453e336e70869505930ed521053e3b400b145e3e0a5f6e3f13033e013ec14ff5d5523e0f006f0e40033f3e16053304933eb00905453e336e70868b00cb610c003e8b00cc610c000f8b00cd610c000e102b0e5e0e0cced56d0e355e0e0ccfd5650e3d5e0e0cd0d55d0e3c5e0e0cd1d5550e3b5e0e0cd2d54d0e335e0e0cd3d5450e265e0e0cd4d53d0e3a5e0e0cd5d5350e395e0e0cd6d52d0e385e0e0cd7d5250e375e0e0cd8d51d0e365e0e0cd9d5150e2b5e0e0cdad50d0e175e0f0cdbafbb0000003b3f0b145e0e0a606e3e13030e020ec24f0000051b0900520e1700520e3301520e3d02520e3903520e3804520e3705520e3606520e2607520e3508520e3c09520e3b0a520e3a0b520e2b0c6f0e3f033e0e8b00ce610c00358b00cf610c003d8b00d0610c003c8b00d1610c003b8b00d2610c00338b00d3610c00268b00d4610c003a8b00d5610c00398b00d6610c00388b00d7610c00378b00d8610c00368b00d9610c002b8b00da610c00178b00db610c000e100f0e5e0e0cdcd5590e355e0e0cddd5510e0d5e0e0cded5490e345e0e0cdfd5410e335e0e0ce0d5390e265e0e0ce1d5310e325e2b0ce2450e1c6f4799d5232b0e5e2b0ce3450e1c704899d5152b0e5e0e0ce4d50d0e175e0e0ce5aff8000000132b26b19b000000263b380b165e360a616e36130336443736712845361c6f4799083903005a39360016053304933ab00905453a336e7086b2093a453a1c70489902368124000078ad04005a393a015a393502523639006c3a3203083902005a393a003b3c0b145e3a0a626e3b13033a023ac34f000053ad0400523a1700523a3401523a3302523a0d036f3a3c033b3a5a393a01523639016f2b380337368b00dc610c00358b00dd610c000d8b00de610c00348b00df610c00338b00e0610c00268b00e1610c003245321c6f47998b00e2610c003245321c7048998b00e3610c00328b00e4610c00178b00e5610c002b100e2b932bb20626102b2a932ab20d26d1071104101124102a115e110ce6d50a11155e240ce7ae1d0111bf01f5d5521115008b00e6610c00158b00e7610c00111024115e110ce8d54211315e110ce9d53a11305e110cead532112e5e110cebd52a11285e110cecd522112b5e110cedd51a112a5e110ceed51211245e110cefd50a11175e110cf0ae743b320b140215c44f0000f7790800521517005215280152152e0252152b0352152a0452153005521524066f15320331158b00e8610c00318b00e9610c00308b00ea610c002e8b00eb610c00288b00ec610c002b8b00ed610c002a8b00ee610c00248b00ef610c00178b00f0610c0015101115b20807972ab2102618070429972ab007073b2a0b103b150b0f1e1616155e150cf1d512152a5e150cf2d50a15165e240cf3ae2c0215cf06000078ad040052152a00521516018b00f1610c002a8b00f2610c00168b00f3610c00151024155e160cf445151c72698ed51216155e150cf5d50a15245e160cf6ae32452a1c72698e081502005a152a005a152401452a1c72698e8b00f4610c002a8b00f5610c00248b00f6610c001510161516070d049324b0080744240d1b4c5e0d0cf7d53a0d295e0d0cf8d5320d285e0d0cf9d52a0d095e0d0cfad5220d265e0d0cfbd51a0d255e0d0cfcd5120d245e0d0cfdd50a0d175e150cfeae713b2b0b143b2a0b17010dc54f0f00520d2900520d1701520d2802520d2403520d0904520d2505520d2606520d2c076f0d2b032a0d8b00f7610c00298b00f8610c00288b00f9610c00098b00fa610c00268b00fb610c00258b00fc610c00248b00fd610c00178b00fe610c000d10150d5e0d0cffd5100d108c00000100005d170c00ae1a6c0d10038b00ff610c00108c0000010000610c000d10170d8c00010100005d0d0c00d6d00000000d238c02020100005d0d0c02d6bf0000000d098c02030100005d0d0c02d6ae0000000d228c02040100005d0d0c02d69d0000000d218c02050100005d0d0c02d68c0000000d208c02060100005d0d0c02d57b0d1f8c02070100005d0d0c02d56d0d1e8c02080100005d0d0c02d55f0d1d8c02090100005d100c02450d1c738fd9d54b100d8c020a0100005d0d0c02d53d0d1b8c020b0100005d0d0c02d52f0d1a8c020c0100005d0d0c02d5210d198c020d0100005d0d0c02d5130d148c020e0100005d100c02af12020000b00c1b6c0d1d03af770100003b260b143b250b060224b03a000078ad0400522427003b290b165e270a636e2718032745282774e55d022a8124000078ad040045271c738fd9522a27005e270a646e27180327452c2775e653022bc64f000078ad0400522b1900932eb20709902e5c6701279021f5d5522b2e016f2c26032c2b082b02005a2b2c00022cc74f0000c2e92c00522c2d00022e480a0000f71c2d0048302f761500442f3077ac6f302f301401442f1a40a3232f302f8b016421012f01902f23081e2f012f522e2f01522c2e016f2c2603252c5a2b2c01522a2b016f2b2903252a082a03005a2a2b005e2b0a616e2b13032b442c2b7128022bf22f000053ad0400522b1f00522b2001522b1e025e2e0a656e2e18032e452f2e789c72012e0308f5d5522e19006f2e26032f2e522b2e036f2b26032c2b5a2a2b015e2b0a666e2c13032b022bc84f000053ad0400522b2d00522b2201522b2102522b23036f2b26032c2b5a2a2b0252272a006f2729032827522427016f0d26032524610c00238c0002010000610c00098c0003010000610c00228c0004010000610c00218c0005010000610c00208c0006010000610c001f8c0007010000610c001e8c0008010000610c001d451c1c738fd98c0009010000610c001c8c000a010000610c001b8c000b010000610c001a8c000c010000610c00198c000d010000610c00148c000e010000610c000d10100d8c000f0100005d0d0c00d51e0d178c01100100005d0d0c01d5100d108c01110100005d140c01ae4c3b190b165e0d0a636e0d18030d45180d74e55d010d9021f5d5081a02005a1a17005a1a1001520d1a006f0d1903180d610c00178c0010010000610c00108c0011010000610c000d10140d8c00120100005d0d0c00d52c0d168c01130100005d0d0c01d51e0d158c01140100005d0d0c01d5100d148c01150100005d100c01ae533b180b163b170b06020d8124000078ad0400520d1600081902005a1915005a191401520d19016f0d1803170d610c00168c0013010000610c00158c0014010000610c00148c0015010000610c000d10100d8c00160100005d0d0c00d52c0d128c01170100005d0d0c01d51e0d118c01180100005d0d0c01d5100d108c01190100005d0d0c01ae5d3b140b165e0a0a616e0a13030a44130a7128020a8124000078ad0400520a1200081502005a1511005a151001520a15016f0a1403130a610c00128c0017010000610c00118c0018010000610c00108c0019010000610c000a100d0a8c001a0100005d0a0c00d52c0a0f8c011b0100005d0a0c01d51e0a0e8c011c0100005d0a0c01d5100a0d8c011d0100005d0a0c01ae4f3b110b163b100b15010b9021f5d5081203005a120f005a120e015a120d02520b12006f0b1103100b610c000f8c001b010000610c000e8c001c010000610c000d8c001d010000610c000b100a0b760a7604"
+        ),
+        FunctionPatch(62665, "", 393, "93007e7600"),
+        FunctionPatch(
+            64307, "useProfileTabIndices", 79,
+            "8b04018c02ffffffff890501100104100002b209058b01021000048906020205df50000088ad040052050000100001100302b20a061f00010410030189060352050301b20606100202520502027605"
+        ),
+        FunctionPatch(64351, "", 1931, "94007e7e7e7600"),
+        FunctionPatch(64359, "", 130, "94007e7e7600"),
+        FunctionPatch(64360, "", 72, "94007600"),
+        FunctionPatch(64371, "", 401, "93007e7600"),
+        FunctionPatch(64372, "", 110, "93007e7e7600"),
+        FunctionPatch(64376, "AddToWishlistItemCard", 417, "93007e7600"),
+        FunctionPatch(64470, "", 405, "93007e7600"),
+        FunctionPatch(64471, "", 183, "93007e7e7e7600"),
+        FunctionPatch(64497, "", 498, "93007e7e7600"),
+        FunctionPatch(64498, "", 260, "93007600"),
+        FunctionPatch(65303, "", 1101, "93007e7600"),
+        FunctionPatch(65304, "", 564, "93007600"),
+        FunctionPatch(65598, "logReadyPayloadReceived", 509, "93007e7600"),
+        FunctionPatch(65599, "getConnectionPath", 101, "93007e7600"),
+        FunctionPatch(65600, "getReadyPayloadByteSizeAnalytics", 892, "93007600"),
+        FunctionPatch(65601, "logGatewayConnected", 150, "93007600"),
+        FunctionPatch(67883, "handleTrack", 257, "93007e7600"),
+        FunctionPatch(68674, "", 449, "93007e7600"),
+        FunctionPatch(68675, "", 216, "93007600"),
+        FunctionPatch(70011, "", 139, "96007e7e7e7600"),
+        FunctionPatch(70012, "", 70, "96007e7e7600"),
+        FunctionPatch(70028, "usePredicate", 34, "96007e7e7600"),
+        FunctionPatch(70031, "usePredicate", 34, "96007e7e7600"),
+        FunctionPatch(70036, "", 688, "93007600"),
+        FunctionPatch(70037, "", 298, "93007e7e7600"),
+        FunctionPatch(70064, "", 3920, "94007600"),
+        FunctionPatch(70065, "", 1917, "94007e7600"),
+        FunctionPatch(70288, "", 426, "96007e7e7600"),
+        FunctionPatch(70848, "", 42, "96007e7e7600"),
+        FunctionPatch(71033, "", 208, "96007600"),
+        FunctionPatch(71034, "", 94, "96007e7e7600"),
+        FunctionPatch(72410, "BalanceWidgetMenu", 233, "93007e7600"),
+        FunctionPatch(72415, "", 418, "93007e7e7600"),
+        FunctionPatch(72416, "", 229, "93007e7600"),
+        FunctionPatch(72459, "overrideSurvey", 58, "93007e7e7600"),
+        FunctionPatch(72460, "surveyHide", 153, "93007e7600"),
+        FunctionPatch(72461, "surveySeen", 243, "3d00480100001d004500010057876c0000017e7e7e7600"),
+        FunctionPatch(72863, "", 303, "93007e7e7e7600"),
+        FunctionPatch(72864, "", 221, "93007e7600"),
+        FunctionPatch(72868, "", 6363, "93007600"),
+        FunctionPatch(72869, "", 3044, "93007600"),
+        FunctionPatch(72870, "", 143, "93007e7e7600"),
+        FunctionPatch(72871, "", 73, "93007e7600"),
+        FunctionPatch(73022, "", 37, "96007e7600"),
+        FunctionPatch(73034, "", 37, "96007e7600"),
+        FunctionPatch(74055, "", 871, "94007e7e7e7600"),
+        FunctionPatch(74056, "", 369, "94007e7600"),
+        FunctionPatch(77273, "componentDidMount", 405, "93007e7600"),
+        FunctionPatch(77274, "componentDidUpdate", 1503, "93007e7e7e7600"),
+        FunctionPatch(
+            77424, "", 5753,
+            "340e00400f1e8908013b140e003b090e025e0a090c93026e0b14020a440a0b00128b00b66e0a0a0b00441d0801f6370f001d440c0802e245170803eb87451c0804d96b453a0805cddd370f013a45390806e07e370f023945380807fab9370f0338452908084908370f042945080809a58317250208b006251025083b0d0e015e0809116e080d02086c1b0802370f051b5e08092b6e0b14020845080b0afd646c28080b370f06285e0809186e0b14020845080b0b47f26c08080b4523080c1070370f07235e08092c6e0b0d020844081d0d4c6e100b0208370f08105e08092d6e0b14020845080b0e5eef6c24080b370f09245e08092e6e080d02086e220802105e110a003d084812080f2200440b12107c9119bf2701006e0b0b1219d30e110b5e130a005e120a01ae283b110e08080b01005a0b110085110ef7fc01009700610a000b8b0001610a001110121110130b5e0b092f6e1114020b440b1111f56f150b1113125e0b0a02d5120b105e0b0a03d50a0b1d5e110a04ae2c020ba737000078ad0400520b1d00520b10018b0002610a00108b0003610a001d8b0004610a000b10110b5e0b09306e0b0d020b6e0b0b021145110b123d8945160b13664f45130b14f331940318070316390f0a075e0b0a05d51a0b165e0b0a06d5120b135e0b0a07d50a0b115e120a08ae37020ba137000088ad0400520b1100520b1601520b13028b0005610a00168b0006610a00138b0007610a00118b0008610a000b10120b5e0b09316e1114020b450b111549f26e0b0b111245210b166761370f0b2145340b17b802370f0c34451e0b185e2c45120b19bc933b2d0e04440b2d1af26e270b2d035e0b0a09d50a0b235e200a0aae1a850b0ff8fc01008b0009610a00238b000a610a000b10200b5e0b09326e1114020b450b111b5bf26c0b0b1144310b1c72370f0d31440b2d1df46e0b0b2d033b110e038b00026f0b11020b005e1f0b005e0b0b01370f0e0b5e0b09336e1314020b450b131ec9f16c370b13370f0f375e130a0b4816080f2200440b16107c6e0b0b1619d30a130b5e180a0bae183b130e09080b01005a0b13008b010b610a010b10180b5e130a0c440b1d0d4cd50a130b5e160a0dae1f850b0ff9fc010044131d0d4c8b010c610a01138b010d610a010b10160b5e0b092f6e1314020b440b1311f56f130b131816370f10135e0b09346e1814020b4516181f79ef440b1d0d4c6e0b16180b5e1609356e18140216451618205dbe911a6d9202006e1616181a440b0b21a397011c0b0b01b0060b100b165e1609366e1814021645161822a2e86e3016181a5e1609376e181402164516182345f19504701616180b300445351624ce5e370f113545361625b88d370f123645161626b88f370f131610320b102629cf4003295e0b09376e1a14020b45181a27ceb6020b8b65000088ad0400520b1600520b3501520b36026f0b181a290b102629b90e0b013b0b0e0a45260b28f812370f1426440b2d1df46e0b0b2d016f0b11020b005e1a0b00370f151a5e0b0b01370f160b5e110a0e4818080f2200440b18107c6e0b0b1819d30a110b5e180a0eae13850b0ffafc01008b000e610a000b10180b5e0b09386e1114020b450b112918f16c0b0b11452b0b2a52b945330b2b7469370f17335e0b0a0fd51a0b295e0b0a10d5120b285e0b0a11d50a0b235e110a12ae28850b0ffbfc01008b000f610a00298b0010610a00288b0011610a00238b0012610a000b10110b5e0b0a13d52a0b365e0b0a14d5220b355e0b0a15d51a0b115e0b0a16d5120b265e0b0a17d50a0b165e230a18ae4d020bbc4f000091750800520b2600520b1601520b3502520b3603520b11048b0013610a00368b0014610a00358b0015610a00118b0016610a00268b0017610a00168b0018610a000b10230b5e0b09376e1114020b450b112c44f16e0b0b112345290b2d238d370f182945110b2ea991370f1911452a0b2f8c6a452f0b30cd09370f1a2f452c0b31248d3b0b0e0a450b0b320f101705290b390f1b055e0b0a19d50a0b245e3c0a1aae1a850b0ffcfc01008b0019610a00248b001a610a000b103c0b370f1c3c5e0b0a1bd50e0b3c5e2e0a1c5e230a1dae2c850b0ffdfc0100083b01005a3b3c008b001b610a003c8b001c610a000b8b001d610a003b10233b102e0b440b2d33f06f0b0b2d2e235e0b0a1ed50a0b1f5e230a1fae251806031f930bb20c06442e1f34a06c0b2e1f8b001e610a001f8b001f610a000b10230b5e0b0a20d6820000000b215e0b0a21d5770b345e0b0a22d56f0b105e0b0a23d5670b075e0b0a24d55f0b3a5e0b0a25d5570b395e0b0a26d54f0b385e2e0a27450b1b35e47ed5412e0b5e2e0a28450b1b361ca1d5332e0b5e2e0a29450b1b37103dd5252e0b5e0b0a2ad51d0b375e0b0a2bd5150b1d5e0b0a2cd50d0b315e2e0a2daf83000000850b0ffefc01008b0020610a00218b0021610a00348b0022610a00108b0023610a00078b0024610a003a8b0025610a00398b0026610a003845381b35e47e8b0027610a003845381b361ca18b0028610a003845381b37103d8b0029610a00388b002a610a00378b002b610a001d8b002c610a00318b002d610a000b102e0b5e0b0a2ed5350b055e0b0a2fd52d0b1a5e310a30450b1b37103dd51f310b5e310a31440b1d0d4cd512310b5e0b0a32d50a0b135e310a33ae41850b0ffffc01008b002e610a00058b002f610a001a45371b37103d8b0030610a003744371d0d4c8b0031610a00378b0032610a00138b0033610a000b10310b5e130a344837080f2200440b37107c6e0b0b3719d30a130b5e380a34ae385e0b091c6e0b14020b44370b389444133739e15e0b091c6e0b14020b440b0b3a0a450b0b3b00276e0b13370b8b0034610a000b10380b5e0b0a35d50a0b335e370a36ae1a850b0f00fd01008b0035610a00338b0036610a000b10370b5e0b0a37d50a0b2e5e130a38ae176c0b2e028b0037610a002e8b0038610a000b10130b5e0b0a39d5120b375e0b0a3ad50a0b135e2e0a3bae48020b874b000084ba0c00520b38013b3a0e0e3b390e050138bd4f29ab52383701523813026f383a023938520b38028b0039610a00378b003a610a00138b003b610a000b102e0b5e0b0a3cd5650b295e0b0a3dd55d0b365e0b0a3ed5550b355e0b0a3fd54d0b215e0b0a40d5450b345e0b0a41d53d0b335e0b0a42d5350b325e0b0a43d52d0b315e0b0a44d5250b305e0b0a45d51d0b2e5e0b0a46d5150b1d5e0b0a47d50d0b165e130a48af7b040000080b01005a0b2e00b388010000025e380a494839080f2200443739107c6e37373919d30a38375e3b0a49ae385e37091c6e37140237443937389444383939e15e37091c6e371402374437373a0a4537373c040a6e373839378b0049610a0037103b375e370a4ad51237355e370a4bd50a37335e3a0a4cae2185370f01fd01008b004a610a00358b004b610a00338b004c610a0037103a375e370a4dd52737295e370a4ed51f37215e370a4fd51737345e380a5044371d0d4cd50a38375e390a51ae5a3b3c0e0e3b380e1302378c65000053ad0400443d1d0d4c52373d005237290152372102523734036f373c0238378b004d610a00298b004e610a00218b004f610a003444381d0d4c8b0050610a00388b0051610a00371039375e370a52d51a37355e370a53d512373a5e370a54d50a37395e380a55ae500237874b00009764240052373b013b3d0e0e3b3c0e05013bbd4f29ab523b3a01523b3902703b3d023c3b3552373b028b0052610a00358b0053610a003a8b0054610a00398b0055610a003710383744370b3dc76e37370b38b366010000305e380a564839080f2200443739107c6e37373919d30a38375e3b0a56ae385e37091c6e37140237443937389444383939e15e37091c6e371402374437373a0a4537373ee9a36e373839378b0056610a0037103b375e370a57d51237365e370a58d50a37335e3a0a59ae2185370f02fd01008b0057610a00368b0058610a00338b0059610a0037103a375e370a5ad51a37215e370a5bd51237345e370a5cd50a371d5e390a5dae453b3c0e0e3b380e1402378d65000088ad040052371d0052372101523734026f373c0238378b005a610a00218b005b610a00348b005c610a001d8b005d610a00371039375e370a5ed51a37365e370a5fd512373a5e370a60d50a37395e380a61ae500237874b000006ef0c0052373b013b3d0e0e3b3c0e05013bbd4f29ab523b3a01523b3902703b3d023c3b3652373b028b005e610a00368b005f610a003a8b0060610a00398b0061610a003710383744370b3dc76e37370b385e380a624839080f2200443739107c6e37373919d30a38375e3b0a62ae385e37091c6e37140237443937389444383939e15e37091c6e371402374437373a0a4537373fad0e6e373839378b0062610a0037103b375e370a63d51237335e370a64d50a37165e3a0a65ae2185370f03fd01008b0063610a00338b0064610a00168b0065610a0037103a375e370a66d50a37315e390a67ae176c3731028b0066610a00318b0067610a00371039375e370a68d51a373a5e370a69d51237395e370a6ad50a37165e380a6bae500237874b0000e9bb0c0052373b013b3d0e0e3b3c0e05013bbd4f29ab523b3a01523b3902703b3d023c3b1652373b028b0068610a003a8b0069610a00398b006a610a00168b006b610a003710383744370b3dc7af050000008b003c610a00298b003d610a00368b003e610a00358b003f610a00218b0040610a00348b0041610a00338b0042610a00328b0043610a00318b0044610a00308b0045610a002e8b0046610a001d8b0047610a00168b0048610a000b10130b5e0b0a6cd5220b2c5e0b0a6dd51a0b2a5e0b0a6ed5120b1a5e0b0a6fd50a0b135e160a70ae5a020bc04f000091750800520b1a00520b2c015e2e09176e2e0d022e442e2e40d9452e2e41d269520b2e02520b1303520b2a048b006c610a002c8b006d610a002a8b006e610a001a8b006f610a00138b0070610a000b10160b5e0b09456e1314020b450b13429df16e0b0b1316370f1d0b5e1309386e1614021345131643108c6e13131617451713440193452a134551b9451a134636dc5e130a71d516132f5e130a72d50e130b5e2c0a735e160a74ae3785130f04fd0100082e02005a2e0b005a2e2f018b0071610a002f8b0072610a000b8b0073610a00138b0074610a002e10162e102c1345132d47327c6f13132d2c165e1309386e161402134513164819f1701613160b2b2a5e130a75d52213295e130a76d51a13285e130a77d51213265e130a78d50a13115e130a79ae2f850f0f05fd01008b0075610a00298b0076610a00288b0077610a00268b0078610a00118b0079610a000f10130f5e0f092b6e1114020f450f114986056e0f0f11135e110a7a4813080f2200440f13107c6e0f0f1319d30a110f5e110a7aae16020fd6000000de7408008b007a610a000f10110f5e130a7b450f1b4a698ed50a130f5e130a7cae2b45261b4a698e080f02005a0f26005a0f110145111b4a698e8b007b610a00118b007c610a000f10130f5e0f0a7dd50a0f125e110a7eae1d010fbf01f5d5520f12008b007d610a00128b007e610a000f10110f5e0f0a7fd5220f255e0f0a80d51a0f1e5e0f0a81d5120f115e0f0a82d50a0f1d5e120a83ae503b280e0e3b260e11020f8e65000053ad0400520f1d00520f1e01520f1102520f25036f0f2802260f8b007f610a00258b0080610a001e8b0081610a00118b0082610a001d8b0083610a000f10120f5e110a84450f1b4befadd518110f5e110a85450f1b4cf0add50a110f5e1e0a86ae3e45111b4befad080f02005a0f110045111b4cf0ad5a0f110145111b4befad8b0084610a001145111b4cf0ad8b0085610a00118b0086610a000f101e0f5e0f0a87d5380f245e0f0a88d5300f075e0f0a89d5280f235e0f0a8ad5200f1f5e110a8b450f1b4de13dd512110f5e0f0a8cd50a0f1e5e110a8dae7b3b260e0e5e0f09466e250d020f020f8f65000022240b00520f2700520f2401520f0702520f1e0345271b4de13d520f2704520f2306520f1f076f0f2602250f8b0087610a00248b0088610a00078b0089610a00238b008a610a001f451f1b4de13d8b008b610a001f8b008c610a001e8b008d610a000f10110f16051003930fb00905450f104e82d416031003931fb00903451f104f0c935e100a8ed50a10155e240a8fae605e10091c6e101402104425103894442325507f5e10091c6e101402104410103a0a461e1051ef89040001106316f5d55e2609476e27140226452627525dc76e26262715521026006f1023251e108b008e610a00158b008f610a00101024105e150a90481e080f220044101e107c6e10101e19d30a15105e230a90ae385e10091c6e10140210441e10389444151e39e15e10091c6e101402104410103a0a4510105361146e10151e108b0090610a0010102310481008540f00441e1055549115e50401009010ff00701e1e102415235e100a91d53210225e100a92d52a10215e100a93d52210205e100a94d51a101f5e100a95d512101e5e100a96d50a101d5e150a97ae660210906500009a570c0052101d0052101f0152102202521021035210200452101e053b230e0b45232356de39521023068b0091610a00228b0092610a00218b0093610a00208b0094610a001f8b0095610a001e8b0096610a001d8b0097610a00101015101704040f5e0f0a98d51a0f1c5e0f0a99d5120f045e0f0a9ad50a0f155e100a9bae453b1e0e0e3b1d0e16020f9165000088ad0400520f0400520f1c01520f15026f0f1e021d0f8b0098610a001c8b0099610a00048b009a610a00158b009b610a000f10100f5e0f0a9c4815080f2200440815107c6e08081519d30a0f085e190a9cae1602086b000000237508008b009c610a00081019089315b2070790155c675e080a9dd51208155e080a9ed50a080b5e0f0a9fae453b1d0e0e5e0809486e08140208451c0857e6530208c64f000078ad040052080b00520815016f081d021c088b009d610a00158b009e610a000b8b009f610a0008100f085e150aa045081b588fd9d51215085e080aa1d50a080f5e150aa2ae463b1d0e0e3b1c0e0602088124000078ad0400451e1b588fd952081e0052080f016f081d021c08451b1b588fd98b00a0610a001b8b00a1610a000f8b00a2610a00081015085e080aa3d50a080b5e0f0aa4ae363b1c0e0e5e0809496e08140208451b08599c7201080308f5d552080b006f081c021b088b00a3610a000b8b00a4610a0008100f085e080aa5d522081a5e080aa6d51a08175e080aa7d51208165e080aa8d50a080f5e0b0aa9ae5a3b1c0e0e5e08094a6e080d0208441b085a280208f22f000053ad04005208170052081a015208160252080f036f081c021b088b00a5610a001a8b00a6610a00178b00a7610a00168b00a8610a000f8b00a9610a0008100b085e080aaad51208155e080aabd50a080b5e0f0aacae4a3b170e0f3b160e060208a62c000088ad04005208190052081801081802005a1815005a180b01520818026f08170216088b00aa610a00158b00ab610a000b8b00ac610a0008100f085e080aadd52d08135e080aaed52508125e080aafd51d08115e080ab0d51508105e080ab1d50d080f5e0b0ab2af8d0000003b150e0e5e08094b6e081402084514085be55d0208645f0000cbf908003b180e0f3b170e0602168124000078ad040052161300081904005a1912005a1911015a1910025a190f03521619016f1618021716520816016f08150214088b00ad610a00138b00ae610a00128b00af610a00118b00b0610a00108b00b1610a000f8b00b2610a0008100b085e080ab3d512080c5e080ab4d50a080b5e080ab5ae443b0e0e0e5e09094a6e090d0209440d095a2802098124000078ad040052090c0052090b016f090e020d098b00b3610a000c8b00b4610a000b8b00b5610a00091008097608"
+        ),
+        FunctionPatch(78981, "trackHttpRequest", 220, "93007600"),
+        FunctionPatch(79182, "_trackStartSpeaking", 238, "93007e7e7600"),
+        FunctionPatch(79183, "_trackStartListening", 237, "93007e7600"),
+        FunctionPatch(81241, "handleAppStateUpdate", 230, "93007e7e7600"),
+        FunctionPatch(81275, "installWebsocketTelemetryHook", 183, "93007e7e7e7600"),
+        FunctionPatch(81317, "setupLibdiscoreTimersMonitor", 39, "93007e7e7e7600"),
+        FunctionPatch(81383, "logDangerously", 146, "93007e7e7600"),
+        FunctionPatch(81384, "log", 206, "93007e7e7600"),
+        FunctionPatch(81385, "verboseDangerously", 146, "93007e7e7600"),
+        FunctionPatch(81386, "verbose", 206, "93007e7e7600"),
+        FunctionPatch(81387, "info", 206, "93007e7e7600"),
+        FunctionPatch(81390, "trace", 146, "93007e7e7600"),
+        FunctionPatch(81392, "fileOnly", 148, "93007600"),
+        FunctionPatch(85406, "track", 544, "3d00480100001d004500010057876c0000017600"),
+        FunctionPatch(85411, "submitEventsImmediately", 251, "3d00480100001d004500010057876c0000017e7e7e7600"),
+        FunctionPatch(85532, "", 134, "93007e7e7600"),
+        FunctionPatch(91461, "_handleVoiceQualityPeriodicsStats", 508, "93007600"),
+        FunctionPatch(91810, "sampleStats", 395, "93007e7e7e7600"),
+        FunctionPatch(91826, "sampleStats", 68, "93007600"),
+        FunctionPatch(91845, "sampleStats", 112, "93007600"),
+        FunctionPatch(107938, "flush", 82, "93007e7e7600"),
+        FunctionPatch(108049, "add", 511, "93007e7e7e7600"),
+        FunctionPatch(108052, "_flush", 374, "93007e7e7600"),
+        FunctionPatch(108053, "_captureMetrics", 97, "93007e7600"),
+        FunctionPatch(108074, "add", 443, "93007e7e7e7600"),
+        FunctionPatch(108075, "flush", 114, "93007e7e7600"),
+        FunctionPatch(
+            114767, "", 213,
+            "34030142050301000000890701370500073b0803003b0403025e03040a93016e060801034503060067d36e06030607130306b1a1000000063406005e09040b6e0a08010945090a011fb66e09090a07b04b095e09040b6e0a08010945090a0285b66e09090a07b019095e04040b6e0808010445040803acd56e04040807ae1b3b0a060145090a04ca2e850805893802006e08090a08130408ae3845070705ad0945070706169e44070707a397001c010000b21c013b07060145060704ca2e850505883802006e050607051301051004011003047603"
+        ),
+        FunctionPatch(
+            114892, "", 624,
+            "3405000203874b000084ba0c003409013b0b09003b0609025e02061e93006e020b0002440702009444040701e15e02061e6e020b0002440202020a4502020300276e02040702520302013b0809143b0709050102bd4f29ab850405a2380200520204013b0405286c040400520204026f020800070252030202080201005a0203003b030519b3a70000000044040204c70203874b0000976424005e0a061e6e0a0b000a440d0a0094440c0d01e15e0a061e6e0a0b000a440a0a020a450a0a05040a6e0a0c0d0a52030a01010cbd4f29ab850a05a3380200520c0a013b0d091c020abe4f000053ad04003b0e0500440e0e064c520a0e003b010525520a01013b01050b520a01023b0e0515520a0e036f0a08000d0a520c0a023b0a051b700a0800070c0a52030a026e030402033b03051ab20d033b04050a940118030104b3ba0000000344040204c70203874b000006ef0c005e0a061e6e0a0b000a440d0a0094440c0d01e15e0a061e6e0a0b000a440a0a020a450a0a07e9a36e0a0c0d0a52030a01010abd4f29ab850c05a4380200520a0c013b0c091d0209bf4f0000917508003b0d050052090d003b0d050a52090d013b0d050252090d023b0e0501940116010e01930db00801440d0e064c52090d033b0d051552090d046f0908000c09520a09023b09051c70090800070a09520309026e030402033b010518b2730044040204c70203874b0000e9bb0c005e09061e6e090b0009440a09009444090a01e15e06061e6e060b0006440606020a45060608ad0e6e06090a06520306010106bd4f29ab850905a5380200520609013b0905296c090900520609023b05051d70050800070605520305026e030402037602"
+        ),
+        FunctionPatch(
+            130319, "", 572,
+            "3404000202874b000084ba0c003408013b0a08003b0508025e01051c93006e010a0001440601009444030601e15e01051c6e010a0001440101020a4501010300276e01030601520201013b07080e3b0608050101bd4f29ab8503046b4c0200520103013b03041f6c030300520103026f010700060152020102080101005a0102003b020411b3a70000000044030104c70202874b0000976424005e09051c6e090a0009440c090094440b0c01e15e09051c6e090a0009440909020a45090905040a6e090b0c0952020901010bbd4f29ab8509046c4c0200520b09013b0c081302098c65000053ad04003b0d0400440d0d064c52090d003b0d041a52090d013b0d040b52090d023b0d040c52090d036f0907000c09520b09023b09041370090700060b09520209026e020301023b020412b39a0000000244030104c70202874b000006ef0c005e09051c6e090a0009440c090094440b0c01e15e09051c6e090a0009440909020a45090907e9a36e090b0c09520209010109bd4f29ab850b046d4c020052090b013b0b081402088d65000088ad04003b0c040052080c003b0c040b52080c013b0c040c52080c026f0807000b08520908023b08041470080700060908520208026e0203010244030104c70202874b0000e9bb0c005e08051c6e080a0008440908009444080901e15e05051c6e050a0005440505020a45050508ad0e6e05080905520205010105bd4f29ab8508046e4c0200520508013b0804206c080800520508023b0404157004070006050452020402af050000007601"
+        ),
+        FunctionPatch(135593, "handlePostConnectionOpen", 373, "93007e7600"),
+        FunctionPatch(
+            145546, "", 213,
+            "34030142050301000000890701370500073b0803003b0403025e03040a93016e060801034503060067d36e06030607130306b1a1000000063406005e09040b6e0a08010945090a011fb66e09090a07b04b095e09040b6e0a08010945090a0285b66e09090a07b019095e04040b6e0808010445040803acd56e04040807ae1b3b0a060045090a04ca2e850805ba5f02006e08090a08130408ae3845070705ad0945070706169e44070707a397001c010000b21c013b07060045060704ca2e850505b95f02006e050607051301051004011003047603"
+        ),
+        FunctionPatch(151493, "", 31, "93007e7e7e7600"),
     )
 
     private fun String.hexToBytes(): ByteArray {
