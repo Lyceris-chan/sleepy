@@ -12,6 +12,7 @@ import dev.sleepy.app.model.TargetApk
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.bundleOf
+import dev.sleepy.app.testing.SmaliReferences
 import dev.sleepy.app.testing.dexEntries
 import java.io.File
 import java.security.MessageDigest
@@ -310,8 +311,8 @@ class DiscordPayloadIntegrationTest {
         // sets in DiscordPatches carry bodies too, and a name that moved costs the same there.
         // A patch whose target class is not in this build is one the pipeline skips as
         // not-applicable - OctoGram's targets among them - so those are left out and counted.
-        val entriesForFilter = dexEntries(apkFile)
-        val classToDex = DexProcessor.buildClassToDexIndex(entriesForFilter)
+        val entries = dexEntries(apkFile)
+        val classToDex = DexProcessor.buildClassToDexIndex(entries)
         val registered = PatchRegistry.all.flatMap { it.smaliPatches }
         val patches = registered.filter {
             "L" + it.smaliPath.removeSuffix(".smali") + ";" in classToDex
@@ -326,11 +327,7 @@ class DiscordPayloadIntegrationTest {
         // were hardcoded - `i()` for what 351.2.0 calls `h()` - which is a `NoSuchMethodError` on
         // the OkHttp dispatcher thread the first time the app makes a request. A check that only
         // read the static table would have said the names were fine.
-        val entries = dexEntries(apkFile)
-        val target = TargetApk(
-            classToDexIndex = DexProcessor.buildClassToDexIndex(entries),
-            dexEntries = entries
-        )
+        val target = TargetApk(classToDexIndex = classToDex, dexEntries = entries)
         val generatedBodies = when (val resolution = OkHttpNameResolver.resolve(target)) {
             is OkHttpResolution.Resolved -> listOf(
                 "the generated blocklist interceptor" to DiscordBlocklistPatch.interceptorBody(
@@ -350,15 +347,16 @@ class DiscordPayloadIntegrationTest {
             }
         }
 
-        // The members this patch set adds to a class that does not have them yet.
-        val fieldDeclaration = Regex("""^\s*\.field\b[^\n]*?\s([A-Za-z0-9_$]+):""", RegexOption.MULTILINE)
-        for (patch in patches) {
-            for (text in listOfNotNull(patch.replacementBody, patch.replacement)) {
-                fieldDeclaration.findAll(text).forEach { declaredFields += it.groupValues[1] }
-            }
-        }
+        val bodies = patches.flatMap { patch ->
+            listOfNotNull(patch.replacementBody, patch.replacement).map { patch.title to it }
+        } + generatedBodies
 
-        // Every class the build defines, and the names it gives its members.
+        // The members this patch set adds to a class that does not have them yet.
+        for ((_, text) in bodies) declaredFields += SmaliReferences.declaredFieldNames(text)
+
+        // Every class the build defines, and what it declares each member as. The signature is
+        // part of the key: a member that exists under the name a body uses, with a different
+        // parameter list, is as unresolvable as one that is not there at all.
         val methods = mutableMapOf<String, MutableSet<String>>()
         val fields = mutableMapOf<String, MutableSet<String>>()
         for ((name, bytes) in entries) {
@@ -369,10 +367,17 @@ class DiscordPayloadIntegrationTest {
             try {
                 val dex = DexFileFactory.loadDexFile(temp, opcodes)
                 for (cls in dex.classes) {
-                    methods.getOrPut(cls.type) { mutableSetOf() }
-                        .addAll(cls.methods.map { it.name })
+                    methods.getOrPut(cls.type) { mutableSetOf() }.addAll(
+                        cls.methods.map { method ->
+                            // The parentheses are part of the key: a reference is recorded as
+                            // `name(params)return`, and a key without them never matches one.
+                            method.name + "(" +
+                                method.parameterTypes.joinToString("") { it.toString() } +
+                                ")" + method.returnType
+                        }
+                    )
                     fields.getOrPut(cls.type) { mutableSetOf() }
-                        .addAll(cls.fields.map { it.name })
+                        .addAll(cls.fields.map { field -> field.name + ":" + field.type })
                 }
             } finally {
                 temp.delete()
@@ -384,29 +389,25 @@ class DiscordPayloadIntegrationTest {
             "Ljava/", "Ljavax/", "Landroid/", "Ldalvik/", "Llibcore/", "Lsun/",
             "Lorg/w3c/", "Lorg/xml/", "Lorg/json/", "Lorg/apache/"
         )
-        val reference = Regex("""(L[A-Za-z0-9_$/]+;)->([A-Za-z0-9_$<>]+)""")
         val unresolved = mutableListOf<String>()
         var checked = 0
 
-        val bodies = patches.flatMap { patch ->
-            listOfNotNull(patch.replacementBody, patch.replacement).map { patch.title to it }
-        } + generatedBodies
-
         for ((label, text) in bodies) {
-            for (match in reference.findAll(text)) {
-                val descriptor = match.groupValues[1]
-                val member = match.groupValues[2]
-                if (systemPrefixes.any { descriptor.startsWith(it) }) continue
+            for (reference in SmaliReferences.inText(text)) {
+                if (systemPrefixes.any { reference.descriptor.startsWith(it) }) continue
                 checked++
-                if (descriptor !in methods && descriptor !in fields) {
-                    unresolved += "$label: $descriptor is not a class in this build"
+                val declared = if (reference.isField) fields else methods
+                if (reference.descriptor !in declared) {
+                    unresolved += "$label: ${reference.descriptor} is not a class in this build"
                     continue
                 }
-                // Both sets, always: a reference is a method or a field and the regex does not
-                // say which, and a class usually has both.
-                val known = methods[descriptor].orEmpty() + fields[descriptor].orEmpty()
-                if (member !in known && member !in declaredMembers && member !in declaredFields) {
-                    unresolved += "$label: $descriptor has no member named '$member'"
+                if (reference.lookup !in declared.getValue(reference.descriptor) &&
+                    reference.member !in declaredMembers &&
+                    reference.member !in declaredFields
+                ) {
+                    val what = if (reference.isField) "field" else "method"
+                    unresolved += "$label: ${reference.descriptor} has no $what " +
+                        "'${reference.member}${reference.signature}'"
                 }
             }
         }
