@@ -1621,25 +1621,8 @@ object DiscordNativePatches {
     val FOREGROUND_SERVICE = PatchSet(
         id = "discord_native_foreground_service",
         label = "Keep calls alive in the background",
-        description = "Keeps the microphone and camera types in the foreground-service type chain when the app is backgrounded, and widens the per-type catch so a refusal falls through to the next candidate instead of escaping, which is what makes a call drop while the notification still says connected.",
+        description = "Widens the per-type catch when promoting the foreground service so a refusal falls through to the next candidate instead of escaping as an uncaught exception, which is what makes a call drop while the notification still says connected. The chain itself is left as Discord built it: which service types the app is eligible for is a fact about the call, not about whether the window is in front.",
         smaliPatches = listOf(
-            SmaliPatch(
-                title = "Keeping microphone access while backgrounded",
-                explanation = "Treats the app as eligible for the microphone and camera foreground-service types even when it is in the background, so audio capture is not cut mid-call.",
-                smaliPath = "com/discord/foreground_service/utils/ForegroundServiceUtilsKt.smali",
-                anchor = """    :cond_4c
-    move v3, v4
-
-    .line 78
-    goto :goto_4f""",
-                replacement = """    :cond_4c
-    # Patch: treat the app as eligible so the microphone/camera types stay in
-    # the chain while backgrounded. Superseded safely by the chain fallback.
-    move v3, v5
-
-    .line 78
-    goto :goto_4f"""
-            ),
             SmaliPatch(
                 title = "Falling through to the next service type on any refusal",
                 explanation = "Catches any refusal when promoting the foreground service, not just the security exception, so the failed type falls through to the next candidate instead of aborting the promotion.",

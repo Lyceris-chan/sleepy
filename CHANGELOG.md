@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.2] - 2026-10-15
+
+### Fixed
+
+- **The patched app claimed the microphone foreground-service type at all times, which is what made it report a call that was not happening.** `ForegroundServiceUtilsKt.buildServiceTypeChain` decides which foreground-service types Discord is allowed to promote its notification service through. Discord's own rule is the one Android 14 enforces: the app is eligible for the microphone and camera types while it is in the foreground, or while a telecom bar is present, and *not* while it is backgrounded with no call. The patch replaced the "not eligible" arm with "eligible", so the app asked for a microphone-type foreground service while sitting in the background with no call in progress. Android refuses that with a `SecurityException`, which the promotion chain catches and steps past — so the service still came up, but as a call service, and its notification said so. That is the "in a call" notification that appears when there is no call, and that outlives the app when it dies mid-promotion.
+
+  The patch is removed rather than adjusted. Which service types an app may use is a fact about whether a call is running, and this function has no way to know that; Discord asks the question it can actually answer, and the answer it gives is the correct one. Backgrounded audio during a real call still works, because a real call is exactly the case Android grants the exemption for. The other patch in the set — widening the per-type catch so a refusal falls through to the next candidate instead of escaping — is kept: `ForegroundServiceStartNotAllowedException` is an `IllegalStateException`, not a `SecurityException`, so an uncaught one takes the process down.
+
+### Notes
+
+- **What is verified about the patched artifact, and what is not.** Everything the project can check without a device now has been, against the real 351.2.0 build, and it is clean: every one of the 208 JavaScript bodies reads back through Hermes; all 106 DEX edits apply with nothing skipped; no method in the patched DEX names a register its frame does not allocate (checked against the same rule ART's verifier applies, with the stock build as the control); the rebuilt DEX keeps every class, method and field it started with; and `aapt2` reads the rebuilt resource table and finds it complete but for the split-install metadata the merge drops on purpose.
+
+- **The one thing that is still unverified is whether a patched build runs.** There is no recorded patched 351.2.0 build to compare against and no way to execute this bytecode off-device. The foreground-service patch above was found by reading the patched output against the stock output, not by reproducing a failure, and the crash it is offered as the cause of has not been reproduced here — no device was attached. If patched builds still die on open, the next thing needed is the crash itself: `adb logcat -b crash -d` after it happens, or `adb shell dumpsys dropbox --print | grep -A 40 data_app_crash`.
+
 ## [3.7.1] - 2026-10-12
 
 ### Fixed
@@ -371,6 +385,7 @@ No part of the app changed in this release. It carries three build changes, and 
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
 [Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...HEAD
+[3.7.2]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...v3.7.2
 [3.7.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.5.0...v3.6.0
