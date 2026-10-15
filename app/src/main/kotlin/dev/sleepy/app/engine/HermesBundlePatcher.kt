@@ -81,7 +81,18 @@ object HermesBundlePatcher {
     private const val ENTRY_SIZE = 12
 
     private const val FLAG_OVERFLOWED = 0x20
+
+    /**
+     * The low 24 bits of a large header's offset, as `SmallFuncHeader(uint32_t)` writes them.
+     *
+     * Hermes' `Offset` field is 25 bits and its reader takes all of them
+     * (`(getFunctionName() << 24) | getOffset()`), while its writer puts the low 24 in `Offset`
+     * and the high 8 in the entry's `functionName`. A repointed entry therefore has to have
+     * bit 24 of `Offset` *cleared*, not left as it was: the previous contents are an address
+     * from a different scheme, and leaving one set makes Hermes read the header 16 MB late.
+     */
     private const val OVERFLOW_OFFSET_MASK = 0x00FFFFFF
+    private const val ENTRY_OFFSET_MASK = 0x1FFFFFF
     private const val BYTECODE_SIZE_MASK = 0x3FFF
 
     /** `functionName` in the 96-bit entry doubles as the high byte of a large header pointer. */
@@ -108,6 +119,11 @@ object HermesBundlePatcher {
     private const val LARGE_HEADER_NUM_REG_COUNT_FIELD = 20
     private const val LARGE_HEADER_NON_PTR_REG_COUNT_FIELD = 24
     private const val LARGE_HEADER_FRAME_SIZE_FIELD = 28
+    private const val LARGE_HEADER_FLAGS_FIELD = 36
+
+    /** `FunctionHeaderFlag`: two bits of `ProhibitInvoke`, then one each for these. */
+    private const val FLAG_HAS_EXCEPTION_HANDLER = 0x08
+    private const val FLAG_HAS_DEBUG_INFO = 0x10
 
     /** Appended bodies and headers start on a four-byte boundary. */
     private const val APPEND_ALIGNMENT = 4
@@ -390,6 +406,17 @@ object HermesBundlePatcher {
         }
         writeU32Le(header, LARGE_HEADER_OFFSET_FIELD, bodyOffset)
         writeU32Le(header, LARGE_HEADER_SIZE_FIELD, plan.replacement.size)
+        // The exception-handler table and the function's debug offsets are not part of the
+        // body: Hermes reads them from immediately behind this header, and only when the flags
+        // say they are there (`BCProviderFromBuffer::getExceptionTableAndDebugOffsets`). A
+        // relocated header is written on its own with nothing behind it, so a copied flag
+        // sends Hermes into whatever the layout put next - the following body, or zeroes - and
+        // it aborts on the first frame it tries to read. Both flags are therefore cleared, which
+        // is also what the replacement is: a body with no handler table, and no line numbers to
+        // report for code that is not the code that was there.
+        header[LARGE_HEADER_FLAGS_FIELD] =
+            (header[LARGE_HEADER_FLAGS_FIELD].toInt() and
+                (FLAG_HAS_EXCEPTION_HANDLER or FLAG_HAS_DEBUG_INFO).inv()).toByte()
         return header
     }
 
@@ -399,8 +426,10 @@ object HermesBundlePatcher {
      */
     private fun repoint(state: ByteArray, functionId: Int, headerOffset: Int) {
         val words = entryWords(state, functionId)
+        // `EntryOffsetMask`, not `OverflowOffsetMask`: the 25-bit `Offset` field has to come out
+        // of this with its top bit clear, and only the low 24 bits are written back into it.
         val w0 =
-            (words.w0 and OVERFLOW_OFFSET_MASK.inv()) or (headerOffset and OVERFLOW_OFFSET_MASK)
+            (words.w0 and ENTRY_OFFSET_MASK.inv()) or (headerOffset and OVERFLOW_OFFSET_MASK)
         val w1 = (words.w1 and BYTECODE_SIZE_MASK.inv() and
             (FUNCTION_NAME_MASK shl FUNCTION_NAME_SHIFT).inv()) or
             (((headerOffset ushr 24) and FUNCTION_NAME_MASK) shl FUNCTION_NAME_SHIFT)

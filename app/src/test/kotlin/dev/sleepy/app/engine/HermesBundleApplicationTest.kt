@@ -42,6 +42,15 @@ class HermesBundleApplicationTest {
     private val functionCountOffset = 40
     private val sha1FooterSize = 20
 
+    /** The 96-bit function table: where it starts, and how wide one entry is. */
+    private val entryTableOffset = 128
+    private val entryBytes = 12
+
+    /** The 37-byte large header's flags byte, and the two bits of it that name trailing data. */
+    private val largeHeaderFlagsField = 36
+    private val flagHasExceptionHandler = 0x08
+    private val flagHasDebugInfo = 0x10
+
     /**
      * The functions whose replacements do not fit where the bodies they replace are.
      *
@@ -171,6 +180,54 @@ class HermesBundleApplicationTest {
                 DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toString()
         }.store(File(out, "patched.properties").outputStream(), "written by HermesBundleApplicationTest")
         println("HermesBundleApplicationTest: wrote the patched bundle to ${out.absolutePath}")
+    }
+
+    /**
+     * A relocated function's header must carry neither an exception table nor debug offsets.
+     *
+     * Those two are not part of the body. Hermes reads them from immediately behind the 37-byte
+     * large header, and only when the flags say they are there
+     * (`BCProviderFromBuffer::getExceptionTableAndDebugOffsets`). A header written on its own,
+     * with nothing behind it and a flag copied from the header it replaced, sends Hermes into
+     * whatever the append layout put next - and that is not a wrong value, it is `abort()`. The
+     * disassembler trips an assertion on it, and the runtime takes the same path, so a bundle
+     * built that way kills the app rather than misbehaving inside it.
+     *
+     * Asserted off the written bundle rather than off the flags the patcher meant to clear,
+     * because the flag byte is copied from a header the patch set does not own: a function with
+     * no large header of its own gets one synthesised over a template borrowed from an unrelated
+     * function, and that template arrives with its own flags.
+     */
+    @Test
+    fun aRelocatedHeaderCarriesNeitherAnExceptionTableNorDebugOffsets() {
+        assumeTrue("the Discord base APK is not on this machine (${baseApk.path})", baseApk.isFile)
+
+        val base = bundleOf(baseApk)
+        assumeTrue(
+            "the base bundle is not the build the patch set was extracted from",
+            base.size.toLong() == DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE.toLong()
+        )
+        val result = HermesBundlePatcher.apply(base, DiscordHermesBundlePatch.PATCHES)
+        val patched = result.bundleBytes
+
+        assertTrue(
+            "no entry was relocated, so this test checked nothing",
+            result.relocated.isNotEmpty()
+        )
+        for (outcome in result.relocated) {
+            val slot = entryTableOffset + entryBytes * outcome.functionId
+            val word0 = readU32Le(patched, slot)
+            val word1 = readU32Le(patched, slot + 4)
+            val headerOffset = (((word1 ushr 14) and 0xFF) shl 24) or (word0 and 0x00FFFFFF)
+            val flags = patched[headerOffset + largeHeaderFlagsField].toInt() and 0xFF
+            assertEquals(
+                "function ${outcome.functionId} was relocated to $headerOffset with flags " +
+                    "0x${flags.toString(16)}: a header whose function has no exception table " +
+                    "and no debug offsets must not claim either",
+                0,
+                flags and (flagHasExceptionHandler or flagHasDebugInfo)
+            )
+        }
     }
 
     /**

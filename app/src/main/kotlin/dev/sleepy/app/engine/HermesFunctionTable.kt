@@ -72,8 +72,14 @@ object HermesFunctionTable {
     private const val FIRST_MODERN_VERSION = 97
 
     private const val FLAG_OVERFLOWED = 0x20
+    /**
+     * `SmallFuncHeader::Offset`, which is 25 bits in both of the header's states: the body's
+     * address when the entry is not overflowed, and the low bits of the large header's address
+     * when it is. Hermes reads `(getFunctionName() << 24) | getOffset()`, so both are masked
+     * with this rather than with the 24 bits its writer happens to fill.
+     */
     private const val OFFSET_MASK = 0x1FFFFFF
-    private const val OVERFLOW_OFFSET_MASK = 0x00FFFFFF
+    private const val OVERFLOW_OFFSET_MASK = OFFSET_MASK
     private const val BYTECODE_SIZE_MASK = 0x3FFF
 
     /** Offset of the large `FunctionHeader`'s bytecode size, as a 32-bit field. */
