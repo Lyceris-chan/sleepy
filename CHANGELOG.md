@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.3] - 2026-10-15
+
+### Fixed
+
+- **The app died as it opened, and this is why.** The patch that drops seven eagerly-loaded exception classes from `CrashReporting`'s static initializer builds an empty list through `Lkotlin/collections/a0;->g`. That name came from the recorded change set for 349.5. In 351.2.0 R8 gave `kotlin/collections/a0` to a different class — it is `ArrayDeque` there, it has eight methods, and `g` is not one of them — and the method that was `a0.g` is `kotlin/collections/v;->h`. So the class died with
+
+  ```
+  java.lang.NoSuchMethodError: No static method g([Ljava/lang/Object;)Ljava/util/List;
+    in class Lkotlin/collections/a0;
+      at com.discord.crash_reporting.CrashReporting.<clinit>(SourceFile:53)
+      at com.discord.MainApplication.performInitialization(SourceFile:328)
+  ```
+
+  on `ReactNativeInitThread`, before anything was drawn. The name is corrected to the one this build actually has, which is the same call the stock initializer makes.
+
+  Nothing about assembling smali requires the names in it to resolve, so this applied cleanly, read back cleanly and passed every test the project had. It is the third defect in this release series with that shape, and the second where the answer was in a log nobody had read.
+
+- **A test now checks that every class and member a patch body names exists in the build being patched.** It walks the replacement bodies and anchor replacements of the whole native set, extracts every `Lclass;->member` reference, and resolves each against the classes and members of all four DEX files of the shipped build. Class and member names are matched rather than full signatures — a wrong overload would pass — but the failure that happened is a name that moved to another class, and that is what it catches. System classes are skipped, and a member the patch set declares itself counts as present, so an entry that adds a field is not reported as one that names a missing one.
+
 ## [3.7.2] - 2026-10-15
 
 ### Fixed
@@ -395,6 +414,7 @@ No part of the app changed in this release. It carries three build changes, and 
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
 [Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...HEAD
+[3.7.3]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.2...v3.7.3
 [3.7.2]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...v3.7.2
 [3.7.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.6.0...v3.7.0

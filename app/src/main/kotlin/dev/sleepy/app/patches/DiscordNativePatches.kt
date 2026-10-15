@@ -1011,7 +1011,7 @@ object DiscordNativePatches {
     .line 53
     const/4 v8, 0x0
 
-    invoke-static {v7}, Lkotlin/collections/a0;->g([Ljava/lang/Object;)Ljava/util/List;
+    invoke-static {v7}, Lkotlin/collections/v;->h([Ljava/lang/Object;)Ljava/util/List;
 
     .line 78
     move-result-object v0

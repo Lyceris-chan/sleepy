@@ -1,5 +1,7 @@
 package dev.sleepy.app.patches
 
+import com.android.tools.smali.dexlib2.DexFileFactory
+import com.android.tools.smali.dexlib2.Opcodes
 import dev.sleepy.app.engine.DexProcessor
 import dev.sleepy.app.engine.HermesFunctionTable
 import dev.sleepy.app.engine.HermesPatcher
@@ -8,6 +10,7 @@ import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.bundleOf
 import dev.sleepy.app.testing.dexEntries
+import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 import kotlinx.coroutines.runBlocking
@@ -271,5 +274,103 @@ class DiscordPayloadIntegrationTest {
             "Hermes: 13 function stubs written, the promise-shaped one refused, " +
                 "Sentry DSN nulled, footer valid"
         )
+    }
+
+    /**
+     * Every class and member a patch body names must exist in the build being patched.
+     *
+     * This is the check the 351.2.0 set needed and did not have. R8 gives the same name to a
+     * different thing on every release, and a patch body is smali text copied from the release it
+     * was written for: nothing about assembling it requires the names in it to resolve. The
+     * `CrashReporting.<clinit>` rewrite called `Lkotlin/collections/a0;->g`, which was
+     * `CollectionsKt.listOf` in 349.5 and is `ArrayDeque` in 351.2.0 - a class that exists, has
+     * eight methods, and none of them is `g`. The patch assembled, applied, read back, and every
+     * test passed; on the phone the class fails at `MainApplication.performInitialization` with
+     * `NoSuchMethodError`, which is the app dying as it opens.
+     *
+     * Class and member names are matched, not full signatures. A wrong overload would pass here,
+     * but the failure that happened - and the failure this release is about - is a name that
+     * moved to another class, and that is what this catches.
+     *
+     * System classes are not in the APK and are skipped; a member the patch set itself declares
+     * is one it is adding, so those are collected first and treated as present.
+     */
+    @Test
+    fun everyReferenceAPatchBodyMakesExistsInThisBuild() {
+        val apkFile = discordBaseApk
+        assumeTrue("${discordBaseApk.path} is not on this machine", apkFile.exists())
+
+        val opcodes = Opcodes.forApi(28)
+        val declaredMembers = mutableSetOf<String>()
+        val declaredFields = mutableSetOf<String>()
+        val patches = dev.sleepy.app.patches.DiscordNativePatches.ALL.flatMap { it.smaliPatches }
+
+        // The members this patch set adds to a class that does not have them yet.
+        val fieldDeclaration = Regex("""^\s*\.field\b[^\n]*?\s([A-Za-z0-9_$]+):""", RegexOption.MULTILINE)
+        for (patch in patches) {
+            for (text in listOfNotNull(patch.replacementBody, patch.replacement)) {
+                fieldDeclaration.findAll(text).forEach { declaredFields += it.groupValues[1] }
+            }
+        }
+
+        // Every class the build defines, and the names it gives its members.
+        val methods = mutableMapOf<String, MutableSet<String>>()
+        val fields = mutableMapOf<String, MutableSet<String>>()
+        for ((name, bytes) in dexEntries(apkFile)) {
+            val temp = File.createTempFile("sleepy_refs_", ".dex").apply {
+                writeBytes(bytes)
+                deleteOnExit()
+            }
+            try {
+                val dex = DexFileFactory.loadDexFile(temp, opcodes)
+                for (cls in dex.classes) {
+                    methods.getOrPut(cls.type) { mutableSetOf() }
+                        .addAll(cls.methods.map { it.name })
+                    fields.getOrPut(cls.type) { mutableSetOf() }
+                        .addAll(cls.fields.map { it.name })
+                }
+            } finally {
+                temp.delete()
+            }
+        }
+        assertTrue("no classes were indexed from ${apkFile.name}", methods.size > 10_000)
+
+        val systemPrefixes = listOf(
+            "Ljava/", "Ljavax/", "Landroid/", "Ldalvik/", "Llibcore/", "Lsun/",
+            "Lorg/w3c/", "Lorg/xml/", "Lorg/json/", "Lorg/apache/"
+        )
+        val reference = Regex("""(L[A-Za-z0-9_$/]+;)->([A-Za-z0-9_$<>]+)""")
+        val unresolved = mutableListOf<String>()
+        var checked = 0
+
+        for (patch in patches) {
+            for (text in listOfNotNull(patch.replacementBody, patch.replacement)) {
+                for (match in reference.findAll(text)) {
+                    val descriptor = match.groupValues[1]
+                    val member = match.groupValues[2]
+                    if (systemPrefixes.any { descriptor.startsWith(it) }) continue
+                    checked++
+                    if (descriptor !in methods && descriptor !in fields) {
+                        unresolved += "${patch.title}: $descriptor is not a class in this build"
+                        continue
+                    }
+                    // Both sets, always: a reference is a method or a field and the regex does not
+                    // say which, and a class usually has both.
+                    val known = methods[descriptor].orEmpty() + fields[descriptor].orEmpty()
+                    if (member !in known && member !in declaredMembers && member !in declaredFields) {
+                        unresolved += "${patch.title}: $descriptor has no member named '$member'"
+                    }
+                }
+            }
+        }
+
+        assertTrue("the check found no references to check", checked > 50)
+        assertTrue(
+            "these names do not resolve in the build the patch set targets, so the patched " +
+                "class would fail at runtime rather than here:\n  " +
+                unresolved.joinToString("\n  "),
+            unresolved.isEmpty()
+        )
+        println("Reference audit: $checked references across ${patches.size} patches all resolve")
     }
 }
