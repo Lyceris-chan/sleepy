@@ -3,9 +3,12 @@ package dev.sleepy.app.patches
 import com.android.tools.smali.dexlib2.DexFileFactory
 import com.android.tools.smali.dexlib2.Opcodes
 import dev.sleepy.app.engine.DexProcessor
+import dev.sleepy.app.engine.OkHttpNameResolver
+import dev.sleepy.app.engine.OkHttpResolution
 import dev.sleepy.app.engine.HermesFunctionTable
 import dev.sleepy.app.engine.HermesPatcher
 import dev.sleepy.app.model.SmaliPatch
+import dev.sleepy.app.model.TargetApk
 import dev.sleepy.app.model.StepStatus
 import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.bundleOf
@@ -305,6 +308,35 @@ class DiscordPayloadIntegrationTest {
         val declaredFields = mutableSetOf<String>()
         val patches = dev.sleepy.app.patches.DiscordNativePatches.ALL.flatMap { it.smaliPatches }
 
+        // The blocklist interceptor is not written in the source: it is generated against the
+        // build, and it is the reason this test exists in the form it does. Its chain accessors
+        // were hardcoded - `i()` for what 351.2.0 calls `h()` - which is a `NoSuchMethodError` on
+        // the OkHttp dispatcher thread the first time the app makes a request. A check that only
+        // read the static table would have said the names were fine.
+        val entries = dexEntries(apkFile)
+        val target = TargetApk(
+            classToDexIndex = DexProcessor.buildClassToDexIndex(entries),
+            dexEntries = entries
+        )
+        val generatedBodies = when (val resolution = OkHttpNameResolver.resolve(target)) {
+            is OkHttpResolution.Resolved -> listOf(
+                "the generated blocklist interceptor" to DiscordBlocklistPatch.interceptorBody(
+                    ctorDescriptor = resolution.names.responseConstructorDescriptor,
+                    protocolClass = resolution.names.protocolClass,
+                    protocolField = resolution.names.protocolHttp11Field,
+                    chainRequestMethod = resolution.names.chainRequestMethod,
+                    chainProceedMethod = resolution.names.chainProceedMethod
+                )
+            )
+
+            is OkHttpResolution.Unresolved -> {
+                // A build this set cannot resolve is one the blocklist set skips, with a reason.
+                println("Blocklist names unresolved, so only the static table is audited: " +
+                    resolution.reason)
+                emptyList()
+            }
+        }
+
         // The members this patch set adds to a class that does not have them yet.
         val fieldDeclaration = Regex("""^\s*\.field\b[^\n]*?\s([A-Za-z0-9_$]+):""", RegexOption.MULTILINE)
         for (patch in patches) {
@@ -316,7 +348,7 @@ class DiscordPayloadIntegrationTest {
         // Every class the build defines, and the names it gives its members.
         val methods = mutableMapOf<String, MutableSet<String>>()
         val fields = mutableMapOf<String, MutableSet<String>>()
-        for ((name, bytes) in dexEntries(apkFile)) {
+        for ((name, bytes) in entries) {
             val temp = File.createTempFile("sleepy_refs_", ".dex").apply {
                 writeBytes(bytes)
                 deleteOnExit()
@@ -343,23 +375,25 @@ class DiscordPayloadIntegrationTest {
         val unresolved = mutableListOf<String>()
         var checked = 0
 
-        for (patch in patches) {
-            for (text in listOfNotNull(patch.replacementBody, patch.replacement)) {
-                for (match in reference.findAll(text)) {
-                    val descriptor = match.groupValues[1]
-                    val member = match.groupValues[2]
-                    if (systemPrefixes.any { descriptor.startsWith(it) }) continue
-                    checked++
-                    if (descriptor !in methods && descriptor !in fields) {
-                        unresolved += "${patch.title}: $descriptor is not a class in this build"
-                        continue
-                    }
-                    // Both sets, always: a reference is a method or a field and the regex does not
-                    // say which, and a class usually has both.
-                    val known = methods[descriptor].orEmpty() + fields[descriptor].orEmpty()
-                    if (member !in known && member !in declaredMembers && member !in declaredFields) {
-                        unresolved += "${patch.title}: $descriptor has no member named '$member'"
-                    }
+        val bodies = patches.flatMap { patch ->
+            listOfNotNull(patch.replacementBody, patch.replacement).map { patch.title to it }
+        } + generatedBodies
+
+        for ((label, text) in bodies) {
+            for (match in reference.findAll(text)) {
+                val descriptor = match.groupValues[1]
+                val member = match.groupValues[2]
+                if (systemPrefixes.any { descriptor.startsWith(it) }) continue
+                checked++
+                if (descriptor !in methods && descriptor !in fields) {
+                    unresolved += "$label: $descriptor is not a class in this build"
+                    continue
+                }
+                // Both sets, always: a reference is a method or a field and the regex does not
+                // say which, and a class usually has both.
+                val known = methods[descriptor].orEmpty() + fields[descriptor].orEmpty()
+                if (member !in known && member !in declaredMembers && member !in declaredFields) {
+                    unresolved += "$label: $descriptor has no member named '$member'"
                 }
             }
         }
@@ -371,6 +405,7 @@ class DiscordPayloadIntegrationTest {
                 unresolved.joinToString("\n  "),
             unresolved.isEmpty()
         )
-        println("Reference audit: $checked references across ${patches.size} patches all resolve")
+        println("Reference audit: $checked references across ${patches.size} patches and " +
+            "${generatedBodies.size} generated bodies all resolve")
     }
 }

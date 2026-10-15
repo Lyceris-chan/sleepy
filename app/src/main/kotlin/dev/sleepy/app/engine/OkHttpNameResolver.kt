@@ -22,7 +22,21 @@ data class OkHttpProtocolNames(
     /** The `okhttp3.Protocol` enum, without the `L`/`;` a descriptor carries—such as `ps/s`. */
     val protocolClass: String,
     /** Field in [protocolClass] holding the `HTTP_1_1` constant—such as `i`. */
-    val protocolHttp11Field: String
+    val protocolHttp11Field: String,
+
+    /**
+     * `okhttp3.Interceptor$Chain`'s no-argument method returning a `Request`—`i` on 349.5, `h`
+     * on 351.2.0.
+     *
+     * The interceptor reads the request it is given through this, and R8 renames it on every
+     * release just as it does the three names above. Hardcoding it costs an `NoSuchMethodError`
+     * on the OkHttp dispatcher thread the first time the app makes a request, which is not a
+     * failure this patch set can afford to have written down.
+     */
+    val chainRequestMethod: String,
+
+    /** `okhttp3.Interceptor$Chain`'s method taking a `Request` and returning a `Response`. */
+    val chainProceedMethod: String
 )
 
 /** Either the preceding names, or why they could not be read. */
@@ -47,7 +61,11 @@ sealed interface OkHttpResolution {
 object OkHttpNameResolver {
 
     private const val RESPONSE_TYPE = "Lokhttp3/Response;"
+    private const val REQUEST_TYPE = "Lokhttp3/Request;"
     private const val CONSTRUCTOR_NAME = "<init>"
+
+    /** The interface the interceptor is handed, whose two accessors are obfuscated too. */
+    private const val CHAIN_TYPE = "Lokhttp3/Interceptor\$Chain;"
 
     /** The protocol string the `HTTP_1_1` enum constant is built from. */
     private const val PROTOCOL_STRING = "http/1.1"
@@ -101,6 +119,26 @@ object OkHttpNameResolver {
             append(constructor.returnType)
         }
 
+        // The two accessors the interceptor calls on the chain it is handed, found by what they
+        // take and return rather than by name.
+        val chain = classDefOf(CHAIN_TYPE) ?: return OkHttpResolution.Unresolved(
+            "$CHAIN_TYPE is not in this APK, so the request interceptor cannot be rebuilt."
+        )
+        val chainRequest = chain.methods.firstOrNull {
+            it.parameterTypes.isEmpty() && it.returnType.toString() == REQUEST_TYPE
+        } ?: return OkHttpResolution.Unresolved(
+            "$CHAIN_TYPE has no method taking nothing and returning $REQUEST_TYPE, so the " +
+                "request the interceptor reads cannot be named."
+        )
+        val chainProceed = chain.methods.firstOrNull {
+            it.parameterTypes.size == 1 &&
+                it.parameterTypes.first().toString() == REQUEST_TYPE &&
+                it.returnType.toString() == RESPONSE_TYPE
+        } ?: return OkHttpResolution.Unresolved(
+            "$CHAIN_TYPE has no method taking $REQUEST_TYPE and returning $RESPONSE_TYPE, so " +
+                "the call the interceptor proceeds with cannot be named."
+        )
+
         // Which obfuscated class the Protocol enum is moves per release, so it is recognized by
         // what it does rather than by name. It is the only class the constructor takes that
         // builds a constant out of the "http/1.1" string and assigns it to a static field of its
@@ -114,7 +152,9 @@ object OkHttpNameResolver {
                 OkHttpProtocolNames(
                     responseConstructorDescriptor = descriptor,
                     protocolClass = type.substring(1, type.length - 1),
-                    protocolHttp11Field = field
+                    protocolHttp11Field = field,
+                    chainRequestMethod = chainRequest.name,
+                    chainProceedMethod = chainProceed.name
                 )
             )
         }

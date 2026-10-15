@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.4] - 2026-10-15
+
+### Fixed
+
+- **The network blocklist interceptor called two methods the build does not have.** The interceptor the blocklist set generates reads the request it is handed through `okhttp3.Interceptor$Chain`, and that interface's two methods are obfuscated like everything else okhttp. The generator resolved three obfuscated names from the target build — the `Response` constructor descriptor, the `Protocol` enum and its `HTTP_1_1` field — and wrote the other two down: `i()` for the no-argument `Request` accessor, which is 349.5's name and is `h` in 351.2.0, and `a(Request)` for the one that proceeds, which happened still to be right. So the first request the React Native XHR client made died with
+
+  ```
+  java.lang.NoSuchMethodError: No interface method i()Lokhttp3/Request;
+    in class Lokhttp3/Interceptor$Chain;
+      at DeviceResourceUsageRecorder$Companion.requestStatsInterceptor(SourceFile:2)
+  ```
+
+  on the OkHttp dispatcher thread. Both names are now resolved from the build's DEX by what they take and return, like the other three, and `interceptorBody` takes them as required arguments rather than defaulting — a default is how a stale name gets back in.
+
+- **The reference audit now covers the generated bodies too.** It only read the static table, which is the half of the patch set that was already being checked; the interceptor is generated at patch time and nothing looked at it. The audit reports what it covered, so a run that checked only the table cannot read as one that checked everything: `67 references across 106 patches and 1 generated body all resolve`.
+
 ## [3.7.3] - 2026-10-15
 
 ### Fixed
@@ -414,6 +430,7 @@ No part of the app changed in this release. It carries three build changes, and 
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
 [Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...HEAD
+[3.7.4]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.3...v3.7.4
 [3.7.3]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.2...v3.7.3
 [3.7.2]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...v3.7.2
 [3.7.1]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.0...v3.7.1

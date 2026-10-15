@@ -163,6 +163,8 @@ object DiscordBlocklistPatch {
                         ctorDescriptor = resolution.names.responseConstructorDescriptor,
                         protocolClass = resolution.names.protocolClass,
                         protocolField = resolution.names.protocolHttp11Field,
+                        chainRequestMethod = resolution.names.chainRequestMethod,
+                        chainProceedMethod = resolution.names.chainProceedMethod,
                         hostRules = hostRules,
                         apiRules = apiRules
                     )
@@ -194,6 +196,8 @@ object DiscordBlocklistPatch {
      * @param ctorDescriptor `Lokhttp3/Response;`'s hand-built constructor, return type included.
      * @param protocolClass The Protocol enum, without `L`/`;`.
      * @param protocolField The Protocol field holding the `HTTP_1_1` constant.
+     * @param chainRequestMethod The chain's no-argument `Request` accessor, read from the build.
+     * @param chainProceedMethod The chain's `Request -> Response` method, read from the build.
      * @param hostRules The host patterns to emit, in order. Defaults to the whole table.
      * @param apiRules The API path patterns to emit, in order. The `:skip_<n>` labels are numbered
      *   within this list, so it has to match the rules the caller selected.
@@ -202,6 +206,8 @@ object DiscordBlocklistPatch {
         ctorDescriptor: String,
         protocolClass: String,
         protocolField: String,
+        chainRequestMethod: String,
+        chainProceedMethod: String,
         hostRules: List<String> = DiscordBlocklistRules.HOST_RULES.map { it.pattern },
         apiRules: List<String> = DiscordBlocklistRules.API_RULES.map { it.pattern }
     ): String {
@@ -212,7 +218,7 @@ object DiscordBlocklistPatch {
             "",
             "    move-object/from16 v3, p1",
             "",
-            "    invoke-interface {v3}, Lokhttp3/Interceptor${'$'}Chain;->i()Lokhttp3/Request;",
+            "    invoke-interface {v3}, Lokhttp3/Interceptor${'$'}Chain;->$chainRequestMethod()Lokhttp3/Request;",
             "",
             "    move-result-object v0",
             "",
@@ -289,7 +295,7 @@ object DiscordBlocklistPatch {
 
         lines += listOf(
             "    # Not blocked - proceed with the (possibly rewritten) request.",
-            "    invoke-interface {v3, v0}, Lokhttp3/Interceptor${'$'}Chain;->a(Lokhttp3/Request;)Lokhttp3/Response;",
+            "    invoke-interface {v3, v0}, Lokhttp3/Interceptor${'$'}Chain;->$chainProceedMethod(Lokhttp3/Request;)Lokhttp3/Response;",
             "",
             "    move-result-object v0",
             "",

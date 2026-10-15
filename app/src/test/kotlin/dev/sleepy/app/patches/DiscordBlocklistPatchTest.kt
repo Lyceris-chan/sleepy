@@ -77,7 +77,21 @@ class DiscordBlocklistPatchTest {
         val generated = DiscordBlocklistPatch.interceptorBody(
             ctorDescriptor = names.responseConstructorDescriptor,
             protocolClass = names.protocolClass,
-            protocolField = names.protocolHttp11Field
+            protocolField = names.protocolHttp11Field,
+            chainRequestMethod = names.chainRequestMethod,
+            chainProceedMethod = names.chainProceedMethod
+        )
+        // The chain accessors are the ones the runtime will look for, so the body has to call
+        // them by the names this build gives them rather than by any release's.
+        assertTrue(
+            "the generated body must read the request through ${names.chainRequestMethod}()",
+            generated.contains("Interceptor\$Chain;->${names.chainRequestMethod}()Lokhttp3/Request;")
+        )
+        assertTrue(
+            "the generated body must proceed through ${names.chainProceedMethod}(Request)",
+            generated.contains(
+                "Interceptor\$Chain;->${names.chainProceedMethod}(Lokhttp3/Request;)Lokhttp3/Response;"
+            )
         )
         assertTrue(
             "the generated body must construct okhttp3.Response with the resolved descriptor",
