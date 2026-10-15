@@ -306,7 +306,20 @@ class DiscordPayloadIntegrationTest {
         val opcodes = Opcodes.forApi(28)
         val declaredMembers = mutableSetOf<String>()
         val declaredFields = mutableSetOf<String>()
-        val patches = dev.sleepy.app.patches.DiscordNativePatches.ALL.flatMap { it.smaliPatches }
+        // Every registered set, not only the native ones: the OTA-bundle, Sentry and telemetry
+        // sets in DiscordPatches carry bodies too, and a name that moved costs the same there.
+        // A patch whose target class is not in this build is one the pipeline skips as
+        // not-applicable - OctoGram's targets among them - so those are left out and counted.
+        val entriesForFilter = dexEntries(apkFile)
+        val classToDex = DexProcessor.buildClassToDexIndex(entriesForFilter)
+        val registered = PatchRegistry.all.flatMap { it.smaliPatches }
+        val patches = registered.filter {
+            "L" + it.smaliPath.removeSuffix(".smali") + ";" in classToDex
+        }
+        println(
+            "Reference audit scope: ${patches.size} patches target this build, " +
+                "${registered.size - patches.size} target a class it does not have"
+        )
 
         // The blocklist interceptor is not written in the source: it is generated against the
         // build, and it is the reason this test exists in the form it does. Its chain accessors
