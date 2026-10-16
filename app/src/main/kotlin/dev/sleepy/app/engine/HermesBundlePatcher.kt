@@ -20,20 +20,20 @@ import java.security.MessageDigest
  *
  * A replacement is usually shorter than the body it replaces, so the declaration is narrowed to
  * the replacement's length: in the 96-bit entry's `bytecodeSizeInBytes` bits or in the large
- * header's `+12` slot, as the recorded change set's output did. Function 14391's body is 186
+ * header's `+12` slot, as the recorded change set's output did. Function 15089's body is 186
  * bytes in the bundle and its replacement is 6. Padding without narrowing the declaration also
  * runs identically, because the padding is unreachable, but it leaves the function declaring a
  * body longer than the one that was written. Applied to the Discord 349.5 bundle, the patcher
  * produced 155,427 function bodies byte-identical to the recorded build's, which is the check
- * that comparison could make; the current 351.2.0 table has no recorded build, so what is
+ * that comparison could make; the current 351.2.5 table has no recorded build, so what is
  * checked there is the declaration itself and the padding behind it
  * ([dev.sleepy.app.engine.HermesBundleApplicationTest]).
  *
  * ## One body, two functions
  *
- * Functions 62264 and 62265 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
+ * Functions 65889 and 65890 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
  * share a single 47-byte body in this bundle, and the table gives each of them the same 19-byte
- * replacement. So do 73022 and 73034, over a shared 37-byte body and a 5-byte replacement. One
+ * replacement. So do 75038 and 75050, over a shared 37-byte body and a 5-byte replacement. One
  * write cannot serve both, so the lower id keeps the shared region and the other function is
  * relocated: its own replacement bytes are written at the end of the file, where its large header
  * declares that size. Nothing is overwritten; writing both into the shared region would leave one

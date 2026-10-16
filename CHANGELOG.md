@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-10-16
+
+### Added
+
+- **Games being played can be removed.** A new switch under **Declutter** takes the game
+  somebody is playing out of the app: the status line drawn under their name in a member list, a
+  DM row or a search result; the entry in their profile's activity list; the label on a private
+  channel; the You bar's accessibility label; and the games section the voice panel draws for a
+  voice channel.
+
+  It is two stubs and a component rather than a change per surface. Discord asks one of two
+  predicates — `isGameActivity` and `isPlayingGameActivity`, both in `modules/activities/utils/` —
+  before it draws a game anywhere, and every surface above reads one of the two, so answering
+  false at both leaves each of them with nothing to render. The voice panel's own
+  `VoicePanelGamesSection` is the container the games list is drawn inside, so an empty list would
+  have left the container on screen; it returns null instead, in both of the copies Discord ships
+  for its React Compiler experiment.
+
+  Nothing else about presence changes. Streaming, listening, custom status and the voice-channel
+  line are separate branches and are untouched, and the game *mentions* feature — typing a game's
+  name in a message — is a different module and is not affected.
+
+- **The storefront, the upsells, the trials and the leaderboard badges can be removed too.**
+  Eight more switches under **Declutter**, five new headings:
+
+  - **Storefront** — the product page, the gift and purchase flows, the wishlist cards and the
+    store item card, plus the actions that open and close them.
+  - **Nitro upsells** — the banners, promo sheets, action sheets, cards, headers and the lock
+    toasts the app raises when something needs Nitro.
+  - **Premium upsells** — the same, for the rest of the premium surface, split into emoji and
+    sticker upsells, profile upsells, guild and boost upsells, and the remaining sheets.
+  - **Free trials** — the card that counts down an expiring trial and the hooks that decide
+    whether to show it.
+  - **Leaderboard badges** — the badge a leaderboard winner carries on their profile.
+
+  208 functions in all, and each was chosen by what its own body returns rather than by its name.
+  A function whose every return path builds a React element (with the null on the "nothing to
+  show" path that Discord's own compiler emits) is a screen or a button, and returns null; one
+  whose every return is a comparison answers false; and one that already returned nothing on
+  every path is left returning nothing. Discord ships each component twice — once plain and once
+  for its React Compiler experiment — and the module picks between them as it loads, so both
+  copies of each are switched off together; stubbing one would have left the screen live half the
+  time. Anything whose returns fit none of those three shapes was left alone.
+
+### Changed
+
+- **Discord support moves to 351.2.5** (version code 351205, published as `351.5 - Alpha`). The
+  351.2.0 build is no longer offered: Hermes numbers functions per bundle, so a patch written for
+  one release names unrelated functions in another and the two cannot be carried side by side.
+  Everything the change list did before still happens, with the game-activity switch added.
+
+  The JavaScript table was re-derived for the new bundle rather than translated. Its 208 entries
+  became 212 (**420 in all**, with the declutter switches above): **180 are constant-shaped stubs** whose bytes name nothing bundle-specific and carry
+  unchanged; **17 are promise-shaped stubs**, re-assembled against this bundle because they read
+  the strings "Promise" and "resolve" through the bundle's own string identifiers, which are
+  renumbered every release; **15 are edits of an original body**, re-derived against the body this
+  build actually has; and **4 are the new game-activity entries**.
+
+  Each id was resolved by more than one method and the answers were required to agree — the name
+  the bundle gives the function with its parameter count, frame size and body size; the module the
+  function belongs to; the strings its body reads; and, where nothing else reached it, a
+  hand-checked body. That requirement is not ceremony: on this port the string method alone put
+  two profile-activity filters and the voice-state callback on the wrong functions, and the module
+  method alone is what the 3.7.0 crash came from.
+
+  The register each tab-list edit points a guard at was chosen again for this build rather than
+  carried, and is only used when the instruction that last wrote it before the guard is a constant
+  load and nothing writes it in between. The five entries whose replacements are longer than the
+  bodies they replace, and the two pairs that share a body, are relocated exactly as before.
+
+- **The native edits were re-pointed from the new build's own smali.** All 47 class paths the
+  native patch set names still exist in 351.2.5, which was checked against the class list of the
+  build's DEX files rather than assumed. Four kinds of name inside those classes did move, and
+  each is read out of the build's own disassembly: five experiment lambdas take the enclosing
+  `NativeExperiments` where they took a libdiscore module; `FrameMetricsAggregator.bindTo` is
+  private rather than public and the method the other patch stubbed as `initialize(Window)` is
+  now `enableTracking`, while the neighbouring `JankStatsAggregator` keeps `initialize`; the
+  coroutine classes the supervisor-scope injection names moved from `Ltr/` to `Lsr/` with their
+  relationships intact; and the obfuscated okhttp cache type moved from `Lvs/g;` to `Lus/g;` on
+  the same builder field.
+
+  A stale name here fails quietly — the patch is skipped and the run reports a step that did
+  nothing — so each was checked before it was written, by asking whether its signature or anchor
+  occurs exactly once in that class in the new build's smali. Four anchors and one signature
+  occur more than once in both builds, which is how they shipped, and are left as they were.
+
+  Every manifest edit, the resource-table merge and the blocklist's five DEX-resolved okhttp
+  names are unchanged and were re-run against the new build.
+
+### Fixed
+
+- **Nothing.** This release moves the patch set to a new build and adds a switch; no reported
+  fault is fixed by it.
+
+### Notes
+
+- The claim about what is checked has not changed and is deliberately narrow. Every one of the 420
+  entries must apply to the build the table names with nothing skipped, and a real Hermes
+  disassembler must read all 420 patched functions back. That catches a body which is not valid
+  bytecode. It does not catch a body that assembles cleanly and does something other than what its
+  entry says, and there is still no recorded patched build to compare against — the 349.5 set had
+  one and no release since has.
+
 ## [3.7.4] - 2026-10-15
 
 ### Fixed

@@ -1,39 +1,68 @@
 package dev.sleepy.app.patches
 
 /**
- * The Discord JavaScript bundle patch set for Discord 351.2.0.
+ * The Discord JavaScript bundle patch set for Discord 351.2.5.
  *
  * ## Where the entries come from, and what changed in this release
  *
  * The 349.5 set was extracted from a pair of APKs — a base split and a build that had been
  * patched and verified by hand — so each entry was the recorded build's own output rather than a
  * reconstruction of it, and every function of sleepy's bundle could be compared against that
- * build byte for byte. There is no such pair for 351.2.0, and nothing in this file is taken from
- * one. Each entry is instead carried, re-assembled or re-derived from the 349.5 entry it
- * replaces:
+ * build byte for byte. There is no such pair for any release since, and nothing in this file is
+ * taken from one. Each entry is instead carried, re-assembled or re-derived from the 351.2.0
+ * entry it replaces:
  *
- * — **175 are constant-shaped stubs** — `LoadConstUndefined; Ret` and its siblings. Their bytes
+ * — **176 are constant-shaped stubs** — `LoadConstUndefined; Ret` and its siblings. Their bytes
  *   name nothing that is numbered per bundle, so they carry unchanged; only the function id and
  *   the size the entry declares move.
  * — **17 are promise-shaped stubs.** These read the strings "Promise" and "resolve" through the
  *   bundle's own string identifiers, which are renumbered every release. Carried unchanged they
  *   would resolve to a different string and quietly return the wrong thing, so each is
  *   re-assembled against this bundle and the resulting bytes are baked in here.
- * — **16 are edits of an original body.** A register, a buffer index and a closure id are all
+ * — **15 are edits of an original body.** A register, a buffer index and a closure id are all
  *   per-bundle values, so each was re-derived against the body this build actually has, from the
- *   difference between the 349.5 function and the 349.5 replacement. Where that difference is a
- *   one-operand change or a size-preserving swap, nothing shifts and the edit is written in
+ *   difference between the 351.2.0 function and the 351.2.0 replacement. Where that difference is
+ *   a one-operand change or a size-preserving swap, nothing shifts and the edit is written in
  *   place; where it inserts instructions the body grows.
+ * — **4 are new**, and are the only entries that patch something no earlier release patched: the
+ *   game-activity presence described below.
  *
- * The set is one entry smaller than the last one. Entry 49956 lived in
- * `modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx`, and 351.2.0 ships no
- * `modules/vibegrations/` module path at all, so that entry has no target here and is not in
- * the table.
+ * ## Games being played
+ *
+ * 49519 and 54209 are `isPlayingGameActivity` and `isGameActivity`, the two predicates in
+ * `modules/activities/utils/` that answer whether an activity is a game being played. They are
+ * the choke points: the status line drawn under a name, the activity list on a profile, the
+ * label on a private channel, the You bar's accessibility label, the voice panel's games
+ * section, and the hook that gathers the games people are playing in a voice channel all ask
+ * one of the two before they draw anything. Answering false at both leaves every one of them
+ * with nothing to render, which is why the feature is two stubs rather than a change per
+ * surface.
+ *
+ * 79418 and 79419 are the two copies of the voice panel's own games section. That section is
+ * the container the list is drawn inside, so an empty list would have left the container on
+ * screen; returning null removes the section itself.
+ *
+ * ## The declutter entries
+ *
+ * The 208 entries at the end of the table are the storefront, the upsells, the trials and the
+ * leaderboard badges. Each is a stub whose replacement is a value its own original returned on
+ * some path, which is what makes the shape safe without reading every caller: a component that
+ * returns an element or null is stubbed to null, a predicate whose returns are all comparisons
+ * answers false, and a function that already returned nothing on every path keeps returning
+ * nothing.
+ *
+ * Which of the three a function is was decided from its own return paths, by following the
+ * returned register to the instruction that computed it and resolving the callee of the call.
+ * The React Compiler copies are recognised by the call Discord's compiler emits - the props
+ * object is built in the destination register and the result is written back over it - and each
+ * component is stubbed in both of its copies, because the module chooses between them at load
+ * time. A function whose returns fit none of the three shapes was left alone, as were two whose
+ * stock bodies are already `LoadConstUndefined; Ret`.
  *
  * ## What is checked, and what is not
  *
  * [dev.sleepy.app.engine.HermesBundleApplicationTest] applies the whole table to the build it
- * names and requires every entry to land with nothing skipped, and then reads all 208 patched
+ * names and requires every entry to land with nothing skipped, and then reads all 420 patched
  * functions back with a real Hermes disassembler. That second check is the one that catches a
  * body which occupies the right number of bytes but is not valid bytecode — a replacement whose
  * last instruction is missing its operands passes every check about *where* the bytes are and
@@ -45,7 +74,7 @@ package dev.sleepy.app.patches
  *
  * ## The four settings rows
  *
- * 15264, 15268, 15275 and 16197 append
+ * 15959, 15965, 15972 and 16829 append
  * `CreateClosureLongIndex` plus `DefineOwnById … "usePredicate"` to the route object they build,
  * pointing at the closure that `modules/user_settings/defs/native/QuestHomeSetting.tsx` exports
  * and that this set already stubs to false. `SettingHookHarness` hides any entry whose
@@ -53,16 +82,18 @@ package dev.sleepy.app.patches
  *
  * ## The tab lists
  *
- * 62639, 77424, 49896 and 114892 are the React Compiler copies of the profile and You-screen
+ * 66259, 78269, 50409 and 118888 are the React Compiler copies of the profile and You-screen
  * content components. Discord ships each of those screens twice and picks between them with an
  * experiment, so removing the tabs from one copy alone leaves them reachable whenever the
  * experiment flips. Each edit points a tab's guard at a register the body has already loaded
  * `undefined` or `null` into and never writes again, which makes the guard always fire; where a
- * push is unguarded the push is replaced by a jump over itself, which is size-preserving.
+ * push is unguarded the push is replaced by a jump over itself, which is size-preserving. The
+ * register is re-chosen for this build and checked against this body, because which register
+ * holds a constant at a given point is not a property that survives a release.
  *
  * ## Shop This Look
  *
- * 47043 and 47044 are the two branches of `useIsShopThisLookMobileEnabled`, the Apex experiment
+ * 47551 and 47552 are the two branches of `useIsShopThisLookMobileEnabled`, the Apex experiment
  * gate in `modules/collectibles/experiments/ShopThisLookMobileExperiment.tsx`. An earlier change
  * set removed the sheet and the coachmark and deliberately left the opener alone, because the
  * opener's body is deduplicated with an unrelated display-name sheet, so a row that opened an
@@ -72,9 +103,9 @@ package dev.sleepy.app.patches
  *
  * ## Relocation
  *
- * Seven entries cannot be written where the body they replace is: 8121, 15264, 15268, 15275 and
- * 16197 have replacements longer than the body. 62265 and 73034 share a body with another entry -
- * with 62264 and 73022 — and a shared region can hold only one replacement, so the lower id keeps
+ * Seven entries cannot be written where the body they replace is: 8346, 15959, 15965, 15972 and
+ * 16829 have replacements longer than the body. 65890 and 75050 share a body with another entry -
+ * with 65889 and 75038 — and a shared region can hold only one replacement, so the lower id keeps
  * it and the other is relocated beside it. [dev.sleepy.app.engine.HermesBundlePatcher] describes
  * how.
  *
@@ -89,10 +120,10 @@ package dev.sleepy.app.patches
 object DiscordHermesBundlePatch {
 
     /** Byte length of the bundle this table was extracted from. */
-    const val TARGET_BUNDLE_SIZE = 68515971
+    const val TARGET_BUNDLE_SIZE = 69028803
 
     /** Function count of that bundle. */
-    const val TARGET_FUNCTION_COUNT = 158639
+    const val TARGET_FUNCTION_COUNT = 160128
 
     /**
      * One function to replace.
@@ -116,267 +147,479 @@ object DiscordHermesBundlePatch {
     /** Every function in the set, in function-id order. */
     val PATCHES: List<FunctionPatch> = listOf(
         FunctionPatch(
-            8121, "", 339,
-            "4003088906023703000689080337030108890406890507370302053d07480b07001700440a0b016490092e000207040000004cc0060070070a0b0409075e07050093016e07060107450707024f3e370303070109ff0947125e0705016e0708010745070703cb624507070478598b000f21000007520900018c00d0070000520900005e0705026e07080107860a0705100f0a100e096b07070288070a07370304075e0705026e07080107860a0705100f0a100e096b07070288070a07370305075e0705026e0b0801070407100e07100d09730a2e039602560702002154860a0b05100f0a100e076b070b0288070a07370306075e0705026e0708010786080705100f08100e096b07070288070807370307075e0505096e07060105440607067791057cec02006e0506070584050307b44b0405013be184050308b44d040502cdbb040084050309b44b040503bf5d8403030ab44d0403041cd704007e7e7601"
+            8346, "", 343,
+            "4003088906023703000689080337030108890406890507370302053d07480b07001700440a0b016690092f0002070400000056b7060070070a0b0409075e07050093016e0706010745070702e83e370303070209000a000090f409005e0705016e07080107450707039862450707049e598b000f21000007520900018c00d0070000520900005e0705026e07080107860a0705100f0a100e096b07070288070a07370304075e0705026e07080107860a0705100f0a100e096b07070288070a07370305075e0705026e0b0801070407100e07100d09730a2e039602560702004d54860a0b05100f0a100e076b070b0288070a07370306075e0705026e0708010786080705100f08100e096b07070288070807370307075e0505096e070601054406070679910558f002006e0506070584050301b64b0405017ee184050302b64d0405027dbf040084050303b64b0405034eba84030304b64d0403040f4304007e7e7601"
         ),
-        FunctionPatch(14391, "", 186, "93007e7e7600"),
+        FunctionPatch(15089, "", 186, "93007e7e7600"),
         FunctionPatch(
-            15264, "", 348,
-            "4008078904023708000489050337080105890206890307370802033d01480901001700440709016490062e000201040000004cc00600700107090206015e06030093008901046e01010006370803015e0103016e01050001370804015e0103026e01050001370805015e0103036e0104000145090102aa785e0103046e010400014401010399370806015e0103086e0504000144010504956c010105b00c01850a0868110100ae09850a08671101005e0103086e0504000144010504956c010105b00c018507086a110100ae09850708691101005e01030d6e06040001450506052dac0201641b0000c7740800850b086b11010052010b005e0b030e6e0b04000b450b0b06af0652010b0252010a03520107040207f819000078ad040045090907b710520709008508086c1101005207080152010705850b088f11010056010b0631f16e010506015e0303106e0504000344040508779103b0f402006e030405034b02010063007e7e7e7600"
-        ),
-        FunctionPatch(
-            15268, "", 205,
-            "40080289040237080004890206890307370801033d01480701001700440607016490052e000201040000004cc00600700106070205015e01030093006e0104000145070102c1425e0103016e0104000145090103aa785e0103026e06040001450506042dac0201a51a000088ad0400850a087511010052010a0045070705b710520107010207f819000078ad040045090906a26852070900850808761101005207080152010702850a088f11010056010a0331f16e010506015e0303056e0504000344040507779103e38602006e030405034b02010063007e7e7e7600"
+            15959, "", 348,
+            "4008078904023708000489050337080105890206890307370802033d01480901001700440709016690062f0002010400000056b70600700107090206015e06030093008901046e01010006370803015e0103016e01050001370804015e0103026e01050001370805015e0103036e010400014509010241235e0103046e01040001440101039a370806015e0103086e0504000144010504966c010105b00c01850a08ce190100ae09850a08cd1901005e0103086e0504000144010504966c010105b00c01850708d0190100ae09850708cf1901005e01030d6e060400014505060501ac02017a1c000018830800850b08d119010052010b005e0b030e6e0b04000b450b0b069e6552010b0252010a03520107040207171b0000b677040045090907d11052070900850808d21901005207080152010705850b08f919010056010b067ff16e010506015e0303106e050400034404050879910395f802006e030405034b02010065007e7e7e7600"
         ),
         FunctionPatch(
-            15275, "", 199,
-            "40080289040237080004890206890307370801033d01480701001700440607016490052e000201040000004cc00600700106070205015e01030093006e0104000145090102aa785e0103016e06040001450506032dac0201631a000053ad040085070885110100520107005e0703036e0704000745070704d92d520107020207f819000078ad040045090905b44a520709008508088611010052070801520107038509088f1101005601090431f16e010506015e0303056e0504000344040506779103abf402006e030405034b02010063007e7e7e7600"
+            15965, "", 205,
+            "40080289040237080004890206890307370801033d01480701001700440607016690052f0002010400000056b70600700106070205015e01030093006e010400014507010246435e0103016e010400014509010341235e0103026e060400014505060401ac0201c01b00000c780400850a08df19010052010a0045070705d110520107010207171b0000b677040045090906ea6852070900850808e01901005207080152010702850a08f919010056010a037ff16e010506015e0303056e0504000344040507799103718902006e030405034b02010065007e7e7e7600"
         ),
         FunctionPatch(
-            16197, "", 217,
-            "4007038904023707000489010337070101890206890307370702033d01480801001700440608016490052e000201040000004cc00600700106080205015e01030093006e0104000145090102aa785e0103016e06040001450506032dac0201921d0000917508008508079c1c0100520108005e0803036e08040008450808040273520108020208f819000078ad0400450909058435520809008509079d1c010052080901520108038507079e1c0100520107048509078f1101005601090531f16e010506015e0303076e050400034404050677910333f402006e030405034b02010063007e7e7e7600"
-        ),
-        FunctionPatch(18823, "report", 203, "93007e7e7e7600"),
-        FunctionPatch(18852, "recordStart", 103, "93007e7e7e7600"),
-        FunctionPatch(18854, "recordEnd", 199, "93007e7e7e7600"),
-        FunctionPatch(18856, "set", 163, "93007600"),
-        FunctionPatch(18864, "record", 147, "93007e7e7e7600"),
-        FunctionPatch(18894, "resumeTracing", 150, "93007e7e7600"),
-        FunctionPatch(18895, "mark", 124, "93007600"),
-        FunctionPatch(18896, "markAndLog", 118, "93007e7e7600"),
-        FunctionPatch(18897, "addImportLogDetail", 86, "93007e7e7600"),
-        FunctionPatch(18898, "markWithDelta", 107, "93007e7e7e7600"),
-        FunctionPatch(18899, "markAt", 187, "93007e7e7e7600"),
-        FunctionPatch(18900, "addDetail", 131, "93007e7e7e7600"),
-        FunctionPatch(18903, "setServerTrace", 28, "93007600"),
-        FunctionPatch(20435, "handleFingerprint", 345, "93007e7600"),
-        FunctionPatch(20586, "getMetricsSampleRate", 81, "8b00007600"),
-        FunctionPatch(20588, "shouldCollectMetrics", 86, "96007e7e7600"),
-        FunctionPatch(21358, "addBreadcrumb", 242, "93007e7e7600"),
-        FunctionPatch(24043, "setUser", 104, "93007600"),
-        FunctionPatch(24044, "clearUser", 78, "93007e7e7600"),
-        FunctionPatch(24045, "setTags", 48, "93007600"),
-        FunctionPatch(24046, "setExtra", 48, "93007600"),
-        FunctionPatch(24047, "captureException", 87, "93007e7e7e7600"),
-        FunctionPatch(24048, "captureCrash", 158, "93007e7e7600"),
-        FunctionPatch(24049, "captureMessage", 90, "93007e7e7600"),
-        FunctionPatch(24050, "addFeatureFlag", 106, "93007e7e7600"),
-        FunctionPatch(24051, "addBreadcrumb", 54, "93007e7e7600"),
-        FunctionPatch(24053, "crash", 27, "93007e7e7e7600"),
-        FunctionPatch(24054, "triggerMemoryWarning", 27, "93007e7e7e7600"),
-        FunctionPatch(24055, "markCrashHandled", 74, "93007e7e7600"),
-        FunctionPatch(24062, "initSentry", 43, "93007e7e7e7600"),
-        FunctionPatch(24121, "debugLogEvent", 79, "93007e7e7e7600"),
-        FunctionPatch(24184, "track", 288, "93007600"),
-        FunctionPatch(24192, "trackNetworkAction", 135, "93007e7e7e7600"),
-        FunctionPatch(26098, "", 189, "94007e7600"),
-        FunctionPatch(26143, "isZoomedExperimentEnabled", 35, "8b00007e7e7600"),
-        FunctionPatch(33314, "trackWithMetadata", 365, "93007e7600"),
-        FunctionPatch(35577, "increment", 96, "93007600"),
-        FunctionPatch(35578, "distribution", 114, "93007e7e7600"),
-        FunctionPatch(35579, "_flush", 183, "93007e7e7e7600"),
-        FunctionPatch(40190, "hasSocialLayerStorefront", 204, "96007600"),
-        FunctionPatch(40492, "", 172, "96007600"),
-        FunctionPatch(40493, "", 150, "96007e7e7600"),
-        FunctionPatch(40494, "", 96, "96007600"),
-        FunctionPatch(40495, "", 494, "96007e7e7600"),
-        FunctionPatch(40496, "", 272, "96007600"),
-        FunctionPatch(41715, "handleAppStateChange", 158, "93007e7e7600"),
-        FunctionPatch(41716, "writeExistingEventStorage", 37, "93007e7600"),
-        FunctionPatch(41717, "track", 37, "93007e7600"),
-        FunctionPatch(41719, "", 38, "93007e7e7600"),
-        FunctionPatch(41720, "", 137, "93007e7600"),
-        FunctionPatch(41721, "", 18, "93007e7e7600"),
-        FunctionPatch(41748, "initSessionHeartbeatScheduler", 292, "93007600"),
-        FunctionPatch(41904, "recordChannelFetchStart", 181, "93007e7600"),
-        FunctionPatch(41905, "recordChannelFetchedLocal", 200, "93007600"),
-        FunctionPatch(41906, "recordChannelFetchedNetwork", 200, "93007600"),
-        FunctionPatch(43895, "surveyFetch", 198, "3d00480100001d004500010057876c0000017e7e7600"),
-        FunctionPatch(46810, "", 461, "96007e7600"),
-        FunctionPatch(46811, "", 247, "96007e7e7e7600"),
-        FunctionPatch(46815, "", 201, "96007e7600"),
-        FunctionPatch(47043, "useIsShopThisLookMobileEnabled", 101, "96007e7600"),
-        FunctionPatch(47044, "useIsShopThisLookMobileEnabled", 39, "96007e7600"),
-        FunctionPatch(47053, "_maybeFetchProductsBySkuIds", 61, "3d00480100001d004500010057876c0000017e7600"),
-        FunctionPatch(47081, "", 260, "94007600"),
-        FunctionPatch(47082, "", 107, "94007e7e7e7600"),
-        FunctionPatch(47142, "", 579, "080000007e7600"),
-        FunctionPatch(47143, "", 243, "080000007e7600"),
-        FunctionPatch(47477, "fetchGuildAffinities", 112, "3d00480100001d004500010057876c0000017600"),
-        FunctionPatch(49053, "", 312, "94007e7e7e7600"),
-        FunctionPatch(49054, "", 160, "94007e7e7e7600"),
-        FunctionPatch(49055, "", 569, "94007e7600"),
-        FunctionPatch(49056, "", 311, "94007e7e7e7600"),
-        FunctionPatch(49057, "", 301, "94007e7600"),
-        FunctionPatch(49322, "", 196, "93007600"),
-        FunctionPatch(49323, "", 103, "93007e7e7e7600"),
-        FunctionPatch(49336, "trackImpression", 398, "93007e7e7600"),
-        FunctionPatch(
-            49438, "_fetchStorefrontPricesForApplicationId", 61,
-            "3d00480100001d004500010057876c0000017e7600"
-        ),
-        FunctionPatch(49439, "_fetchStorefrontPricesForSkuIds", 61, "3d00480100001d004500010057876c0000017e7600"),
-        FunctionPatch(49519, "", 468, "94007600"),
-        FunctionPatch(49520, "", 218, "94007e7e7600"),
-        FunctionPatch(49560, "", 204, "94007600"),
-        FunctionPatch(49561, "", 87, "94007e7e7e7600"),
-        FunctionPatch(
-            49828, "_maybeFetchCollectionsWithProducts", 61,
-            "3d00480100001d004500010057876c0000017e7600"
+            15972, "", 199,
+            "40080289040237080004890206890307370801033d01480701001700440607016690052f0002010400000056b70600700106070205015e01030093006e010400014509010241235e0103016e060400014505060301ac02017f1b000018780400850708ef190100520107005e0703036e07040007450707046b2e520107020207171b0000b677040045090905bd4a52070900850808f01901005207080152010703850908f9190100560109047ff16e010506015e0303056e050400034404050679910390f802006e030405034b02010065007e7e7e7600"
         ),
         FunctionPatch(
-            49896, "", 1567,
-            "400409890301450f0300cedd3704000f450a0301e07e3704010a45130302fab94516030321b94611030483a604004512030504e19301d50612019712340300390402013904030139040401390405013904060139040701390408013b060306850503798801006e0e0601053b0c03003b0603025e0506106e090c010544080906f53b050307080701005a0705008505037a8801006f0d080907053b0703015e0506116e09070105940816020d089305b0080244050d074c6e0b0901055e0506126e090701050205a737000078ad040052050d0052050b016e09090105451709083d8945050909664f450d090af3315e0906136e100c0109450b100b49f20209a137000088ad0400520917005209050152090d026e0b0b100945090b0c676145100b0db802450b0b0e5ac93704020b5e1406146e150c01144514150f3f5e6e14141517b21514180208059405b20f021802080d9405b20602100509370403053b0d030344140d10f1080902005a090b005a0905018505047b8801006f20140d05093b05030c9322102112101f0b101e106a0b05055e0506166e090c01054505091175e26c1205093b05030d6c050501370404055e0906176e090701096c0909014514091290923704051445090913b9b1370406095e1006186e150c0110451015148e7b6c1510155e1006196e180c0110461718150b2105009110599202006e171718105e10060c6e190c01104518191637f23b1003096e10181910180208103904070244180d17ef081003005a1005005a100f015a100202850f047c8801006f10180d0f1044180d17ef080f01005a0f0a00850a047d8801006f0f180d0a0f44180d17ef080a02005a0a14005a0a09018509047e8801006f19180d090a44180d17ef080a00008509037f8801006f09180d090a940ab269173b1a030a5e1706206e180701170217d83b000088ad04005e1b06216e1b0c011b451b1b18a96152171b005e1b060f6e1b0c011b441d1b1994441c1d1ae15e1b06226e1b07011b451b1b1bdced6e1b1c1d1b52171b0152170902910983190100700a1a01181709080905005a090a00940ab2700a3b18030a5e1506206e170701150215d93b000053ad04005e1a06236e1a0c011a451a1a1c106d52151a005e1a060f6e1a0c011a441c1a1994441b1c1ae15e1a060f6e1a0c011a441a1a1d0a451a1a1ee70d6e1a1b1c1a52151a0152151902521514039014454d700a18011715145a090a013b0a030a5e1406246e150701140214da3b000078ad040052141600521413019013856a70130a011514135a0913029408b19b000000125e1206206e130701120212db3b000053ad04005e1406256e140c01144514141faf06521214005e14060f6e140c011444161419944415161ae15e14060f6e140c01144414141d0a4514142021366e14151614521214015e14060f6e140c011444161419944415161ae15e14060f6e140c01144414141d0a4514142021366e141516145212140252120f03900f31de70080a0113120f5a0908035e0806206e0f0701080208dc3b000091750800520811005e1106266e110c011145111121234a520811015e11060f6e110c011144131119944412131ae15e11060f6e110c01114411111d0a45111122610c6e1112131152081102520810035208050490058c8870050a010f08055a090504440809232d850501808801006e0f0809053b050304020879240000a589240046090b24ac420400520809005e0906276e090c0109450c0925a77b01099021f5d552090f0070090a010c090e520809026f0c0a01050845080b260909440e0827523704080e44090d10f1080801005a080e00850404818801006f20090d04083b04030b020379240000a589240046090b286b6f0400520309005e0606286e070701060106af01f5d545090b2609095206090010210673082e039008992056060800a5226f070a010706080602005a06070002078124000078ad040046080b295643040052070800020877300000e6950c0045090b2a2e07520809006f090a010508080803005a08090002098124000078ad0400460d0b2b5306050052090d0052090c016f090a0105095a080901020977300000e6950c00450b0b2a2e0752090b006f090a0105095a080902520708016f07040105075a060701520306026f03040105037603"
+            16829, "", 217,
+            "4007038904023707000489010337070101890206890307370702033d01480801001700440608016690052f0002010400000056b70600700106080205015e01030093006e010400014509010241235e0103016e060400014505060301ac02017a1e0000f38308008508077c240100520108005e0803036e0804000845080804ae73520108020208171b0000b6770400450909054336520809008509077d24010052080901520108038507077e24010052010704850907f9190100560109057ff16e010506015e0303076e050400034404050679910316f802006e030405034b02010065007e7e7e7600"
         ),
-        FunctionPatch(50253, "", 337, "8b00007600"),
-        FunctionPatch(50277, "_fetchCurrentQuests", 61, "3d00480100001d004500010057876c0000017e7600"),
-        FunctionPatch(50278, "_sendHeartbeat", 61, "3d00480100001d004500010057876c0000017e7600"),
-        FunctionPatch(50286, "_fetchClaimedQuests", 61, "3d00480100001d004500010057876c0000017e7600"),
-        FunctionPatch(50287, "_fetchQuestToDeliver", 61, "3d00480100001d004500010057876c0000017e7600"),
-        FunctionPatch(50288, "_fetchEarnedQuestToDeliver", 61, "3d00480100001d004500010057876c0000017e7600"),
-        FunctionPatch(50875, "openPremiumUpsellActionSheet", 107, "93007e7e7600"),
-        FunctionPatch(51395, "openPremiumModal", 82, "93007e7e7600"),
-        FunctionPatch(52519, "", 446, "93007e7e7600"),
-        FunctionPatch(52520, "", 221, "93007e7600"),
+        FunctionPatch(19159, "report", 203, "93007e7e7e7600"),
+        FunctionPatch(19188, "recordStart", 103, "93007e7e7e7600"),
+        FunctionPatch(19190, "recordEnd", 199, "93007e7e7e7600"),
+        FunctionPatch(19192, "set", 163, "93007600"),
+        FunctionPatch(19200, "record", 147, "93007e7e7e7600"),
+        FunctionPatch(19231, "resumeTracing", 150, "93007e7e7600"),
+        FunctionPatch(19232, "mark", 124, "93007600"),
+        FunctionPatch(19233, "markAndLog", 118, "93007e7e7600"),
+        FunctionPatch(19234, "addImportLogDetail", 86, "93007e7e7600"),
+        FunctionPatch(19235, "markWithDelta", 107, "93007e7e7e7600"),
+        FunctionPatch(19236, "markAt", 187, "93007e7e7e7600"),
+        FunctionPatch(19237, "addDetail", 131, "93007e7e7e7600"),
+        FunctionPatch(19240, "setServerTrace", 28, "93007600"),
+        FunctionPatch(20772, "handleFingerprint", 345, "93007e7600"),
+        FunctionPatch(20923, "getMetricsSampleRate", 81, "8b00007600"),
+        FunctionPatch(20925, "shouldCollectMetrics", 86, "96007e7e7600"),
+        FunctionPatch(21696, "addBreadcrumb", 242, "93007e7e7600"),
+        FunctionPatch(23808, "disableActivityHostLeftNitroUpsell", 23, "96007e7600"),
+        FunctionPatch(24395, "setUser", 104, "93007600"),
+        FunctionPatch(24396, "clearUser", 78, "93007e7e7600"),
+        FunctionPatch(24397, "setTags", 48, "93007600"),
+        FunctionPatch(24398, "setExtra", 48, "93007600"),
+        FunctionPatch(24399, "captureException", 87, "93007e7e7e7600"),
+        FunctionPatch(24400, "captureCrash", 162, "93007e7e7600"),
+        FunctionPatch(24401, "captureMessage", 90, "93007e7e7600"),
+        FunctionPatch(24402, "addFeatureFlag", 106, "93007e7e7600"),
+        FunctionPatch(24403, "addBreadcrumb", 54, "93007e7e7600"),
+        FunctionPatch(24405, "crash", 27, "93007e7e7e7600"),
+        FunctionPatch(24406, "triggerMemoryWarning", 27, "93007e7e7e7600"),
+        FunctionPatch(24407, "markCrashHandled", 74, "93007e7e7600"),
+        FunctionPatch(24414, "initSentry", 43, "93007e7e7e7600"),
+        FunctionPatch(24473, "debugLogEvent", 79, "93007e7e7e7600"),
+        FunctionPatch(24536, "track", 288, "93007600"),
+        FunctionPatch(24544, "trackNetworkAction", 135, "93007e7e7e7600"),
+        FunctionPatch(26452, "parseAvatarDecorationData", 189, "94007e7600"),
+        FunctionPatch(26497, "isZoomedExperimentEnabled", 35, "8b00007e7e7600"),
+        FunctionPatch(32928, "ageEligibleForPremiumUpsell", 90, "96007e7600"),
+        FunctionPatch(33733, "trackWithMetadata", 365, "93007e7600"),
+        FunctionPatch(36002, "increment", 96, "93007600"),
+        FunctionPatch(36003, "distribution", 114, "93007e7e7600"),
+        FunctionPatch(36004, "_flush", 183, "93007e7e7e7600"),
+        FunctionPatch(40558, "hideInlineGuildCapUpsell", 56, "93007e7600"),
+        FunctionPatch(40655, "hasSocialLayerStorefront", 204, "96007600"),
+        FunctionPatch(40682, "isOnSocialLayerStorefrontPage", 161, "96007e7600"),
+        FunctionPatch(40951, "useGuildShopVisibleInGuild", 172, "96007600"),
+        FunctionPatch(40952, "useGuildShopVisibleInGuild", 150, "96007e7e7600"),
+        FunctionPatch(40953, "isGuildShopVisibleInGuild", 96, "96007600"),
+        FunctionPatch(40954, "useGuildShopPreviewVisible", 494, "96007e7e7600"),
+        FunctionPatch(40955, "useGuildShopPreviewVisible", 272, "96007600"),
+        FunctionPatch(42008, "useShouldShowPremiumTrialUserSettingsAvatarBadge", 114, "96007e7600"),
+        FunctionPatch(42009, "useShouldShowPremiumTrialUserSettingsAvatarBadge", 114, "96007e7600"),
+        FunctionPatch(42212, "handleAppStateChange", 158, "93007e7e7600"),
+        FunctionPatch(42213, "writeExistingEventStorage", 37, "93007e7600"),
+        FunctionPatch(42214, "track", 37, "93007e7600"),
+        FunctionPatch(42216, "", 38, "93007e7e7600"),
+        FunctionPatch(42217, "", 137, "93007e7600"),
+        FunctionPatch(42218, "", 18, "93007e7e7600"),
+        FunctionPatch(42245, "initSessionHeartbeatScheduler", 292, "93007600"),
+        FunctionPatch(42401, "recordChannelFetchStart", 181, "93007e7600"),
+        FunctionPatch(42402, "recordChannelFetchedLocal", 200, "93007600"),
+        FunctionPatch(42403, "recordChannelFetchedNetwork", 200, "93007600"),
+        FunctionPatch(44393, "surveyFetch", 198, "3d00480100001d004500010018306c0000017e7e7600"),
+        FunctionPatch(46252, "DoubleTapNitroAlert", 904, "94007e7600"),
+        FunctionPatch(46253, "DoubleTapNitroAlert", 532, "94007e7600"),
+        FunctionPatch(47318, "useShouldDisplayGuildTag", 461, "96007e7600"),
+        FunctionPatch(47319, "useShouldDisplayGuildTag", 247, "96007e7e7e7600"),
+        FunctionPatch(47323, "shouldDisplayGuildTag", 201, "96007e7600"),
+        FunctionPatch(47551, "useIsShopThisLookMobileEnabled", 101, "96007e7600"),
+        FunctionPatch(47552, "useIsShopThisLookMobileEnabled", 39, "96007e7600"),
+        FunctionPatch(47561, "_maybeFetchProductsBySkuIds", 61, "3d00480100001d004500010018306c0000017e7600"),
+        FunctionPatch(47589, "ProfileFrame", 260, "94007600"),
+        FunctionPatch(47590, "ProfileFrame", 107, "94007e7e7e7600"),
+        FunctionPatch(47650, "useBadges", 579, "080000007e7600"),
+        FunctionPatch(47651, "useBadges", 243, "080000007e7600"),
+        FunctionPatch(47985, "fetchGuildAffinities", 112, "3d00480100001d004500010018306c0000017600"),
+        FunctionPatch(49519, "isPlayingGameActivity", 99, "96007600"),
+        FunctionPatch(49524, "GuildTagBadge", 312, "94007e7e7e7600"),
+        FunctionPatch(49525, "GuildTagBadge", 160, "94007e7e7e7600"),
+        FunctionPatch(49526, "BaseGuildTagChiplet", 569, "94007e7600"),
+        FunctionPatch(49527, "BaseGuildTagChiplet", 311, "94007e7e7e7600"),
+        FunctionPatch(49528, "GuildTagChiplet", 301, "94007e7600"),
+        FunctionPatch(49812, "GameProfileShopCarousel", 196, "93007600"),
+        FunctionPatch(49813, "GameProfileShopCarousel", 103, "93007e7e7e7600"),
+        FunctionPatch(49826, "trackImpression", 398, "93007e7e7600"),
         FunctionPatch(
-            53481, "_fetchSocialLayerStorefrontConfig", 61,
-            "3d00480100001d004500010057876c0000017e7600"
+            49928, "_fetchStorefrontPricesForApplicationId", 61,
+            "3d00480100001d004500010018306c0000017e7600"
         ),
+        FunctionPatch(49929, "_fetchStorefrontPricesForSkuIds", 61, "3d00480100001d004500010018306c0000017e7600"),
+        FunctionPatch(50009, "WrappedProfileEffect", 468, "94007600"),
+        FunctionPatch(50010, "WrappedProfileEffect", 218, "94007e7e7600"),
+        FunctionPatch(50050, "Nameplate", 204, "94007600"),
+        FunctionPatch(50051, "Nameplate", 87, "94007e7e7e7600"),
+        FunctionPatch(50060, "SlayerStorefrontItemCard", 1435, "94007e7600"),
+        FunctionPatch(50061, "SlayerStorefrontItemCard", 653, "94007e7600"),
         FunctionPatch(
-            53485, "fetchSocialLayerStorefrontSkuForApplication", 49,
-            "3d00480100001d004500010057876c0000017e7600"
-        ),
-        FunctionPatch(53703, "isListeningOnSpotify", 148, "8b00007e7e7e7600"),
-        FunctionPatch(55262, "SpotifyTrack", 51, "96007e7e7e7600"),
-        FunctionPatch(
-            55281, "subscribePlayerStateNotifications", 118,
-            "3d00480100001d004500010057876c0000017e7e7600"
-        ),
-        FunctionPatch(55286, "fetchIsSpotifyProtocolRegistered", 101, "96007e7600"),
-        FunctionPatch(57893, "", 173, "080000007e7600"),
-        FunctionPatch(58817, "", 365, "93007e7600"),
-        FunctionPatch(58818, "", 254, "93007e7e7600"),
-        FunctionPatch(58829, "", 1928, "93007e7e7e7600"),
-        FunctionPatch(58830, "", 1180, "93007e7600"),
-        FunctionPatch(61076, "", 328, "93007600"),
-        FunctionPatch(62072, "", 1713, "93007e7600"),
-        FunctionPatch(62073, "", 1213, "93007e7600"),
-        FunctionPatch(62187, "", 731, "93007e7e7e7600"),
-        FunctionPatch(62188, "", 477, "93007e7600"),
-        FunctionPatch(62189, "", 735, "93007e7e7e7600"),
-        FunctionPatch(62190, "", 349, "93007e7600"),
-        FunctionPatch(62264, "isVirtualCurrencyEnabled", 47, "34020001012103f5d59600520100007e7e7601"),
-        FunctionPatch(62265, "useVirtualCurrencyMobileEnabled", 47, "34020001012103f5d59600520100007e7e7601"),
-        FunctionPatch(62388, "", 1124, "93007600"),
-        FunctionPatch(62389, "", 555, "93007e7e7e7600"),
-        FunctionPatch(62405, "", 732, "93007600"),
-        FunctionPatch(62406, "", 265, "93007e7600"),
-        FunctionPatch(
-            62639, "", 9077,
-            "340b0040312c890e013b180b003b0a0b025e0c0a1893036e0d18030c440c0d00128c001e0100006e0c0c0d0044170e01f637310017440d0e02493731010d44280e03863731022845330e04999a3731033345250e053ea93731042545450e061e8c3731054545440e079d9637310644452e0e084fa145260e096bd53731072645110e0ab89744430e0ba83731084345510e0ce07e37310951451e0e0dfab937310a1e45200e0e17d1451f0e0feb873b130b015e0e0a106e0e13030e6c1c0e0337310b1c5e0e0a376e0f13030e3b0e0b126e3d0f030e5e0e0c00d5120e3d5e0e0c01d50a0e1f5e0f0c02ae2b020ea637000078ad0400520e1f00520e3d019700610c003d8b0001610c001f8b0002610c000e100f0e5e0e0a386e0e13030e6e0e0e030f45350e108201453c0e11dc2e45120e125b3e453b0e13c59b453a0e14f4925e0e0a396e0e13030e6c0e0e0344160e15475e0e0a196e0f18030e450e0f1647f26c0e0e0f451d0e17107037310c1d5e0f0c033d2f48102f182200440e10197c9153bf2701006e0e0e1053d30e0f0e5e140c035e100c04ae293b0f0b0b080e01005a0e0f00850f0ba6c001008b0003610c000e8b0004610c000f10100f10140e5e0e0a116e0f18030e440e0f1af56f340e0f141037310d34940416093404930fb00809440f341b4c440e171b4c17070f0e39310e075e0f0c0548102f182200440e10197c6e0e0e1053d30a0f0e5e140c05ae183b0f0b0a080e01005a0e0f008b0005610c000e10140e5e0f0c06440e171b4cd50a0f0e5e100c07ae1f850e31a7c00100440f171b4c8b0006610c000f8b0007610c000e10100e5e0e0a116e0f18030e450e0f1c5f5f6f0e0e0f141045370e1de5e537310f3745420e1eb8ac373110425e0e0a3a6e1018030e450f101f23f0440e171b4c6e3e0f100e3731113e5e0e0a3b6e1018030e450f102052f0440e171b4c6e380f100e373112385e0f0c08440e171b4cd50a0f0e5e100c09ae27010e7a37f5d5440f171b4c520e0f00440f171b4c8b0008610c000f8b0009610c000e10100e5e0e0a3c6e0f18030e450e0f214af26e540e0f10373113545e0e0a286e1013030e450f1022e7f016090d04930eb00809440e0d1b4c70550f10280e17373114555e0e0c0ad5120e285e0e0c0bd50a0e175e100c0cae3dcf080428d1080417040eae19040f4415171b4c081401005a1415005c0f142801100e0f8b000a610c00288b000b610c00178b000c610c000e10100e5e0e0a3d6e0f18030e450e0f2304f29119e46902006f0e0e0f10195e0e0a3e6e0f13030e440e171b4c6e290f030e5e0f0c0d48102f182200440e10197c6e0e0e1053d30e0f0e5e140c0d5e100c0eae293b0f0b0c080e01005a0e0f00850f0ba8c001008b000d610c000e8b000e610c000f10100f10140e5e0e0a116e0f18030e450e0f1c5f5f6f0f0e0f141045360f24aee1451a0f2513c345240f2614c3453f0f27cca43731153f45390f28c1e137311639454a0f292bda3731174a452b0f2aabe1450e0f2b67da45150f2c1d5e45400f2db6e13731184045140f2ecc3c45100f2fade15e0f0c0fd5170f1a5e1b0c10440f171b4cd50a1b0f5e2a0c11ae4a5e0f0a3f6e2118030f451b21306c58020f2137000078ad04004422171b4c520f2200520f1a016e0f1b210f8b000f610c001a441a171b4c8b0010610c001a8b0011610c000f102a0f5e0f0a236e0f13030f6f1a0f0333155e150c12481b2f182200440f1b197c6e0f0f1b53d30a150f5e220c12ae183b150b07080f01005a0f15008b0012610c000f10220f5e150c13440f171b4cd50e150f5e210c145e1b0c15ae36850f31a9c001004423171b4c081501005a1523004423171b4c8b0013610c00238b0014610c000f8b0015610c0015101b1510210f5e0f0a116e1518030f450f15319d0570150f1522211b5e1b0c1648212f182200440f21197c6e0f0f2153d30a1b0f5e210c16ae16020fdd010000cb072d008b0016610c000f10210f5e0f0a406e1b18030f450f1b3236f06e230f1b21373119235e0f0c17d51b0f235e1b0c18440f171b4cd50e1b0f5e210c195e1b0c1aae41850f31aac001004427171b4c082202005a2227005a2223018b0017610c00234423171b4c8b0018610c00238b0019610c000f8b001a610c0022101b2210210f3b490b04440f4933f06f0f0f49211b5e0f0c1bd5220f1a5e0f0c1cd51a0f155e0f0c1dd5120f145e0f0c1ed50a0f105e410c1fae505e0f0a426e2118030f451b213436aa020fba4f000078ad0400520f1400520f1001700f1b211a150f8b001b610c001a8b001c610c00158b001d610c00148b001e610c00108b001f610c000f10410f37311a419314b2062610140e5e0f0c20d51a0f335e0f0c21d5120f145e0f0c22d50a0f175e100c23ae37020f8537000088ad0400520f1700520f3301520f14028b0020610c00338b0021610c00148b0022610c00178b0023610c000f10100f5e0f0a436e0f13030f6e100f0310451410353d89450f1036664f451a1037f3311809040f39311b095e100c24d51a100f5e100c25d512101a5e100c26d50a10145e150c27ae370210a137000088ad04005210140052100f0152101a028b0024610c000f8b0025610c001a8b0026610c00148b0027610c00101015105e100a446e141803104510143849f26e1010141545461039676137311c464530103a5e2c4515103bbc934410493cf26e2c1049044410493cf26e2d1049045e140c28481a2f18220044101a197c6e10101a53d30a14105e1b0c28ae183b140b0d081001005a1014008b0028610c0010101b105e140c294410171b4cd50a14105e1a0c2aae1f851031abc001004414171b4c8b0029610c00148b002a610c0010101a105e100a116e141803104410141af56f5010141b1a37311d505e140c2b4410171b4cd51214105e100c2cd50a10505e1a0c2dae360210173b000078ad0400521050004414171b4c521014014414171b4c8b002b610c00148b002c610c00508b002d610c0010101a105e100a456e141803104510143d657a6e1010141a5e140c2e481a2f18220044101a197c6e10101a53d30a14105e210c2eae183b140b08081001005a1014008b002e610c00101021105e100c2fd50e10505e1b0c305e1a0c31ae2c851031acc00100081401005a1450008b002f610c00508b0030610c00108b0031610c0014101a14101b105e100a116e141803104410141af570141014211b1a5e100c32d52010075e1a0c33160514049310b008054410143e97d50a1a105e100c34ae4f16051404931ab019054422143e974421223f2d851b31adc001006e1a21221bd1081a04081a00008b0032610c000716051404931bb00805441b143e978b0033610c001b8b0034610c001a10101a100507b0180518060414b20e0644101040a397001c0610001005065e100a476e1a18031045141a4179ef4410171b4c6e14141a105e100a486e1a18031045101a425dbe6f10101a190744141440a397011c4c1401b0064c104c105e100a496e1418031045101443a2e86e48101419b2074818480434101b05b0061b101b4cb0061b101b485e100a4a6e141803104510144445f1701010144c4805454e1045ce5e37311e4e454f1046b88d37311f4f45141047b88f3731201444104948f46e191049013b100b038b00026f10100319005e1910005e101001373121105e1a0c3548212f182200441021197c6e10102153d30a1a105e270c35ae13851031aec001008b0035610c00101027105e100a4b6e1a18031045101a4918f16c10101a4547104a52b9454d104b74693731224d5e100c36d51210075e100c37d50a10055e210c38ae2c0210bb4f000078ad040052100700521005018b0036610c00078b0037610c00058b0038610c00101021105e100a4c6e1a18031045101a4c6af26e10101a214522104d4c83373123224521104e6ea3373124215e100c39d51a10225e100c3ad51210215e100c3bd50a101d5e1a0c3cae28851031afc001008b0039610c00228b003a610c00218b003b610c001d8b003c610c0010101a105e100c3dd52a104f5e100c3ed522104e5e100c3fd51a10205e100c40d512101a5e100c41d50a10145e1d0c42ae4d0210bc4f000091750800521020005210140152104e0252104f0352101a048b003d610c004f8b003e610c004e8b003f610c00208b0040610c001a8b0041610c00148b0042610c0010101d105e100a4a6e1a18031045101a4f44f16e10101a1d451a1050238d45321051a99137312532452010528c6a454b1053cd093731264b45231054248d3b100b0e451d10550f1017061a1d3931270645101056dd585e1d0c43d50a1d515e520c44ae1a851d31b0c001008b0043610c00518b0044610c001d10521d373128525e1d0c45d50a1d1e5e510c46ae1a851d31b1c001008b0045610c001e8b0046610c001d10511d373129515e1d0c47d6ae0000001d0d5e1d0c48d6a30000001d465e1d0c49d6980000001d345e1d0c4ad68d0000001d555e1d0c4bd6820000001d335e1d0c4cd5771d545e1d0c4dd56f1d285e1d0c4ed5671d525e1d0c4fd55f1d515e1d0c50d5571d095e1d0c51d54f1d265e1d0c52d5471d4a5e1e0c53451d1c57e47ed5391e1d5e1e0c54451d1c581ca1d52b1e1d5e1e0c55451d1c59103dd51d1e1d5e1d0c56d5151d255e1d0c57d50d1d175e1d0c58af9f000000851e31b2c001008b0047610c000d8b0048610c00468b0049610c00348b004a610c00558b004b610c00338b004c610c00548b004d610c00288b004e610c00528b004f610c00518b0050610c00098b0051610c00268b0052610c004a454a1c57e47e8b0053610c004a454a1c581ca18b0054610c004a454a1c59103d8b0055610c004a8b0056610c00258b0057610c00178b0058610c001e101d1e5e1e0c59d5351e075e1e0c5ad52d1e065e4a0c5b451e1c59103dd51f4a1e5e4a0c5c441e171b4cd5124a1e5e1e0c5dd50a1e505e4a0c5eae41851e31b3c001008b0059610c00078b005a610c000645511c59103d8b005b610c00514451171b4c8b005c610c00518b005d610c00508b005e610c001e104a1e5e500c5f48512f182200441e51197c6e1e1e5153d30a501e5e540c5fae385e1e0a1e6e1e18031e44511e5a944450515be15e1e0a1e6e1e18031e441e1e5c0a451e1e5d00276e1e50511e8b005f610c001e10541e5e1e0c60d50a1e4d5e520c61ae1a851e31b4c001008b0060610c004d8b0061610c001e10521e5e1e0c62d50a1e1d5e510c63ae176c1e1d038b0062610c001d8b0063610c001e10511e5e1e0c64d5121e525e1e0c65d50a1e515e1e0c66ae480250874b000084ba0c00525054013b560b143b550b050154bd4f29ab52545201525451026f5456035554525054028b0064610c00528b0065610c00518b0066610c0050101e5017061a105e100c67d699000000104f5e100c68d68e000000104e5e1a0c6916080d049310b0080844100d1b4cd5751a105e100c6ad56d10465e100c6bd56510345e100c6cd55d10285e100c6dd555104d5e100c6ed54d104c5e100c6fd54510065e100c70d53d10075e100c71d535104a5e100c72d52d10055e100c73d52510485e100c74d51d101e5e100c75d51510175e100c76d50d10145e1a0c77afe6040000081001005a101e00b388010000035e510c7848522f182200445052197c6e50505253d30a51505e550c78ae385e500a1e6e501803504452505a944451525be15e500a1e6e501803504450505c0a4550505e040a6e505152508b0078610c00501055505e500c79d512504e5e500c7ad50a504d5e540c7bae21855031b5c001008b0079610c004e8b007a610c004d8b007b610c00501054505e500c7cd52750465e500c7dd51f50065e500c7ed51750075e510c7f4450171b4cd50a51505e520c80ae5a3b560b143b510b1c0250be4f000053ad04004457171b4c525057005250060152500702525046036f50560351508b007c610c00468b007d610c00068b007e610c00074451171b4c8b007f610c00518b0080610c00501052505e500c81d51a504e5e500c82d51250545e500c83d50a50525e510c84ae500250874b000097642400525055013b570b143b560b050155bd4f29ab52555401525552027055570356554e525055028b0081610c004e8b0082610c00548b0083610c00528b0084610c00501051504450105fc76e50501051b3a101000048d09b01000004345e510c8548522f182200445052197c6e50505253d30a51505e550c85ae385e500a1e6e501803504452505a944451525be15e500a1e6e501803504450505c0a45505060e9a36e505152508b0085610c00501055505e500c86d512504f5e500c87d50a504d5e540c88ae21855031b6c001008b0086610c004f8b0087610c004d8b0088610c005010545016080d049351b0080844510d1b4c5e500c89d52a50465e500c8ad52250345e500c8bd51a50285e500c8cd51250515e500c8dd50a50175e520c8eae5b3b570b143b560b1d0250bf4f00009175080052501700525034015250280252505103525046046f50570356508b0089610c00468b008a610c00348b008b610c00288b008c610c00518b008d610c00178b008e610c00501052505e500c8fd51a504f5e500c90d51250545e500c91d50a50525e510c92ae500250874b000006ef0c00525055013b570b143b560b050155bd4f29ab52555401525552027055570356554f525055028b008f610c004f8b0090610c00548b0091610c00528b0092610c00501051504450105fc76e50501051b328010000035e510c9348522f182200445052197c6e50505253d30a51505e540c93ae385e500a1e6e501803504452505a944451525be15e500a1e6e501803504450505c0a45505061ad0e6e505152508b0093610c00501054505e500c94d512504d5e500c95d50a50145e530c96ae21855031b7c001008b0094610c004d8b0095610c00148b0096610c00501053505e500c97d50a504a5e520c98ae176c504a038b0097610c004a8b0098610c00501052505e500c99d51a50535e500c9ad51250525e500c9bd50a50145e510c9cae500250874b0000e9bb0c00525054013b560b143b550b050154bd4f29ab525453015254520270545603555414525054028b0099610c00538b009a610c00528b009b610c00148b009c610c00501051504450105fc76e505010518b0067610c004f8b0068610c004e16080d04934eb00808444e0d1b4c8b0069610c004e8b006a610c00468b006b610c00348b006c610c00288b006d610c004d8b006e610c004c8b006f610c00068b0070610c00078b0071610c004a8b0072610c00058b0073610c00488b0074610c001e8b0075610c00178b0076610c00148b0077610c0010101a105e100c9dd52210235e100c9ed51a10205e100c9fd51210195e100ca0d50a101a5e1e0ca1ae5a0210c04f00009175080052101900521023015e480a306e4813034844484862d945484863d2695210480252101a03521020048b009d610c00238b009e610c00208b009f610c00198b00a0610c001a8b00a1610c0010101e105e100a596e19180310451019649df16e1910191e37312a195e100a4b6e1e18031045101e65108c6e10101e1f451f106601934523106751b94520106836dc5e100ca2d516104b5e100ca3d50e10195e480ca45e1e0ca5ae37851031b8c00100084a02005a4a19005a4a4b018b00a2610c004b8b00a3610c00198b00a4610c00108b00a5610c004a101e4a10481045104969327c6f101049481e5e100a4b6e1e18031045101e6a19f1701e101e1947235e100ca6d52210215e100ca7d51a10325e100ca8d51210195e100ca9d50a10145e230caaae2f851031b9c001008b00a6610c00218b00a7610c00328b00a8610c00198b00a9610c00148b00aa610c0010102310d0340d00000417d02d0d000004345e100cabd50a10465e320cacae1d0110bf01f5d5521046008b00ab610c00468b00ac610c001010321037312b325e100cadd60901000010325e470cae16050d049310b0080544100d1b4cd6f000000047105e100cafd6e500000010465e100cb0d6da00000010345e100cb1d6cf00000010455e100cb2d6c400000010445e100cb3d6b900000010335e100cb4d6ae00000010285e100cb5d6a300000010095e100cb6d69800000010075e100cb7d68d00000010265e100cb8d68200000010435e100cb9d57710425e100cbad56f10415e100cbbd56710405e100cbcd55f103f5e100cbdd557103e5e100cbed54f10395e100cbfd54710375e470cc045101c6b093cd53947105e470cc145101c6cbfc1d52b47105e470cc245101c59103dd51d47105e100cc3d51510255e100cc4d50d10175e100cc5afde0000008b00ad610c003216050d049347b0080544470d1b4c853231bac001008b00ae610c00478b00af610c00468b00b0610c00348b00b1610c00458b00b2610c00448b00b3610c00338b00b4610c00288b00b5610c00098b00b6610c00078b00b7610c00268b00b8610c00438b00b9610c00428b00ba610c00418b00bb610c00408b00bc610c003f8b00bd610c003e8b00be610c00398b00bf610c003745391c6b093c8b00c0610c003945391c6cbfc18b00c1610c003945391c59103d8b00c2610c00398b00c3610c00258b00c4610c00178b00c5610c00321010325e320cc6d52232345e320cc7d51a32385e320cc8d51232375e320cc9d50a32175e320ccaae2f853131bbc001008b00c6610c00348b00c7610c00388b00c8610c00378b00c9610c00178b00ca610c00311032315e370a5eb010266e311803374531316d5226ae076e311303379339b206261039369338b2062610382a9337b20f261805042b9337b2060510372b9336b20f261805040e9336b2060510360e5e2b0ccb16053304930eb00905450e336e7086d5122b0e5e0e0cccd50a0e0f5e2b0ccdae5d16053304933eb00905453e336e70869505930ed521053e3b400b145e3e0a5f6e3f13033e013ec14ff5d5523e0f006f0e40033f3e16053304933eb00905453e336e70868b00cb610c003e8b00cc610c000f8b00cd610c000e102b0e5e0e0cced56d0e355e0e0ccfd5650e3d5e0e0cd0d55d0e3c5e0e0cd1d5550e3b5e0e0cd2d54d0e335e0e0cd3d5450e265e0e0cd4d53d0e3a5e0e0cd5d5350e395e0e0cd6d52d0e385e0e0cd7d5250e375e0e0cd8d51d0e365e0e0cd9d5150e2b5e0e0cdad50d0e175e0f0cdbafbb0000003b3f0b145e0e0a606e3e13030e020ec24f0000051b0900520e1700520e3301520e3d02520e3903520e3804520e3705520e3606520e2607520e3508520e3c09520e3b0a520e3a0b520e2b0c6f0e3f033e0e8b00ce610c00358b00cf610c003d8b00d0610c003c8b00d1610c003b8b00d2610c00338b00d3610c00268b00d4610c003a8b00d5610c00398b00d6610c00388b00d7610c00378b00d8610c00368b00d9610c002b8b00da610c00178b00db610c000e100f0e5e0e0cdcd5590e355e0e0cddd5510e0d5e0e0cded5490e345e0e0cdfd5410e335e0e0ce0d5390e265e0e0ce1d5310e325e2b0ce2450e1c6f4799d5232b0e5e2b0ce3450e1c704899d5152b0e5e0e0ce4d50d0e175e0e0ce5aff8000000132b26b19b000000263b380b165e360a616e36130336443736712845361c6f4799083903005a39360016053304933ab00905453a336e7086b2093a453a1c70489902368124000078ad04005a393a015a393502523639006c3a3203083902005a393a003b3c0b145e3a0a626e3b13033a023ac34f000053ad0400523a1700523a3401523a3302523a0d036f3a3c033b3a5a393a01523639016f2b380337368b00dc610c00358b00dd610c000d8b00de610c00348b00df610c00338b00e0610c00268b00e1610c003245321c6f47998b00e2610c003245321c7048998b00e3610c00328b00e4610c00178b00e5610c002b100e2b932bb20626102b2a932ab20d26d1071104101124102a115e110ce6d50a11155e240ce7ae1d0111bf01f5d5521115008b00e6610c00158b00e7610c00111024115e110ce8d54211315e110ce9d53a11305e110cead532112e5e110cebd52a11285e110cecd522112b5e110cedd51a112a5e110ceed51211245e110cefd50a11175e110cf0ae743b320b140215c44f0000f7790800521517005215280152152e0252152b0352152a0452153005521524066f15320331158b00e8610c00318b00e9610c00308b00ea610c002e8b00eb610c00288b00ec610c002b8b00ed610c002a8b00ee610c00248b00ef610c00178b00f0610c0015101115b20807972ab2102618070429972ab007073b2a0b103b150b0f1e1616155e150cf1d512152a5e150cf2d50a15165e240cf3ae2c0215cf06000078ad040052152a00521516018b00f1610c002a8b00f2610c00168b00f3610c00151024155e160cf445151c72698ed51216155e150cf5d50a15245e160cf6ae32452a1c72698e081502005a152a005a152401452a1c72698e8b00f4610c002a8b00f5610c00248b00f6610c001510161516070d049324b0080744240d1b4c5e0d0cf7d53a0d295e0d0cf8d5320d285e0d0cf9d52a0d095e0d0cfad5220d265e0d0cfbd51a0d255e0d0cfcd5120d245e0d0cfdd50a0d175e150cfeae713b2b0b143b2a0b17010dc54f0f00520d2900520d1701520d2802520d2403520d0904520d2505520d2606520d2c076f0d2b032a0d8b00f7610c00298b00f8610c00288b00f9610c00098b00fa610c00268b00fb610c00258b00fc610c00248b00fd610c00178b00fe610c000d10150d5e0d0cffd5100d108c00000100005d170c00ae1a6c0d10038b00ff610c00108c0000010000610c000d10170d8c00010100005d0d0c00d6d00000000d238c02020100005d0d0c02d6bf0000000d098c02030100005d0d0c02d6ae0000000d228c02040100005d0d0c02d69d0000000d218c02050100005d0d0c02d68c0000000d208c02060100005d0d0c02d57b0d1f8c02070100005d0d0c02d56d0d1e8c02080100005d0d0c02d55f0d1d8c02090100005d100c02450d1c738fd9d54b100d8c020a0100005d0d0c02d53d0d1b8c020b0100005d0d0c02d52f0d1a8c020c0100005d0d0c02d5210d198c020d0100005d0d0c02d5130d148c020e0100005d100c02af12020000b00c1b6c0d1d03af770100003b260b143b250b060224b03a000078ad0400522427003b290b165e270a636e2718032745282774e55d022a8124000078ad040045271c738fd9522a27005e270a646e27180327452c2775e653022bc64f000078ad0400522b1900932eb20709902e5c6701279021f5d5522b2e016f2c26032c2b082b02005a2b2c00022cc74f0000c2e92c00522c2d00022e480a0000f71c2d0048302f761500442f3077ac6f302f301401442f1a40a3232f302f8b016421012f01902f23081e2f012f522e2f01522c2e016f2c2603252c5a2b2c01522a2b016f2b2903252a082a03005a2a2b005e2b0a616e2b13032b442c2b7128022bf22f000053ad0400522b1f00522b2001522b1e025e2e0a656e2e18032e452f2e789c72012e0308f5d5522e19006f2e26032f2e522b2e036f2b26032c2b5a2a2b015e2b0a666e2c13032b022bc84f000053ad0400522b2d00522b2201522b2102522b23036f2b26032c2b5a2a2b0252272a006f2729032827522427016f0d26032524610c00238c0002010000610c00098c0003010000610c00228c0004010000610c00218c0005010000610c00208c0006010000610c001f8c0007010000610c001e8c0008010000610c001d451c1c738fd98c0009010000610c001c8c000a010000610c001b8c000b010000610c001a8c000c010000610c00198c000d010000610c00148c000e010000610c000d10100d8c000f0100005d0d0c00d51e0d178c01100100005d0d0c01d5100d108c01110100005d140c01ae4c3b190b165e0d0a636e0d18030d45180d74e55d010d9021f5d5081a02005a1a17005a1a1001520d1a006f0d1903180d610c00178c0010010000610c00108c0011010000610c000d10140d8c00120100005d0d0c00d52c0d168c01130100005d0d0c01d51e0d158c01140100005d0d0c01d5100d148c01150100005d100c01ae533b180b163b170b06020d8124000078ad0400520d1600081902005a1915005a191401520d19016f0d1803170d610c00168c0013010000610c00158c0014010000610c00148c0015010000610c000d10100d8c00160100005d0d0c00d52c0d128c01170100005d0d0c01d51e0d118c01180100005d0d0c01d5100d108c01190100005d0d0c01ae5d3b140b165e0a0a616e0a13030a44130a7128020a8124000078ad0400520a1200081502005a1511005a151001520a15016f0a1403130a610c00128c0017010000610c00118c0018010000610c00108c0019010000610c000a100d0a8c001a0100005d0a0c00d52c0a0f8c011b0100005d0a0c01d51e0a0e8c011c0100005d0a0c01d5100a0d8c011d0100005d0a0c01ae4f3b110b163b100b15010b9021f5d5081203005a120f005a120e015a120d02520b12006f0b1103100b610c000f8c001b010000610c000e8c001c010000610c000d8c001d010000610c000b100a0b760a7604"
-        ),
-        FunctionPatch(62665, "", 393, "93007e7600"),
-        FunctionPatch(
-            64307, "useProfileTabIndices", 79,
-            "8b04018c02ffffffff890501100104100002b209058b01021000048906020205df50000088ad040052050000100001100302b20a061f00010410030189060352050301b20606100202520502027605"
-        ),
-        FunctionPatch(64351, "", 1931, "94007e7e7e7600"),
-        FunctionPatch(64359, "", 130, "94007e7e7600"),
-        FunctionPatch(64360, "", 72, "94007600"),
-        FunctionPatch(64371, "", 401, "93007e7600"),
-        FunctionPatch(64372, "", 110, "93007e7e7600"),
-        FunctionPatch(64376, "AddToWishlistItemCard", 417, "93007e7600"),
-        FunctionPatch(64470, "", 405, "93007e7600"),
-        FunctionPatch(64471, "", 183, "93007e7e7e7600"),
-        FunctionPatch(64497, "", 498, "93007e7e7600"),
-        FunctionPatch(64498, "", 260, "93007600"),
-        FunctionPatch(65303, "", 1101, "93007e7600"),
-        FunctionPatch(65304, "", 564, "93007600"),
-        FunctionPatch(65598, "logReadyPayloadReceived", 509, "93007e7600"),
-        FunctionPatch(65599, "getConnectionPath", 101, "93007e7600"),
-        FunctionPatch(65600, "getReadyPayloadByteSizeAnalytics", 892, "93007600"),
-        FunctionPatch(65601, "logGatewayConnected", 150, "93007600"),
-        FunctionPatch(67883, "handleTrack", 257, "93007e7600"),
-        FunctionPatch(68674, "", 449, "93007e7600"),
-        FunctionPatch(68675, "", 216, "93007600"),
-        FunctionPatch(70011, "", 139, "96007e7e7e7600"),
-        FunctionPatch(70012, "", 70, "96007e7e7600"),
-        FunctionPatch(70028, "usePredicate", 34, "96007e7e7600"),
-        FunctionPatch(70031, "usePredicate", 34, "96007e7e7600"),
-        FunctionPatch(70036, "", 688, "93007600"),
-        FunctionPatch(70037, "", 298, "93007e7e7600"),
-        FunctionPatch(70064, "", 3920, "94007600"),
-        FunctionPatch(70065, "", 1917, "94007e7600"),
-        FunctionPatch(70288, "", 426, "96007e7e7600"),
-        FunctionPatch(70848, "", 42, "96007e7e7600"),
-        FunctionPatch(71033, "", 208, "96007600"),
-        FunctionPatch(71034, "", 94, "96007e7e7600"),
-        FunctionPatch(72410, "BalanceWidgetMenu", 233, "93007e7600"),
-        FunctionPatch(72415, "", 418, "93007e7e7600"),
-        FunctionPatch(72416, "", 229, "93007e7600"),
-        FunctionPatch(72459, "overrideSurvey", 58, "93007e7e7600"),
-        FunctionPatch(72460, "surveyHide", 153, "93007e7600"),
-        FunctionPatch(72461, "surveySeen", 243, "3d00480100001d004500010057876c0000017e7e7e7600"),
-        FunctionPatch(72863, "", 303, "93007e7e7e7600"),
-        FunctionPatch(72864, "", 221, "93007e7600"),
-        FunctionPatch(72868, "", 6363, "93007600"),
-        FunctionPatch(72869, "", 3044, "93007600"),
-        FunctionPatch(72872, "", 805, "93007e7e7600"),
-        FunctionPatch(72873, "", 542, "93007e7600"),
-        FunctionPatch(73022, "", 37, "96007e7600"),
-        FunctionPatch(73034, "", 37, "96007e7600"),
-        FunctionPatch(74055, "", 871, "94007e7e7e7600"),
-        FunctionPatch(74056, "", 369, "94007e7600"),
-        FunctionPatch(77273, "componentDidMount", 405, "93007e7600"),
-        FunctionPatch(77274, "componentDidUpdate", 1503, "93007e7e7e7600"),
-        FunctionPatch(
-            77424, "", 5753,
-            "340e00400f1e8908013b140e003b090e025e0a090c93026e0b14020a440a0b00128b00b66e0a0a0b00441d0801f6370f001d440c0802e245170803eb87451c0804d96b453a0805cddd370f013a45390806e07e370f023945380807fab9370f0338452908084908370f042945080809a58317250208b006251025083b0d0e015e0809116e080d02086c1b0802370f051b5e08092b6e0b14020845080b0afd646c28080b370f06285e0809186e0b14020845080b0b47f26c08080b4523080c1070370f07235e08092c6e0b0d020844081d0d4c6e100b0208370f08105e08092d6e0b14020845080b0e5eef6c24080b370f09245e08092e6e080d02086e220802105e110a003d084812080f2200440b12107c9119bf2701006e0b0b1219d30e110b5e130a005e120a01ae283b110e08080b01005a0b110085110ef7fc01009700610a000b8b0001610a001110121110130b5e0b092f6e1114020b440b1111f56f150b1113125e0b0a02d5120b105e0b0a03d50a0b1d5e110a04ae2c020ba737000078ad0400520b1d00520b10018b0002610a00108b0003610a001d8b0004610a000b10110b5e0b09306e0b0d020b6e0b0b021145110b123d8945160b13664f45130b14f331940318070316390f0a075e0b0a05d51a0b165e0b0a06d5120b135e0b0a07d50a0b115e120a08ae37020ba137000088ad0400520b1100520b1601520b13028b0005610a00168b0006610a00138b0007610a00118b0008610a000b10120b5e0b09316e1114020b450b111549f26e0b0b111245210b166761370f0b2145340b17b802370f0c34451e0b185e2c45120b19bc933b2d0e04440b2d1af26e270b2d035e0b0a09d50a0b235e200a0aae1a850b0ff8fc01008b0009610a00238b000a610a000b10200b5e0b09326e1114020b450b111b5bf26c0b0b1144310b1c72370f0d31440b2d1df46e0b0b2d033b110e038b00026f0b11020b005e1f0b005e0b0b01370f0e0b5e0b09336e1314020b450b131ec9f16c370b13370f0f375e130a0b4816080f2200440b16107c6e0b0b1619d30a130b5e180a0bae183b130e09080b01005a0b13008b010b610a010b10180b5e130a0c440b1d0d4cd50a130b5e160a0dae1f850b0ff9fc010044131d0d4c8b010c610a01138b010d610a010b10160b5e0b092f6e1314020b440b1311f56f130b131816370f10135e0b09346e1814020b4516181f79ef440b1d0d4c6e0b16180b5e1609356e18140216451618205dbe911a6d9202006e1616181a440b0b21a397011c0b0b01b0060b100b165e1609366e1814021645161822a2e86e3016181a5e1609376e181402164516182345f19504701616180b300445351624ce5e370f113545361625b88d370f123645161626b88f370f131610320b102629cf4003295e0b09376e1a14020b45181a27ceb6020b8b65000088ad0400520b1600520b3501520b36026f0b181a290b102629b90e0b013b0b0e0a45260b28f812370f1426440b2d1df46e0b0b2d016f0b11020b005e1a0b00370f151a5e0b0b01370f160b5e110a0e4818080f2200440b18107c6e0b0b1819d30a110b5e180a0eae13850b0ffafc01008b000e610a000b10180b5e0b09386e1114020b450b112918f16c0b0b11452b0b2a52b945330b2b7469370f17335e0b0a0fd51a0b295e0b0a10d5120b285e0b0a11d50a0b235e110a12ae28850b0ffbfc01008b000f610a00298b0010610a00288b0011610a00238b0012610a000b10110b5e0b0a13d52a0b365e0b0a14d5220b355e0b0a15d51a0b115e0b0a16d5120b265e0b0a17d50a0b165e230a18ae4d020bbc4f000091750800520b2600520b1601520b3502520b3603520b11048b0013610a00368b0014610a00358b0015610a00118b0016610a00268b0017610a00168b0018610a000b10230b5e0b09376e1114020b450b112c44f16e0b0b112345290b2d238d370f182945110b2ea991370f1911452a0b2f8c6a452f0b30cd09370f1a2f452c0b31248d3b0b0e0a450b0b320f101705290b390f1b055e0b0a19d50a0b245e3c0a1aae1a850b0ffcfc01008b0019610a00248b001a610a000b103c0b370f1c3c5e0b0a1bd50e0b3c5e2e0a1c5e230a1dae2c850b0ffdfc0100083b01005a3b3c008b001b610a003c8b001c610a000b8b001d610a003b10233b102e0b440b2d33f06f0b0b2d2e235e0b0a1ed50a0b1f5e230a1fae251806031f930bb20c06442e1f34a06c0b2e1f8b001e610a001f8b001f610a000b10230b5e0b0a20d6820000000b215e0b0a21d5770b345e0b0a22d56f0b105e0b0a23d5670b075e0b0a24d55f0b3a5e0b0a25d5570b395e0b0a26d54f0b385e2e0a27450b1b35e47ed5412e0b5e2e0a28450b1b361ca1d5332e0b5e2e0a29450b1b37103dd5252e0b5e0b0a2ad51d0b375e0b0a2bd5150b1d5e0b0a2cd50d0b315e2e0a2daf83000000850b0ffefc01008b0020610a00218b0021610a00348b0022610a00108b0023610a00078b0024610a003a8b0025610a00398b0026610a003845381b35e47e8b0027610a003845381b361ca18b0028610a003845381b37103d8b0029610a00388b002a610a00378b002b610a001d8b002c610a00318b002d610a000b102e0b5e0b0a2ed5350b055e0b0a2fd52d0b1a5e310a30450b1b37103dd51f310b5e310a31440b1d0d4cd512310b5e0b0a32d50a0b135e310a33ae41850b0ffffc01008b002e610a00058b002f610a001a45371b37103d8b0030610a003744371d0d4c8b0031610a00378b0032610a00138b0033610a000b10310b5e130a344837080f2200440b37107c6e0b0b3719d30a130b5e380a34ae385e0b091c6e0b14020b44370b389444133739e15e0b091c6e0b14020b440b0b3a0a450b0b3b00276e0b13370b8b0034610a000b10380b5e0b0a35d50a0b335e370a36ae1a850b0f00fd01008b0035610a00338b0036610a000b10370b5e0b0a37d50a0b2e5e130a38ae176c0b2e028b0037610a002e8b0038610a000b10130b5e0b0a39d5120b375e0b0a3ad50a0b135e2e0a3bae48020b874b000084ba0c00520b38013b3a0e0e3b390e050138bd4f29ab52383701523813026f383a023938520b38028b0039610a00378b003a610a00138b003b610a000b102e0b5e0b0a3cd5650b295e0b0a3dd55d0b365e0b0a3ed5550b355e0b0a3fd54d0b215e0b0a40d5450b345e0b0a41d53d0b335e0b0a42d5350b325e0b0a43d52d0b315e0b0a44d5250b305e0b0a45d51d0b2e5e0b0a46d5150b1d5e0b0a47d50d0b165e130a48af7b040000080b01005a0b2e00b388010000025e380a494839080f2200443739107c6e37373919d30a38375e3b0a49ae385e37091c6e37140237443937389444383939e15e37091c6e371402374437373a0a4537373c040a6e373839378b0049610a0037103b375e370a4ad51237355e370a4bd50a37335e3a0a4cae2185370f01fd01008b004a610a00358b004b610a00338b004c610a0037103a375e370a4dd52737295e370a4ed51f37215e370a4fd51737345e380a5044371d0d4cd50a38375e390a51ae5a3b3c0e0e3b380e1302378c65000053ad0400443d1d0d4c52373d005237290152372102523734036f373c0238378b004d610a00298b004e610a00218b004f610a003444381d0d4c8b0050610a00388b0051610a00371039375e370a52d51a37355e370a53d512373a5e370a54d50a37395e380a55ae500237874b00009764240052373b013b3d0e0e3b3c0e05013bbd4f29ab523b3a01523b3902703b3d023c3b3552373b028b0052610a00358b0053610a003a8b0054610a00398b0055610a003710383744370b3dc76e37370b38b366010000305e380a564839080f2200443739107c6e37373919d30a38375e3b0a56ae385e37091c6e37140237443937389444383939e15e37091c6e371402374437373a0a4537373ee9a36e373839378b0056610a0037103b375e370a57d51237365e370a58d50a37335e3a0a59ae2185370f02fd01008b0057610a00368b0058610a00338b0059610a0037103a375e370a5ad51a37215e370a5bd51237345e370a5cd50a371d5e390a5dae453b3c0e0e3b380e1402378d65000088ad040052371d0052372101523734026f373c0238378b005a610a00218b005b610a00348b005c610a001d8b005d610a00371039375e370a5ed51a37365e370a5fd512373a5e370a60d50a37395e380a61ae500237874b000006ef0c0052373b013b3d0e0e3b3c0e05013bbd4f29ab523b3a01523b3902703b3d023c3b3652373b028b005e610a00368b005f610a003a8b0060610a00398b0061610a003710383744370b3dc76e37370b385e380a624839080f2200443739107c6e37373919d30a38375e3b0a62ae385e37091c6e37140237443937389444383939e15e37091c6e371402374437373a0a4537373fad0e6e373839378b0062610a0037103b375e370a63d51237335e370a64d50a37165e3a0a65ae2185370f03fd01008b0063610a00338b0064610a00168b0065610a0037103a375e370a66d50a37315e390a67ae176c3731028b0066610a00318b0067610a00371039375e370a68d51a373a5e370a69d51237395e370a6ad50a37165e380a6bae500237874b0000e9bb0c0052373b013b3d0e0e3b3c0e05013bbd4f29ab523b3a01523b3902703b3d023c3b1652373b028b0068610a003a8b0069610a00398b006a610a00168b006b610a003710383744370b3dc7af050000008b003c610a00298b003d610a00368b003e610a00358b003f610a00218b0040610a00348b0041610a00338b0042610a00328b0043610a00318b0044610a00308b0045610a002e8b0046610a001d8b0047610a00168b0048610a000b10130b5e0b0a6cd5220b2c5e0b0a6dd51a0b2a5e0b0a6ed5120b1a5e0b0a6fd50a0b135e160a70ae5a020bc04f000091750800520b1a00520b2c015e2e09176e2e0d022e442e2e40d9452e2e41d269520b2e02520b1303520b2a048b006c610a002c8b006d610a002a8b006e610a001a8b006f610a00138b0070610a000b10160b5e0b09456e1314020b450b13429df16e0b0b1316370f1d0b5e1309386e1614021345131643108c6e13131617451713440193452a134551b9451a134636dc5e130a71d516132f5e130a72d50e130b5e2c0a735e160a74ae3785130f04fd0100082e02005a2e0b005a2e2f018b0071610a002f8b0072610a000b8b0073610a00138b0074610a002e10162e102c1345132d47327c6f13132d2c165e1309386e161402134513164819f1701613160b2b2a5e130a75d52213295e130a76d51a13285e130a77d51213265e130a78d50a13115e130a79ae2f850f0f05fd01008b0075610a00298b0076610a00288b0077610a00268b0078610a00118b0079610a000f10130f5e0f092b6e1114020f450f114986056e0f0f11135e110a7a4813080f2200440f13107c6e0f0f1319d30a110f5e110a7aae16020fd6000000de7408008b007a610a000f10110f5e130a7b450f1b4a698ed50a130f5e130a7cae2b45261b4a698e080f02005a0f26005a0f110145111b4a698e8b007b610a00118b007c610a000f10130f5e0f0a7dd50a0f125e110a7eae1d010fbf01f5d5520f12008b007d610a00128b007e610a000f10110f5e0f0a7fd5220f255e0f0a80d51a0f1e5e0f0a81d5120f115e0f0a82d50a0f1d5e120a83ae503b280e0e3b260e11020f8e65000053ad0400520f1d00520f1e01520f1102520f25036f0f2802260f8b007f610a00258b0080610a001e8b0081610a00118b0082610a001d8b0083610a000f10120f5e110a84450f1b4befadd518110f5e110a85450f1b4cf0add50a110f5e1e0a86ae3e45111b4befad080f02005a0f110045111b4cf0ad5a0f110145111b4befad8b0084610a001145111b4cf0ad8b0085610a00118b0086610a000f101e0f5e0f0a87d5380f245e0f0a88d5300f075e0f0a89d5280f235e0f0a8ad5200f1f5e110a8b450f1b4de13dd512110f5e0f0a8cd50a0f1e5e110a8dae7b3b260e0e5e0f09466e250d020f020f8f65000022240b00520f2700520f2401520f0702520f1e0345271b4de13d520f2704520f2306520f1f076f0f2602250f8b0087610a00248b0088610a00078b0089610a00238b008a610a001f451f1b4de13d8b008b610a001f8b008c610a001e8b008d610a000f10110f16051003930fb00905450f104e82d416031003931fb00903451f104f0c935e100a8ed50a10155e240a8fae605e10091c6e101402104425103894442325507f5e10091c6e101402104410103a0a461e1051ef89040001106316f5d55e2609476e27140226452627525dc76e26262715521026006f1023251e108b008e610a00158b008f610a00101024105e150a90481e080f220044101e107c6e10101e19d30a15105e230a90ae385e10091c6e10140210441e10389444151e39e15e10091c6e101402104410103a0a4510105361146e10151e108b0090610a0010102310481008540f00441e1055549115e50401009010ff00701e1e102415235e100a91d53210225e100a92d52a10215e100a93d52210205e100a94d51a101f5e100a95d512101e5e100a96d50a101d5e150a97ae660210906500009a570c0052101d0052101f0152102202521021035210200452101e053b230e0b45232356de39521023068b0091610a00228b0092610a00218b0093610a00208b0094610a001f8b0095610a001e8b0096610a001d8b0097610a00101015101704040f5e0f0a98d51a0f1c5e0f0a99d5120f045e0f0a9ad50a0f155e100a9bae453b1e0e0e3b1d0e16020f9165000088ad0400520f0400520f1c01520f15026f0f1e021d0f8b0098610a001c8b0099610a00048b009a610a00158b009b610a000f10100f5e0f0a9c4815080f2200440815107c6e08081519d30a0f085e190a9cae1602086b000000237508008b009c610a00081019089315b2070790155c675e080a9dd51208155e080a9ed50a080b5e0f0a9fae453b1d0e0e5e0809486e08140208451c0857e6530208c64f000078ad040052080b00520815016f081d021c088b009d610a00158b009e610a000b8b009f610a0008100f085e150aa045081b588fd9d51215085e080aa1d50a080f5e150aa2ae463b1d0e0e3b1c0e0602088124000078ad0400451e1b588fd952081e0052080f016f081d021c08451b1b588fd98b00a0610a001b8b00a1610a000f8b00a2610a00081015085e080aa3d50a080b5e0f0aa4ae363b1c0e0e5e0809496e08140208451b08599c7201080308f5d552080b006f081c021b088b00a3610a000b8b00a4610a0008100f085e080aa5d522081a5e080aa6d51a08175e080aa7d51208165e080aa8d50a080f5e0b0aa9ae5a3b1c0e0e5e08094a6e080d0208441b085a280208f22f000053ad04005208170052081a015208160252080f036f081c021b088b00a5610a001a8b00a6610a00178b00a7610a00168b00a8610a000f8b00a9610a0008100b085e080aaad51208155e080aabd50a080b5e0f0aacae4a3b170e0f3b160e060208a62c000088ad04005208190052081801081802005a1815005a180b01520818026f08170216088b00aa610a00158b00ab610a000b8b00ac610a0008100f085e080aadd52d08135e080aaed52508125e080aafd51d08115e080ab0d51508105e080ab1d50d080f5e0b0ab2af8d0000003b150e0e5e08094b6e081402084514085be55d0208645f0000cbf908003b180e0f3b170e0602168124000078ad040052161300081904005a1912005a1911015a1910025a190f03521619016f1618021716520816016f08150214088b00ad610a00138b00ae610a00128b00af610a00118b00b0610a00108b00b1610a000f8b00b2610a0008100b085e080ab3d512080c5e080ab4d50a080b5e080ab5ae443b0e0e0e5e09094a6e090d0209440d095a2802098124000078ad040052090c0052090b016f090e020d098b00b3610a000c8b00b4610a000b8b00b5610a00091008097608"
-        ),
-        FunctionPatch(78981, "trackHttpRequest", 220, "93007600"),
-        FunctionPatch(79182, "_trackStartSpeaking", 238, "93007e7e7600"),
-        FunctionPatch(79183, "_trackStartListening", 237, "93007e7600"),
-        FunctionPatch(81241, "handleAppStateUpdate", 230, "93007e7e7600"),
-        FunctionPatch(81275, "installWebsocketTelemetryHook", 183, "93007e7e7e7600"),
-        FunctionPatch(81317, "setupLibdiscoreTimersMonitor", 39, "93007e7e7e7600"),
-        FunctionPatch(81383, "logDangerously", 146, "93007e7e7600"),
-        FunctionPatch(81384, "log", 206, "93007e7e7600"),
-        FunctionPatch(81385, "verboseDangerously", 146, "93007e7e7600"),
-        FunctionPatch(81386, "verbose", 206, "93007e7e7600"),
-        FunctionPatch(81387, "info", 206, "93007e7e7600"),
-        FunctionPatch(81390, "trace", 146, "93007e7e7600"),
-        FunctionPatch(81392, "fileOnly", 148, "93007600"),
-        FunctionPatch(85406, "track", 544, "3d00480100001d004500010057876c0000017600"),
-        FunctionPatch(85411, "submitEventsImmediately", 251, "3d00480100001d004500010057876c0000017e7e7e7600"),
-        FunctionPatch(85532, "", 134, "93007e7e7600"),
-        FunctionPatch(91461, "_handleVoiceQualityPeriodicsStats", 508, "93007600"),
-        FunctionPatch(91810, "sampleStats", 395, "93007e7e7e7600"),
-        FunctionPatch(91826, "sampleStats", 68, "93007600"),
-        FunctionPatch(91845, "sampleStats", 112, "93007600"),
-        FunctionPatch(107938, "flush", 82, "93007e7e7600"),
-        FunctionPatch(108049, "add", 511, "93007e7e7e7600"),
-        FunctionPatch(108052, "_flush", 374, "93007e7e7600"),
-        FunctionPatch(108053, "_captureMetrics", 97, "93007e7600"),
-        FunctionPatch(108074, "add", 443, "93007e7e7e7600"),
-        FunctionPatch(108075, "flush", 114, "93007e7e7600"),
-        FunctionPatch(
-            114767, "", 213,
-            "34030142050301000000890701370500073b0803003b0403025e03040a93016e060801034503060067d36e06030607130306b1a1000000063406005e09040b6e0a08010945090a011fb66e09090a07b04b095e09040b6e0a08010945090a0285b66e09090a07b019095e04040b6e0808010445040803acd56e04040807ae1b3b0a060145090a04ca2e850805893802006e08090a08130408ae3845070705ad0945070706169e44070707a397001c010000b21c013b07060145060704ca2e850505883802006e050607051301051004011003047603"
+            50320, "_maybeFetchCollectionsWithProducts", 61,
+            "3d00480100001d004500010018306c0000017e7600"
         ),
         FunctionPatch(
-            114892, "", 624,
-            "3405000203874b000084ba0c003409013b0b09003b0609025e02061e93006e020b0002440702009444040701e15e02061e6e020b0002440202020a4502020300276e02040702520302013b0809143b0709050102bd4f29ab850405a2380200520204013b0405286c040400520204026f020800070252030202080201005a0203003b030519b3a70000000044040204c70203874b0000976424005e0a061e6e0a0b000a440d0a0094440c0d01e15e0a061e6e0a0b000a440a0a020a450a0a05040a6e0a0c0d0a52030a01010cbd4f29ab850a05a3380200520c0a013b0d091c020abe4f000053ad04003b0e0500440e0e064c520a0e003b010525520a01013b01050b520a01023b0e0515520a0e036f0a08000d0a520c0a023b0a051b700a0800070c0a52030a026e030402033b03051ab20d033b04050a940118030104b3ba0000000344040204c70203874b000006ef0c005e0a061e6e0a0b000a440d0a0094440c0d01e15e0a061e6e0a0b000a440a0a020a450a0a07e9a36e0a0c0d0a52030a01010abd4f29ab850c05a4380200520a0c013b0c091d0209bf4f0000917508003b0d050052090d003b0d050a52090d013b0d050252090d023b0e0501940116010e01930db00801440d0e064c52090d033b0d051552090d046f0908000c09520a09023b09051c70090800070a09520309026e030402033b010518b2730044040204c70203874b0000e9bb0c005e09061e6e090b0009440a09009444090a01e15e06061e6e060b0006440606020a45060608ad0e6e06090a06520306010106bd4f29ab850905a5380200520609013b0905296c090900520609023b05051d70050800070605520305026e030402037602"
+            50409, "YouBannerDecorations", 1563,
+            "400409890301450f0300f1dd3704000f450a03011c903704010a45130302f2dd4516030369b746110304597b0400451203053ae19301d50612019712340300390402013904030139040401390405013904060139040701390408013b0603068505037a8c01006e0e0601053b0c03003b0603025e0506106e090c010544080906f53b050307080701005a0705008505037b8c01006f0d080907053b0703015e0506116e09070105940816020d089305b0080244050d074d6e0b0901055e0506126e090701050205f3370000b677040052050d0052050b016e090901054517090861894505090941dc450d090ad9b45e0906136e100c0109450b100ba0f20209ed3700000c780400520917005209050152090d026e0b0b100945090b0c636145100b0dc202450b0b0edac83704020b5e1406146e150c01144514150f415e6e14141517b21514180208059405b20f021802080d9405b20602100509370403053b0d030344140d10f1080902005a090b005a0905018505047c8c01006f20140d05093b05030c9322102112101f0b101e106a0b05055e0506166e090c010545050911bde26c1205093b05030d6c050501370404055e0906176e090701096c0909014514091298263704051445090913c0b1370406095e1006186e150c0110451015140dc36c1510155e1006196e180c0110451718155ad89110b99402006e171718105e10060c6e190c0110451819168ff23b1003096e10181910180208103904070244180d17ef081003005a1005005a100f015a100202850f047d8c01006f10180d0f1044180d17ef080f01005a0f0a00850a047e8c01006f0f180d0a0f44180d17ef080a02005a0a14005a0a09018509047f8c01006f19180d090a44180d17ef080a0000850903808c01006f09180d090a940ab267173b1a030a5e1706206e180701170217243c00000c7804005e1b06216e1b0c011b451b1b18926152171b005e1b060f6e1b0c011b441d1b1995441c1d1ae25e1b06226e1b07011b451b1b1b19bc6e1b1c1d1b52171b015217090290093986700a1a01181709080905005a090a00940ab2700a3b18030a5e1506206e170701150215253c0000187804005e1a06236e1a0c011a451a1a1cb76d52151a005e1a060f6e1a0c011a441c1a1995441b1c1ae25e1a060f6e1a0c011a441a1a1d0a451a1a1e1d0c6e1a1b1c1a52151a0152151902521514039014704d700a18011715145a090a013b0a030a5e1406246e150701140214263c0000b677040052141600521413019013006b70130a011514135a0913029408b19b000000125e1206206e130701120212273c0000187804005e1406256e140c01144514141f9e65521214005e14060f6e140c011444161419954415161ae25e14060f6e140c01144414141d0a45141420cc366e14151614521214015e14060f6e140c011444161419954415161ae25e14060f6e140c01144414141d0a45141420cc366e141516145212140252120f03900f3bde70080a0113120f5a0908035e0806206e0f0701080208283c0000f3830800520811005e1106266e110c011145111121cd62520811015e11060f6e110c011144131119954412131ae25e11060f6e110c01114411111d0a451111228e0c6e111213115208110252081003520805049005b38870050a010f08055a090504440809232e850501818c01006e0f0809053b0503040208ad240000b8ec0a0046090b24047e0400520809005e0906276e090c0109450c0925287c0109bf2132d252090f0070090a010c090e520809026f0c0a01050845080b268b40440e0827533704080e44090d10f1080801005a080e00850404828c01006f20090d04083b04030b0203ad240000b8ec0a0046090b2861e20400520309005e0606286e070701060106af0132d245090b268b405206090010210673082e039008fa885606080089226f070a010706080602005a0607000207b5240000b677040046080b29b1660400520708000208b5300000e2c01e0045090b2a0f8f520809006f090a010508080803005a0809000209b5240000b6770400460d0b2b540b050052090d0052090c016f090a0105095a0809010209b5300000e2c01e00450b0b2a0f8f52090b006f090a0105095a080902520708016f07040105075a060701520306026f03040105037603"
+        ),
+        FunctionPatch(50778, "useShouldShowQuestsActivityPanelItem", 337, "8b00007600"),
+        FunctionPatch(50802, "_fetchCurrentQuests", 61, "3d00480100001d004500010018306c0000017e7600"),
+        FunctionPatch(50803, "_sendHeartbeat", 61, "3d00480100001d004500010018306c0000017e7600"),
+        FunctionPatch(50811, "_fetchClaimedQuests", 61, "3d00480100001d004500010018306c0000017e7600"),
+        FunctionPatch(50812, "_fetchQuestToDeliver", 61, "3d00480100001d004500010018306c0000017e7600"),
+        FunctionPatch(50813, "_fetchEarnedQuestToDeliver", 61, "3d00480100001d004500010018306c0000017e7600"),
+        FunctionPatch(51395, "handleShowUpsellAlert", 843, "93007e7600"),
+        FunctionPatch(51397, "maybeOpenPremiumUpsellActionSheet", 583, "96007e7600"),
+        FunctionPatch(51398, "openPremiumUpsellActionSheet", 107, "93007e7e7600"),
+        FunctionPatch(51403, "PremiumUpsellHero", 1048, "94007e7600"),
+        FunctionPatch(51404, "PremiumUpsellHero", 397, "94007e7600"),
+        FunctionPatch(51405, "PremiumUpsellActionSheet", 2966, "94007e7600"),
+        FunctionPatch(51406, "PremiumUpsellActionSheet", 1347, "94007e7600"),
+        FunctionPatch(51898, "openPremiumModal", 82, "93007e7e7600"),
+        FunctionPatch(51973, "PremiumUpsellTooltipActionSheet", 1580, "94007e7600"),
+        FunctionPatch(51974, "PremiumUpsellTooltipActionSheet", 641, "94007e7600"),
+        FunctionPatch(52095, "handleShowEmojiUpsellAlert", 71, "93007e7600"),
+        FunctionPatch(52096, "RoleSubscriptionEmojiUpsellAlert", 825, "94007e7600"),
+        FunctionPatch(52097, "RoleSubscriptionEmojiUpsellAlert", 369, "94007e7600"),
+        FunctionPatch(52106, "GlobalEmojiUpsell", 871, "94007e7600"),
+        FunctionPatch(52107, "GlobalEmojiUpsell", 547, "94007e7600"),
+        FunctionPatch(52108, "AnimatedEmojiUpsell", 427, "94007e7600"),
+        FunctionPatch(52109, "AnimatedEmojiUpsell", 247, "94007e7600"),
+        FunctionPatch(52110, "PremiumGuildIdentityUpsell", 451, "94007e7600"),
+        FunctionPatch(52111, "PremiumGuildIdentityUpsell", 264, "94007e7600"),
+        FunctionPatch(52112, "CustomProfilesUpsell", 347, "94007e7600"),
+        FunctionPatch(52113, "CustomProfilesUpsell", 217, "94007e7600"),
+        FunctionPatch(52114, "CustomAppIconsUpsell", 583, "94007e7600"),
+        FunctionPatch(52115, "CustomAppIconsUpsell", 310, "94007e7600"),
+        FunctionPatch(52116, "GlobalStickerUpsell", 431, "94007e7600"),
+        FunctionPatch(52117, "GlobalStickerUpsell", 251, "94007e7600"),
+        FunctionPatch(52118, "LongerMessageUpsell", 507, "94007e7600"),
+        FunctionPatch(52119, "LongerMessageUpsell", 288, "94007e7600"),
+        FunctionPatch(52120, "GuildCapUpsell", 454, "94007e7600"),
+        FunctionPatch(52121, "GuildCapUpsell", 267, "94007e7600"),
+        FunctionPatch(52122, "UploadUpsell", 599, "94007e7600"),
+        FunctionPatch(52123, "UploadUpsell", 331, "94007e7600"),
+        FunctionPatch(52124, "PremiumUpsellAlert", 1722, "94007e7600"),
+        FunctionPatch(52125, "PremiumUpsellAlert", 1471, "94007e7600"),
+        FunctionPatch(52167, "EmojiPickerListPremiumSearchUpsell", 619, "94007e7600"),
+        FunctionPatch(52168, "EmojiPickerListPremiumSearchUpsell", 373, "94007e7600"),
+        FunctionPatch(52170, "PremiumExpressionPickerSearchUpsell", 597, "94007e7600"),
+        FunctionPatch(52171, "PremiumExpressionPickerSearchUpsell", 268, "94007e7600"),
+        FunctionPatch(52199, "PremiumFeatureUpsellPill", 1607, "94007e7600"),
+        FunctionPatch(52200, "PremiumFeatureUpsellPill", 715, "94007e7600"),
+        FunctionPatch(52201, "PremiumFeatureUpsell", 500, "94007e7600"),
+        FunctionPatch(52202, "PremiumFeatureUpsell", 288, "94007e7600"),
+        FunctionPatch(53029, "NitroUpsellButton", 446, "93007e7e7600"),
+        FunctionPatch(53030, "NitroUpsellButton", 221, "93007e7600"),
+        FunctionPatch(53038, "StickersPremiumUpsellAlert", 1649, "94007e7600"),
+        FunctionPatch(53039, "StickersPremiumUpsellAlert", 785, "94007e7600"),
+        FunctionPatch(53054, "StickerPickerPremiumSearchUpsell", 743, "94007e7600"),
+        FunctionPatch(53055, "StickerPickerPremiumSearchUpsell", 449, "94007e7600"),
+        FunctionPatch(53980, "openSocialLayerStorefrontUnsupportedOnMobileAlert", 139, "93007e7600"),
+        FunctionPatch(53981, "openSocialLayerStorefrontProductDetailsModal", 101, "93007e7600"),
+        FunctionPatch(53982, "closeSocialLayerStorefrontProductDetailsModal", 39, "93007e7600"),
+        FunctionPatch(53983, "openSocialLayerStorefrontGiftModal", 168, "93007e7600"),
+        FunctionPatch(53984, "closeSocialLayerStorefrontGiftModal", 39, "93007e7600"),
+        FunctionPatch(
+            53996, "_fetchSocialLayerStorefrontConfig", 61,
+            "3d00480100001d004500010018306c0000017e7600"
         ),
         FunctionPatch(
-            130319, "", 572,
-            "3404000202874b000084ba0c003408013b0a08003b0508025e01051c93006e010a0001440601009444030601e15e01051c6e010a0001440101020a4501010300276e01030601520201013b07080e3b0608050101bd4f29ab8503046b4c0200520103013b03041f6c030300520103026f010700060152020102080101005a0102003b020411b3a70000000044030104c70202874b0000976424005e09051c6e090a0009440c090094440b0c01e15e09051c6e090a0009440909020a45090905040a6e090b0c0952020901010bbd4f29ab8509046c4c0200520b09013b0c081302098c65000053ad04003b0d0400440d0d064c52090d003b0d041a52090d013b0d040b52090d023b0d040c52090d036f0907000c09520b09023b09041370090700060b09520209026e020301023b020412b39a0000000244030104c70202874b000006ef0c005e09051c6e090a0009440c090094440b0c01e15e09051c6e090a0009440909020a45090907e9a36e090b0c09520209010109bd4f29ab850b046d4c020052090b013b0b081402088d65000088ad04003b0c040052080c003b0c040b52080c013b0c040c52080c026f0807000b08520908023b08041470080700060908520208026e0203010244030104c70202874b0000e9bb0c005e08051c6e080a0008440908009444080901e15e05051c6e050a0005440505020a45050508ad0e6e05080905520205010105bd4f29ab8508046e4c0200520508013b0804206c080800520508023b0404157004070006050452020402af050000007601"
+            54000, "fetchSocialLayerStorefrontSkuForApplication", 49,
+            "3d00480100001d004500010018306c0000017e7600"
         ),
-        FunctionPatch(135593, "handlePostConnectionOpen", 373, "93007e7600"),
+        FunctionPatch(54021, "SocialLayerStorefrontProductDetailsModal", 6335, "94007e7600"),
+        FunctionPatch(54022, "SocialLayerStorefrontProductDetailsModal", 3040, "94007e7600"),
+        FunctionPatch(54023, "WrappedSocialLayerStorefrontProductDetailsModal", 187, "94007e7600"),
+        FunctionPatch(54024, "WrappedSocialLayerStorefrontProductDetailsModal", 84, "94007e7600"),
+        FunctionPatch(54080, "SocialLayerStorefrontGiftModal", 1565, "94007e7600"),
+        FunctionPatch(54081, "SocialLayerStorefrontGiftModal", 660, "94007e7600"),
+        FunctionPatch(54087, "SocialLayerStorefrontGiftPurchaseSection", 1897, "94007e7600"),
+        FunctionPatch(54088, "SocialLayerStorefrontGiftPurchaseSection", 784, "94007e7600"),
+        FunctionPatch(54209, "isGameActivity", 36, "96007600"),
+        FunctionPatch(54218, "isListeningOnSpotify", 148, "8b00007e7e7e7600"),
+        FunctionPatch(54248, "LeaderboardWinnerBadge", 637, "94007e7600"),
+        FunctionPatch(54249, "LeaderboardWinnerBadge", 340, "94007e7600"),
+        FunctionPatch(54394, "openFavoritesGuildLimitUpsell", 82, "93007e7600"),
+        FunctionPatch(54395, "FavoritesGuildUpsellSheet", 863, "94007e7600"),
+        FunctionPatch(54396, "FavoritesGuildUpsellSheet", 518, "94007e7600"),
+        FunctionPatch(56370, "openGroupDMNitroCapLimitSheet", 84, "93007e7600"),
+        FunctionPatch(56371, "GroupDMNitroCapLimitSheet", 1650, "94007e7600"),
+        FunctionPatch(56372, "GroupDMNitroCapLimitSheet", 895, "94007e7600"),
+        FunctionPatch(56374, "navigateToNitroHomePage", 79, "93007e7600"),
+        FunctionPatch(56379, "showChatGDMUpsellActionSheet", 74, "93007e7600"),
+        FunctionPatch(56380, "ChatGDMUpsellActionSheet", 2523, "94007e7600"),
+        FunctionPatch(56381, "ChatGDMUpsellActionSheet", 1139, "94007e7600"),
+        FunctionPatch(56420, "SpotifyTrack", 51, "96007e7e7e7600"),
         FunctionPatch(
-            145546, "", 213,
-            "34030142050301000000890701370500073b0803003b0403025e03040a93016e060801034503060067d36e06030607130306b1a1000000063406005e09040b6e0a08010945090a011fb66e09090a07b04b095e09040b6e0a08010945090a0285b66e09090a07b019095e04040b6e0808010445040803acd56e04040807ae1b3b0a060045090a04ca2e850805ba5f02006e08090a08130408ae3845070705ad0945070706169e44070707a397001c010000b21c013b07060045060704ca2e850505b95f02006e050607051301051004011003047603"
+            56439, "subscribePlayerStateNotifications", 118,
+            "3d00480100001d004500010018306c0000017e7e7600"
         ),
-        FunctionPatch(151493, "", 31, "93007e7e7e7600"),
+        FunctionPatch(56444, "fetchIsSpotifyProtocolRegistered", 101, "96007e7600"),
+        FunctionPatch(59727, "openGroupDMNitroCapInfoActionSheet", 70, "93007e7600"),
+        FunctionPatch(59728, "GroupDMNitroCapInfoActionSheet", 850, "94007e7600"),
+        FunctionPatch(59729, "GroupDMNitroCapInfoActionSheet", 446, "94007e7600"),
+        FunctionPatch(62030, "showNitroLockedToast", 93, "93007e7600"),
+        FunctionPatch(62137, "useTypingUserIdsForDisplay", 173, "080000007e7600"),
+        FunctionPatch(62377, "ChatInputActionButtonGiftOrThread", 365, "93007e7600"),
+        FunctionPatch(62378, "ChatInputActionButtonGiftOrThread", 254, "93007e7e7600"),
+        FunctionPatch(62380, "ChatInputActionButtonGift", 1928, "93007e7e7e7600"),
+        FunctionPatch(62381, "ChatInputActionButtonGift", 1180, "93007e7600"),
+        FunctionPatch(63103, "EmojiPremiumUpsell", 203, "94007e7600"),
+        FunctionPatch(63104, "EmojiPremiumUpsell", 101, "94007e7600"),
+        FunctionPatch(63117, "ChannelAutocompleteEmojiUpsell", 793, "94007e7600"),
+        FunctionPatch(63118, "ChannelAutocompleteEmojiUpsell", 306, "94007e7600"),
+        FunctionPatch(64027, "dismissUpsellCTA", 74, "93007e7600"),
+        FunctionPatch(64367, "GuildDirectoryNicknameUpsell", 2193, "94007e7600"),
+        FunctionPatch(64368, "GuildDirectoryNicknameUpsell", 1035, "94007e7600"),
+        FunctionPatch(64369, "GuildDirectoryNicknameUpsellModal", 180, "94007e7600"),
+        FunctionPatch(64370, "GuildDirectoryNicknameUpsellModal", 97, "94007e7600"),
+        FunctionPatch(64632, "NotificationSettingsMessageUnreadGuildActionSheet", 328, "93007600"),
+        FunctionPatch(65015, "SocialLayerStorefrontProductSelfPurchaseSuccessModal", 2182, "94007e7600"),
+        FunctionPatch(65016, "SocialLayerStorefrontProductSelfPurchaseSuccessModal", 908, "94007e7600"),
+        FunctionPatch(65017, "SocialLayerStorefrontProductGiftPurchaseSuccessModal", 736, "94007e7600"),
+        FunctionPatch(65018, "SocialLayerStorefrontProductGiftPurchaseSuccessModal", 301, "94007e7600"),
+        FunctionPatch(65090, "SocialLayerStorefrontWishlistItemCard", 954, "94007e7600"),
+        FunctionPatch(65091, "SocialLayerStorefrontWishlistItemCard", 428, "94007e7600"),
+        FunctionPatch(65408, "GroupDMNitroCapCoachmark", 1295, "94007e7600"),
+        FunctionPatch(65409, "GroupDMNitroCapCoachmark", 463, "94007e7600"),
+        FunctionPatch(65472, "openScheduledMessagesLimitUpsell", 58, "93007e7600"),
+        FunctionPatch(65769, "QuestOrbsRewardModal", 1713, "93007e7600"),
+        FunctionPatch(65770, "QuestOrbsRewardModal", 1213, "93007e7600"),
+        FunctionPatch(65803, "CollectiblesShopEntryButton", 731, "93007e7e7e7600"),
+        FunctionPatch(65804, "CollectiblesShopEntryButton", 477, "93007e7600"),
+        FunctionPatch(65805, "MobileShopButtonCoachmark", 735, "93007e7e7e7600"),
+        FunctionPatch(65806, "MobileShopButtonCoachmark", 349, "93007e7600"),
+        FunctionPatch(65828, "GuildProfileCreateTagUpsell", 407, "94007e7600"),
+        FunctionPatch(65829, "GuildProfileCreateTagUpsell", 235, "94007e7600"),
+        FunctionPatch(65889, "isVirtualCurrencyEnabled", 47, "3402000101210332d29600520100007e7e7601"),
+        FunctionPatch(65890, "useVirtualCurrencyMobileEnabled", 47, "3402000101210332d29600520100007e7e7601"),
+        FunctionPatch(66010, "ShopThisLookActionSheet", 1124, "93007600"),
+        FunctionPatch(66011, "ShopThisLookActionSheet", 555, "93007e7e7e7600"),
+        FunctionPatch(66027, "ShopThisLookMarketingCoachmark", 732, "93007600"),
+        FunctionPatch(66028, "ShopThisLookMarketingCoachmark", 265, "93007e7600"),
+        FunctionPatch(
+            66259, "UserProfileContent", 9191,
+            "340b0040102c890e013b190b003b0a0b025e0c0a1893036e0d19030c440c0d00128c00200100006e0c0c0d0044180e01f637100018440d0e024a3710010d44290e03883710022945340e04b59d3710033445260e050ba93710042645450e06338c3710054545440e077b9637100644452f0e083ba145270e09816c3710072745120e0ae54e44430e0ba93710084345510e0c1c9037100951451f0e0df2dd37100a1f45210e0e129e45200e0f71733b140b015e0e0a106e0e14030e6c1d0e0337100b1d5e0e0a376e0f14030e3b0e0b126e3d0f030e5e0e0c00d5120e3d5e0e0c01d50a0e205e0f0c02ae2b020ef2370000b6770400520e2000520e3d019700610c003d8b0001610c00208b0002610c000e100f0e5e0e0a386e0e14030e6e0e0e030f45360e101299453c0e11584d45130e1256a9453b0e13229b453a0e1419935e0e0a396e0e14030e6c0e0e0344170e15485e0e0a196e0f19030e450e0f169ff26c0e0e0f451e0e17f3c037100c1e5e0f0c033d30481130182300440e11197e9153c2da02006e0e0e1153d30e0f0e5e150c035e110c04ae293b0f0b0b080e01005a0e0f00850f0b42d001008b0003610c000e8b0004610c000f10110f10150e5e0e0a116e0f19030e440e0f1af56f350e0f151137100d35940416093504930fb00809440f351b4d440e181b4d17070f0e39100e075e0f0c05481130182300440e11197e6e0e0e1153d30a0f0e5e150c05ae183b0f0b0a080e01005a0e0f008b0005610c000e10150e5e0f0c06440e181b4dd50a0f0e5e110c07ae1f850e1043d00100440f181b4d8b0006610c000f8b0007610c000e10110e5e0e0a116e0f19030e450e0f1c4ef26f0e0e0f151145320e1d28e637100f3245420e1e8bac371010425e0e0a3a6e1119030e450f111f87f0440e181b4d6e3e0f110e3710113e5e0e0a3b6e1119030e450f1120b3f0440e181b4d6e370f110e371012375e0f0c08440e181b4dd50a0f0e5e110c09ae27010ec63732d2440f181b4d520e0f00440f181b4d8b0008610c000f8b0009610c000e10110e5e0e0a3c6e0f19030e450e0f21a1f26e540e0f11371013545e0e0a286e1114030e450f11223bf116090d04930eb00809440e0d1b4d70550f11290e18371014555e0e0c0ad5120e295e0e0c0bd50a0e185e110c0cae3dcf080429d1080418040eae19040f4416181b4d081501005a1516005c0f152901100e0f8b000a610c00298b000b610c00188b000c610c000e10110e5e0e0a3d6e0f19030e450e0f235624911aad6b02006f0e0e0f111a5e0e0a3e6e0f14030e440e181b4d6e2a0f030e5e0f0c0d481130182300440e11197e6e0e0e1153d30e0f0e5e150c0d5e110c0eae293b0f0b0c080e01005a0e0f00850f0b44d001008b000d610c000e8b000e610c000f10110f10150e5e0e0a116e0f19030e450e0f1c4ef26f110e0f1511452c11245633451c11253686452511263786453f1127f2e13710153f45391128fce137101639454a11290ada3710174a450f112a78d1450e112b19de451b112cc9204540112d861f371018404516112e1f3d4515112fe7e15e110c0fd517111c5e220c104411181b4dd50a22115e2b0c11ae4a5e110a3f6e2319031145222330bd3e02116d370000b67704004424181b4d5211240052111c016e112223118b000f610c001c441c181b4d8b0010610c001c8b0011610c0011102b115e110a236e111403116f1c1103341b5e1b0c12482230182300441122197e6e11112253d30a1b115e240c12ae183b1b0b07081101005a111b008b0012610c00111024115e1b0c134411181b4dd50e1b115e230c145e220c15ae3685111045d001004428181b4d081b01005a1b28004428181b4d8b0013610c00288b0014610c00118b0015610c001b10221b1023115e110a116e1b19031145111b31a205701b111b2423225e220c16482330182300441123197e6e11112353d30a22115e230c16ae160211dd0100008b4a19008b0016610c00111023115e110a406e221903114511223299f06e28112223371019285e110c17d51b11285e220c184411181b4dd50e22115e230c195e220c1aae4185111046d00100442d181b4d082402005a242d005a2428018b0017610c00284428181b4d8b0018610c00288b0019610c00118b001a610c00241022241023113b490b0444114933f06f11114923225e110c1bd522111c5e110c1cd51a111b5e110c1dd51211165e110c1ed50a11155e410c1fae505e110a426e23190311452223345e8e0211eb530000b67704005211160052111501701122231c1b118b001b610c001c8b001c610c001b8b001d610c00168b001e610c00158b001f610c001110411137101a419316b2062710160e5e110c20d51a11345e110c21d51211165e110c22d50a11185e150c23ae370211d13700000c7804005211180052113401521116028b0020610c00348b0021610c00168b0022610c00188b0023610c00111015115e110a436e111403116e111103154515113561894538113641dc451b1137d9b41809043839101b095e110c24d51a11385e110c25d512111b5e110c26d50a11155e160c27ae370211ed3700000c780400521115005211380152111b028b0024610c00388b0025610c001b8b0026610c00158b0027610c00111016115e110a446e1519031145111538a0f26e1111151645461139636137101c464531113aac974516113be1934411493cf26e2d1149044411493cf26e2e1149045e150c28481b3018230044111b197e6e11111b53d30a15115e1c0c28ae183b150b0d081101005a1115008b0028610c0011101c115e150c294411181b4dd50a15115e1b0c2aae1f85111047d001004415181b4d8b0029610c00158b002a610c0011101b115e110a116e151903114411151af56f5011151c1b37101d505e150c2b4411181b4dd51215115e110c2cd50a11505e1b0c2dae360211623b0000b6770400521150004415181b4d521115014415181b4d8b002b610c00158b002c610c00508b002d610c0011101b115e110a456e151903114511153d68c76e1111151b5e150c2e481b3018230044111b197e6e11111b53d30a15115e220c2eae183b150b08081101005a1115008b002e610c00111022115e110c2fd50e11505e1c0c305e1b0c31ae2c85111048d00100081501005a1550008b002f610c00508b0030610c00118b0031610c0015101b15101c115e110a116e151903114411151af570151115221c1b5e110c32d52011075e1b0c33160515049311b008054411153e98d50a1b115e110c34ae4f16051504931bb019054423153e984422233f2e851c1049d001006e1b22231cd1081b04081b00008b0032610c000716051504931cb00805441c153e988b0033610c001c8b0034610c001b10111b100507b0180518060415b20e0644111140a497001c0611001005065e110a476e1b19031145151b41dfef4411181b4d6e15151b115e110a486e1b19031145111b4227be6f11111b1a0744151540a497011c4c1501b0064c104c115e110a496e1519031145111543727e6e4811151ab2074818480435101c05b0061c101c4cb0061c101c485e110a4a6e151903114511154495f1701111154c4805454e1145c75e37101e4e454f1146926e37101f4f4515114739813710201544114948f46e1a1149013b110b038b00026f1111031a005e1a11005e111101371021115e1b0c35482230182300441122197e6e11112253d30a1b115e280c35ae138511104ad001008b0035610c00111028115e110a4b6e1b19031145111b496cf16c11111b4547114a25b9454d114b20cb3710224d5e110c36d51211075e110c37d50a11055e220c38ae2c0211ec530000b677040052110700521105018b0036610c00078b0037610c00058b0038610c00111022115e110a4c6e1b19031145111b4cc6f26e11111b224523114d872c371023234522114e55a3371024225e110c39d51a11235e110c3ad51211225e110c3bd50a111e5e1b0c3cae288511104bd001008b0039610c00238b003a610c00228b003b610c001e8b003c610c0011101b115e110c3dd52a114f5e110c3ed522114e5e110c3fd51a11215e110c40d512111b5e110c41d50a11155e1e0c42ae4d0211ed530000f3830800521121005211150152114e0252114f0352111b048b003d610c004f8b003e610c004e8b003f610c00218b0040610c001b8b0041610c00158b0042610c0011101e115e110a4a6e1b19031145111b4f94f16e11111b1e451b11504f8d45331151069237102533452111522d76454b1153bf433710264b45241154508d3b110b0e451e1155351017061b1e3910270645111156a05f5e1e0c43d50a1e515e520c44ae1a851e104cd001008b0043610c00518b0044610c001e10521e371028525e1e0c45d50a1e1f5e510c46ae1a851e104dd001008b0045610c001f8b0046610c001e10511e371029515e1e0c47d6ae0000001e0d5e1e0c48d6a30000001e465e1e0c49d6980000001e355e1e0c4ad68d0000001e555e1e0c4bd6820000001e345e1e0c4cd5771e545e1e0c4dd56f1e295e1e0c4ed5671e525e1e0c4fd55f1e515e1e0c50d5571e095e1e0c51d54f1e275e1e0c52d5471e4a5e1f0c53451e1d575a7fd5391f1e5e1f0c54451e1d580aa1d52b1f1e5e1f0c55451e1d596c3dd51d1f1e5e1e0c56d5151e265e1e0c57d50d1e185e1e0c58af9f000000851f104ed001008b0047610c000d8b0048610c00468b0049610c00358b004a610c00558b004b610c00348b004c610c00548b004d610c00298b004e610c00528b004f610c00518b0050610c00098b0051610c00278b0052610c004a454a1d575a7f8b0053610c004a454a1d580aa18b0054610c004a454a1d596c3d8b0055610c004a8b0056610c00268b0057610c00188b0058610c001f101e1f5e1f0c59d5351f075e1f0c5ad52d1f065e4a0c5b451f1d596c3dd51f4a1f5e4a0c5c441f181b4dd5124a1f5e1f0c5dd50a1f505e4a0c5eae41851f104fd001008b0059610c00078b005a610c000645511d596c3d8b005b610c00514451181b4d8b005c610c00518b005d610c00508b005e610c001f104a1f5e500c5f485130182300441f51197e6e1f1f5153d30a501f5e540c5fae385e1f0a1e6e1f19031f44511f5a954450515be25e1f0a1e6e1f19031f441f1f5c0a451f1f5d24276e1f50511f8b005f610c001f10541f5e1f0c60d50a1f4d5e520c61ae1a851f1050d001008b0060610c004d8b0061610c001f10521f5e1f0c62d50a1f1e5e510c63ae176c1f1e038b0062610c001e8b0063610c001f10511f5e1f0c64d5121f525e1f0c65d50a1f515e1f0c66ae4802506749000090680d00525054013b560b143b550b050154ee53dca952545201525451026f5456035554525054028b0064610c00528b0065610c00518b0066610c0050101f5017061b115e110c67d699000000114f5e110c68d68e000000114e5e1b0c6916080d049311b0080844110d1b4dd5751b115e110c6ad56d11465e110c6bd56511355e110c6cd55d11295e110c6dd555114d5e110c6ed54d114c5e110c6fd54511065e110c70d53d11075e110c71d535114a5e110c72d52d11055e110c73d52511485e110c74d51d111f5e110c75d51511185e110c76d50d11155e1b0c77afe6040000081101005a111f00b388010000035e510c78485230182300445052197e6e50505253d30a51505e550c78ae385e500a1e6e501903504452505a954451525be25e500a1e6e501903504450505c0a4550505e420a6e505152508b0078610c00501055505e500c79d512504e5e500c7ad50a504d5e540c7bae2185501051d001008b0079610c004e8b007a610c004d8b007b610c00501054505e500c7cd52750465e500c7dd51f50065e500c7ed51750075e510c7f4450181b4dd50a51505e520c80ae5a3b560b143b510b1c0250ef530000187804004457181b4d525057005250060152500702525046036f50560351508b007c610c00468b007d610c00068b007e610c00074451181b4d8b007f610c00518b0080610c00501052505e500c81d51a504e5e500c82d51250545e500c83d50a50525e510c84ae50025067490000d0792400525055013b570b143b560b050155ee53dca952555401525552027055570356554e525055028b0081610c004e8b0082610c00548b0083610c00528b0084610c00501051504450115fc86e50501151b3a101000048d09b01000004355e510c85485230182300445052197e6e50505253d30a51505e550c85ae385e500a1e6e501903504452505a954451525be25e500a1e6e501903504450505c0a45505060cfa36e505152508b0085610c00501055505e500c86d512504f5e500c87d50a504d5e540c88ae2185501052d001008b0086610c004f8b0087610c004d8b0088610c005010545016080d049351b0080844510d1b4d5e500c89d52a50465e500c8ad52250355e500c8bd51a50295e500c8cd51250515e500c8dd50a50185e520c8eae5b3b570b143b560b1d0250f0530000f383080052501800525035015250290252505103525046046f50570356508b0089610c00468b008a610c00358b008b610c00298b008c610c00518b008d610c00188b008e610c00501052505e500c8fd51a504f5e500c90d51250545e500c91d50a50525e510c92ae50025067490000cb800d00525055013b570b143b560b050155ee53dca952555401525552027055570356554f525055028b008f610c004f8b0090610c00548b0091610c00528b0092610c00501051504450115fc86e50501151b328010000035e510c93485230182300445052197e6e50505253d30a51505e540c93ae385e500a1e6e501903504452505a954451525be25e500a1e6e501903504450505c0a45505061b00e6e505152508b0093610c00501054505e500c94d512504d5e500c95d50a50155e530c96ae2185501053d001008b0094610c004d8b0095610c00158b0096610c00501053505e500c97d50a504a5e520c98ae176c504a038b0097610c004a8b0098610c00501052505e500c99d51a50535e500c9ad51250525e500c9bd50a50155e510c9cae50025067490000af680d00525054013b560b143b550b050154ee53dca9525453015254520270545603555415525054028b0099610c00538b009a610c00528b009b610c00158b009c610c00501051504450115fc86e505011518b0067610c004f8b0068610c004e16080d04934eb00808444e0d1b4d8b0069610c004e8b006a610c00468b006b610c00358b006c610c00298b006d610c004d8b006e610c004c8b006f610c00068b0070610c00078b0071610c004a8b0072610c00058b0073610c00488b0074610c001f8b0075610c00188b0076610c00158b0077610c0011101b115e110c9dd52211245e110c9ed51a11215e110c9fd512111a5e110ca0d50a111b5e1f0ca1ae5a0211f1530000f383080052111a00521124015e480a306e4814034844484862da45484863196a5211480252111b03521121048b009d610c00248b009e610c00218b009f610c001a8b00a0610c001b8b00a1610c0011101f115e110a596e1a19031145111a64f0f16e1a111a1f37102a1a5e110a4b6e1f19031145111f65cd4a6e11111f2045201166a88b4524116724b9452111686a4e5e110ca2d516114b5e110ca3d50e111a5e480ca45e1f0ca5ae3785111054d00100084a02005a4a1a005a4a4b018b00a2610c004b8b00a3610c001a8b00a4610c00118b00a5610c004a101f4a10481145114969fff06f111149481f5e110a4b6e1f19031145111f6a6df1701f111f1a47245e110ca6d52211225e110ca7d51a11335e110ca8d512111a5e110ca9d50a11155e240caaae2f85111055d001008b00a6610c00228b00a7610c00338b00a8610c001a8b00a9610c00158b00aa610c0011102411d0a60d00000418d09f0d000004355e110cabd50a11465e330cacae1d0111bf0132d2521146008b00ab610c00468b00ac610c001110331137102b335e110cadd60901000011335e470cae16050d049311b0080544110d1b4dd6f000000047115e110cafd6e500000011465e110cb0d6da00000011355e110cb1d6cf00000011455e110cb2d6c400000011445e110cb3d6b900000011345e110cb4d6ae00000011295e110cb5d6a300000011095e110cb6d69800000011075e110cb7d68d00000011275e110cb8d68200000011435e110cb9d57711425e110cbad56f11415e110cbbd56711405e110cbcd55f113f5e110cbdd557113e5e110cbed54f11395e110cbfd54711325e470cc045111d6b543cd53947115e470cc145111d6c12e4d52b47115e470cc245111d596c3dd51d47115e110cc3d51511265e110cc4d50d11185e110cc5afde0000008b00ad610c003316050d049347b0080544470d1b4d85331056d001008b00ae610c00478b00af610c00468b00b0610c00358b00b1610c00458b00b2610c00448b00b3610c00348b00b4610c00298b00b5610c00098b00b6610c00078b00b7610c00278b00b8610c00438b00b9610c00428b00ba610c00418b00bb610c00408b00bc610c003f8b00bd610c003e8b00be610c00398b00bf610c003245391d6b543c8b00c0610c003945391d6c12e48b00c1610c003945391d596c3d8b00c2610c00398b00c3610c00268b00c4610c00188b00c5610c00331011335e330cc6d52233355e330cc7d51a33375e330cc8d51233325e330cc9d50a33185e330ccaae2f85101057d001008b00c6610c00358b00c7610c00378b00c8610c00328b00c9610c00188b00ca610c00101033105e100a5eb010276e321903104532326d8826ae076e321403105e100ccbd53a10365e370ccc160534049310b009054510346eaf86d52337105e100ccdd51b10385e370cce45101d6f2de4d50d37105e100ccfafad000000160534049337b009054537346eaf86950517370537b258373b3f0b145e390a5f6e39140339443e3970290239b5240000b677040045411d6f2de4084002005a4041005a403601523940005e400a606e411403400140f25332d2524038006f403f034140523940016f373f033e398b00cb610c0036160534049339b009054539346eaf868b00cc610c00398b00cd610c003845381d6f2de48b00ce610c00388b00cf610c00371010379339b2062710392c9338b2062710382b9337b20f271805040f9337b2060510370f932cb20f271805040e932cb20605102c0e5e0e0cd0d5650e365e0e0cd1d55d0e3d5e0e0cd2d5550e3c5e0e0cd3d54d0e3b5e0e0cd4d5450e345e0e0cd5d53d0e275e0e0cd6d5350e3a5e0e0cd7d52d0e395e0e0cd8d5250e385e0e0cd9d51d0e375e0e0cdad5150e2c5e0e0cdbd50d0e185e0f0cdcafb00000003b3f0b145e0e0a616e3e14030e020ef3530000cc0e0900520e1800520e3401520e3d02520e3903520e3804520e3705520e2c06520e2707520e3608520e3c09520e3b0a520e3a0b6f0e3f033e0e8b00d0610c00368b00d1610c003d8b00d2610c003c8b00d3610c003b8b00d4610c00348b00d5610c00278b00d6610c003a8b00d7610c00398b00d8610c00388b00d9610c00378b00da610c002c8b00db610c00188b00dc610c000e100f0e5e0e0cddd5590e365e0e0cded5510e0d5e0e0cdfd5490e355e0e0ce0d5410e345e0e0ce1d5390e275e0e0ce2d5310e335e2c0ce3450e1d711899d5232c0e5e2c0ce4450e1d721999d5152c0e5e0e0ce5d50d0e185e0e0ce6aff8000000132c27b19b000000273b390b165e370a5f6e37140337443837702945371d711899083a03005a3a370016053404933bb00905453b346eaf86b2093b453b1d7219990237b5240000b67704005a3a3b015a3a360252373a006c3b3303083a02005a3a3b003b3d0b145e3b0a626e3c14033b023bf453000018780400523b1800523b3501523b3402523b0d036f3b3d033c3b5a3a3b0152373a016f2c390338378b00dd610c00368b00de610c000d8b00df610c00358b00e0610c00348b00e1610c00278b00e2610c003345331d7118998b00e3610c003345331d7219998b00e4610c00338b00e5610c00188b00e6610c002c100e2c932cb20627102c2b932bb20d27d1071204101225102b125e120ce7d50a12165e250ce8ae1d0112bf0132d2521216008b00e7610c00168b00e8610c00121025125e120ce9d54212325e120cead53a12315e120cebd532122f5e120cecd52a12295e120cedd522122c5e120ceed51a122b5e120cefd51212255e120cf0d50a12185e120cf1ae743b330b140216f553000068190900521618005216290152162f0252162c0352162b0452163105521625066f16330332168b00e9610c00328b00ea610c00318b00eb610c002f8b00ec610c00298b00ed610c002c8b00ee610c002b8b00ef610c00258b00f0610c00188b00f1610c0016101216b20807972bb210271807042a972bb007073b2b0b103b160b0f1e1717165e160cf2d512162b5e160cf3d50a16175e250cf4ae2c0216d0060000b677040052162b00521617018b00f2610c002b8b00f3610c00178b00f4610c00161025165e170cf545161d7308b1d51217165e160cf6d50a16255e170cf7ae32452b1d7308b1081602005a162b005a162501452b1d7308b18b00f5610c002b8b00f6610c00258b00f7610c001610171616070d049325b0080744250d1b4d5e0d0cf8d53a0d2a5e0d0cf9d5320d295e0d0cfad52a0d095e0d0cfbd5220d275e0d0cfcd51a0d265e0d0cfdd5120d255e0d0cfed50a0d185e160cffae713b2c0b143b2b0b17010df6530200520d2a00520d1801520d2902520d2503520d0904520d2605520d2706520d2d076f0d2c032b0d8b00f8610c002a8b00f9610c00298b00fa610c00098b00fb610c00278b00fc610c00268b00fd610c00258b00fe610c00188b00ff610c000d10160d8c00000100005d0d0c00d5100d118c02010100005d180c02ae176c0d1103610c00118c0001010000610c000d10180d8c00020100005d0d0c00d6d00000000d248c02030100005d0d0c02d6bf0000000d098c02040100005d0d0c02d6ae0000000d238c02050100005d0d0c02d69d0000000d228c02060100005d0d0c02d68c0000000d218c02070100005d0d0c02d57b0d208c02080100005d0d0c02d56d0d1f8c02090100005d0d0c02d55f0d1e8c020a0100005d110c02450d1d7457d9d54b110d8c020b0100005d0d0c02d53d0d1c8c020c0100005d0d0c02d52f0d1b8c020d0100005d0d0c02d5210d1a8c020e0100005d0d0c02d5130d158c020f0100005d110c02af12020000b00c1c6c0d1e03af770100003b270b143b260b060225f53a0000b6770400522528003b2a0b165e280a636e2819032845292875f95d022bb5240000b677040045281d7457d9522b28005e280a646e28190328452d28760d54022cb54a0000b6770400522c1a00932fb20709902f86670128bf2132d2522c2f016f2d27032d2c082c02005a2c2d00022df7530000f7760100522d2e00022f4d0a0000c0612d0048313077150044303178ad6f313031150144301b40a4233031308b01642101300190307c081e300130522f3001522d2f016f2d2703262d5a2c2d01522b2c016f2c2a03262b082b03005a2b2c005e2c0a5f6e2c14032c442d2c7029022c3030000018780400522c2000522c2101522c1f025e2f0a656e2f19032f45302f794873012f020832d2522f1a006f2f2703302f522c2f036f2c27032d2c5a2b2c015e2c0a666e2d14032c022cf853000018780400522c2e00522c2301522c2202522c24036f2c27032d2c5a2b2c0252282b006f282a032928522528016f0d27032625610c00248c0003010000610c00098c0004010000610c00238c0005010000610c00228c0006010000610c00218c0007010000610c00208c0008010000610c001f8c0009010000610c001e451d1d7457d98c000a010000610c001d8c000b010000610c001c8c000c010000610c001b8c000d010000610c001a8c000e010000610c00158c000f010000610c000d10110d8c00100100005d0d0c00d51e0d188c01110100005d0d0c01d5100d118c01120100005d150c01ae4c3b1a0b165e0d0a636e0d19030d45190d75f95d010dbf2132d2081b02005a1b18005a1b1101520d1b006f0d1a03190d610c00188c0011010000610c00118c0012010000610c000d10150d8c00130100005d0d0c00d52c0d178c01140100005d0d0c01d51e0d168c01150100005d0d0c01d5100d158c01160100005d110c01ae533b190b163b180b06020db5240000b6770400520d1700081a02005a1a16005a1a1501520d1a016f0d1903180d610c00178c0014010000610c00168c0015010000610c00158c0016010000610c000d10110d8c00170100005d0d0c00d52c0d138c01180100005d0d0c01d51e0d128c01190100005d0d0c01d5100d118c011a0100005d0d0c01ae5d3b150b165e0a0a5f6e0a14030a44140a7029020ab5240000b6770400520a1300081602005a1612005a161101520a16016f0a1503140a610c00138c0018010000610c00128c0019010000610c00118c001a010000610c000a100d0a8c001b0100005d0a0c00d53a0a108c011c0100005d0a0c01d52c0a0f8c011d0100005d0a0c01d51e0a0e8c011e0100005d0a0c01d5100a0d8c011f0100005d0a0c01ae5d3b120b163b110b15010bbf2132d2081304005a1310005a130f015a130e025a130d03520b13006f0b1203110b610c00108c001c010000610c000f8c001d010000610c000e8c001e010000610c000d8c001f010000610c000b100a0b760a7604"
+        ),
+        FunctionPatch(66285, "NoProgressGraphic", 393, "93007e7600"),
+        FunctionPatch(
+            66459, "useProfileTabIndices", 79,
+            "8b04018c02ffffffff890501100104100002b209058b010210000489060202052a5400000c78040052050000100001100302b20a061f00010410030189060352050301b20606100202520502027605"
+        ),
+        FunctionPatch(66502, "UserProfileWishlistGrid", 1933, "94007e7e7e7600"),
+        FunctionPatch(66507, "UserProfileWishlistSuggestionsGrid", 96, "94007e7e7600"),
+        FunctionPatch(66508, "UserProfileWishlistSuggestionsGrid", 33, "94007600"),
+        FunctionPatch(66519, "AddToWishlistGrid", 401, "93007e7600"),
+        FunctionPatch(66520, "AddToWishlistGrid", 110, "93007e7e7600"),
+        FunctionPatch(66524, "AddToWishlistItemCard", 417, "93007e7600"),
+        FunctionPatch(66617, "ExpressiveNitroUpsell", 856, "94007e7600"),
+        FunctionPatch(66618, "PriceTag", 405, "93007e7600"),
+        FunctionPatch(66619, "PriceTag", 183, "93007e7e7e7600"),
+        FunctionPatch(66622, "NitroUpsell", 745, "94007e7600"),
+        FunctionPatch(66623, "NitroUpsell", 327, "94007e7600"),
+        FunctionPatch(66629, "ShopNitroUpsellPromoSheet", 884, "94007e7600"),
+        FunctionPatch(66630, "ShopNitroUpsellPromoSheet", 462, "94007e7600"),
+        FunctionPatch(66645, "GiftButton", 498, "93007e7e7600"),
+        FunctionPatch(66646, "GiftButton", 260, "93007600"),
+        FunctionPatch(66686, "NitroAcquiredHeader", 463, "94007e7600"),
+        FunctionPatch(66687, "NitroAcquiredHeader", 237, "94007e7600"),
+        FunctionPatch(66688, "FractionalNitroCollectedActionSheet", 2112, "94007e7600"),
+        FunctionPatch(66689, "FractionalNitroCollectedActionSheet", 904, "94007e7600"),
+        FunctionPatch(66694, "UnlockWithNitroButton", 690, "94007e7600"),
+        FunctionPatch(66695, "UnlockWithNitroButton", 327, "94007e7600"),
+        FunctionPatch(67033, "NitroOrbsDeliveredModal", 1709, "94007e7600"),
+        FunctionPatch(67034, "NitroOrbsDeliveredModal", 1107, "94007e7600"),
+        FunctionPatch(67106, "NitroHomeHeader", 1194, "94007e7600"),
+        FunctionPatch(67107, "NitroHomeHeader", 599, "94007e7600"),
+        FunctionPatch(67361, "NitroCreditEducationActionSheet", 814, "94007e7600"),
+        FunctionPatch(67362, "NitroCreditEducationActionSheet", 398, "94007e7600"),
+        FunctionPatch(67370, "GuildBoostingUpsell", 2830, "94007e7600"),
+        FunctionPatch(67371, "GuildBoostingUpsell", 1502, "94007e7600"),
+        FunctionPatch(67381, "PremiumSubscriptionPricingUpsell", 420, "94007e7600"),
+        FunctionPatch(67382, "PremiumSubscriptionPricingUpsell", 202, "94007e7600"),
+        FunctionPatch(67388, "PremiumSubscriptionUpsell", 1799, "94007e7600"),
+        FunctionPatch(67389, "PremiumSubscriptionUpsell", 949, "94007e7600"),
+        FunctionPatch(67393, "BoostPurchaseNitroBanner", 886, "94007e7600"),
+        FunctionPatch(67394, "BoostPurchaseNitroBanner", 524, "94007e7600"),
+        FunctionPatch(67427, "PremiumPlanSelectYearlyUpsellModal", 2057, "94007e7600"),
+        FunctionPatch(67428, "PremiumPlanSelectYearlyUpsellModal", 1151, "94007e7600"),
+        FunctionPatch(67455, "GiftPurchaseButton", 1101, "93007e7600"),
+        FunctionPatch(67456, "GiftPurchaseButton", 564, "93007600"),
+        FunctionPatch(67750, "logReadyPayloadReceived", 509, "93007e7600"),
+        FunctionPatch(67751, "getConnectionPath", 101, "93007e7600"),
+        FunctionPatch(67752, "getReadyPayloadByteSizeAnalytics", 892, "93007600"),
+        FunctionPatch(67753, "logGatewayConnected", 150, "93007600"),
+        FunctionPatch(68748, "ContactSyncUpsellCTA", 494, "94007e7600"),
+        FunctionPatch(68749, "ContactSyncUpsellCTA", 238, "94007e7600"),
+        FunctionPatch(70014, "handleTrack", 257, "93007e7600"),
+        FunctionPatch(70835, "UserSettingsEditUserProfile", 449, "93007e7600"),
+        FunctionPatch(70836, "UserSettingsEditUserProfile", 216, "93007600"),
+        FunctionPatch(70847, "UserProfileUpsellButton", 565, "94007e7600"),
+        FunctionPatch(70848, "UserProfileUpsellButton", 285, "94007e7600"),
+        FunctionPatch(70933, "UserProfileUpsellCard", 1245, "94007e7600"),
+        FunctionPatch(70934, "UserProfileUpsellCard", 579, "94007e7600"),
+        FunctionPatch(71058, "UserProfilePremiumTryItOutUpsell", 705, "94007e7600"),
+        FunctionPatch(71059, "UserProfilePremiumTryItOutUpsell", 443, "94007e7600"),
+        FunctionPatch(71063, "PreviewNitroCard", 346, "94007e7600"),
+        FunctionPatch(71064, "PreviewNitroCard", 213, "94007e7600"),
+        FunctionPatch(71065, "GetNitroCard", 520, "94007e7600"),
+        FunctionPatch(71066, "GetNitroCard", 337, "94007e7600"),
+        FunctionPatch(71067, "UserProfilePremiumUpsellCard", 224, "94007e7600"),
+        FunctionPatch(71068, "UserProfilePremiumUpsellCard", 89, "94007e7600"),
+        FunctionPatch(71089, "UserProfileFloatingUpsell", 170, "94007e7600"),
+        FunctionPatch(71090, "UserProfileFloatingUpsell", 86, "94007e7600"),
+        FunctionPatch(71100, "PasswordlessUpsell", 1324, "94007e7600"),
+        FunctionPatch(71101, "PasswordlessUpsell", 644, "94007e7600"),
+        FunctionPatch(71743, "ProfileToActivityUpsellActionSheet", 498, "94007e7600"),
+        FunctionPatch(71744, "ProfileToActivityUpsellActionSheet", 247, "94007e7600"),
+        FunctionPatch(71749, "BaseUpsellActionSheet", 1040, "94007e7600"),
+        FunctionPatch(71750, "BaseUpsellActionSheet", 518, "94007e7600"),
+        FunctionPatch(72086, "ConnectionsEmptyStateUpsell", 1537, "94007e7600"),
+        FunctionPatch(72087, "ConnectionsEmptyStateUpsell", 671, "94007e7600"),
+        FunctionPatch(72106, "XboxTwoWayLinkUpsell", 513, "94007e7600"),
+        FunctionPatch(72107, "XboxTwoWayLinkUpsell", 291, "94007e7600"),
+        FunctionPatch(72110, "OneWayToTwoWayLinkUpsell", 1019, "94007e7600"),
+        FunctionPatch(72111, "OneWayToTwoWayLinkUpsell", 452, "94007e7600"),
+        FunctionPatch(72112, "PlayStationTwoWayLinkUpsell", 513, "94007e7600"),
+        FunctionPatch(72113, "PlayStationTwoWayLinkUpsell", 291, "94007e7600"),
+        FunctionPatch(72165, "useShowManageSubscriptionsSetting", 139, "96007e7e7e7600"),
+        FunctionPatch(72166, "useShowManageSubscriptionsSetting", 70, "96007e7e7600"),
+        FunctionPatch(72182, "usePredicate", 34, "96007e7e7600"),
+        FunctionPatch(72185, "usePredicate", 34, "96007e7e7600"),
+        FunctionPatch(72190, "QuestHomeSetting", 688, "93007600"),
+        FunctionPatch(72191, "QuestHomeSetting", 298, "93007e7e7600"),
+        FunctionPatch(72218, "QuestHome", 3923, "94007600"),
+        FunctionPatch(72219, "QuestHome", 1920, "94007e7600"),
+        FunctionPatch(72444, "useIsMobileQuestDockVisibleToUser", 426, "96007e7e7600"),
+        FunctionPatch(73002, "useHasGuildRoleSubscriptionsSetting", 42, "96007e7e7600"),
+        FunctionPatch(73187, "useHasPremiumRestoreSubscriptionSetting", 208, "96007600"),
+        FunctionPatch(73188, "useHasPremiumRestoreSubscriptionSetting", 94, "96007e7e7600"),
+        FunctionPatch(73348, "SettingsAppearanceChannelListPreviewNitroUpsell", 308, "94007e7600"),
+        FunctionPatch(73349, "SettingsAppearanceChannelListPreviewNitroUpsell", 158, "94007e7600"),
+        FunctionPatch(73663, "VideoUploadQualityNitroUpsell", 779, "94007e7600"),
+        FunctionPatch(73664, "VideoUploadQualityNitroUpsell", 549, "94007e7600"),
+        FunctionPatch(74347, "openPasskeyUpsell", 113, "93007e7600"),
+        FunctionPatch(74348, "openPasskeyUpsellPromoSheet", 68, "93007e7600"),
+        FunctionPatch(74349, "closePasskeyUpsellPromoSheet", 38, "93007e7600"),
+        FunctionPatch(74350, "PasswordlessUpsellPromoSheet", 823, "94007e7600"),
+        FunctionPatch(74351, "PasswordlessUpsellPromoSheet", 512, "94007e7600"),
+        FunctionPatch(74414, "BalanceWidgetMenu", 233, "93007e7600"),
+        FunctionPatch(74419, "BalanceWidgetMenuWrapper", 418, "93007e7e7600"),
+        FunctionPatch(74420, "BalanceWidgetMenuWrapper", 229, "93007e7600"),
+        FunctionPatch(74463, "overrideSurvey", 58, "93007e7e7600"),
+        FunctionPatch(74464, "surveyHide", 153, "93007e7600"),
+        FunctionPatch(74465, "surveySeen", 243, "3d00480100001d004500010018306c0000017e7e7e7600"),
+        FunctionPatch(74872, "UserProfileTryItOutGetPremiumUpsell", 521, "94007e7600"),
+        FunctionPatch(74873, "UserProfileTryItOutGetPremiumUpsell", 340, "94007e7600"),
+        FunctionPatch(74879, "CollectiblesShopScreen", 303, "93007e7e7e7600"),
+        FunctionPatch(74880, "CollectiblesShopScreen", 221, "93007e7600"),
+        FunctionPatch(74884, "", 6363, "93007600"),
+        FunctionPatch(74885, "", 3044, "93007600"),
+        FunctionPatch(74888, "CollectiblesShopV2", 805, "93007e7e7600"),
+        FunctionPatch(74889, "CollectiblesShopV2", 542, "93007e7600"),
+        FunctionPatch(74915, "ShopNitroUpsellBanner", 913, "94007e7600"),
+        FunctionPatch(75038, "usePredicate", 37, "96007e7600"),
+        FunctionPatch(75050, "usePredicate", 37, "96007e7600"),
+        FunctionPatch(75245, "ActivityPrivacyUpsellActionSheet", 418, "94007e7600"),
+        FunctionPatch(75246, "ActivityPrivacyUpsellActionSheet", 211, "94007e7600"),
+        FunctionPatch(75926, "VoiceGuildTagChiplet", 871, "94007e7e7e7600"),
+        FunctionPatch(75927, "VoiceGuildTagChiplet", 369, "94007e7600"),
+        FunctionPatch(76312, "GuildRoleSubscriptionsUpsellActionSheet", 1204, "94007e7600"),
+        FunctionPatch(76313, "GuildRoleSubscriptionsUpsellActionSheet", 554, "94007e7600"),
+        FunctionPatch(76314, "IAPUpsellActionSheet", 441, "94007e7600"),
+        FunctionPatch(76315, "IAPUpsellActionSheet", 249, "94007e7600"),
+        FunctionPatch(76316, "GenericUpsellActionSheet", 1027, "94007e7600"),
+        FunctionPatch(76317, "GenericUpsellActionSheet", 465, "94007e7600"),
+        FunctionPatch(76318, "CreatorMonetizationOnboardingV2UpsellActionSheet", 1325, "94007e7600"),
+        FunctionPatch(76319, "CreatorMonetizationOnboardingV2UpsellActionSheet", 593, "94007e7600"),
+        FunctionPatch(76320, "GuildRoleSubscriptionTierTemplateUpsellActionSheet", 1976, "94007e7600"),
+        FunctionPatch(76321, "GuildRoleSubscriptionTierTemplateUpsellActionSheet", 924, "94007e7600"),
+        FunctionPatch(76325, "useIsGuildEligibleForRoleSubscriptionsUpsell", 616, "96007e7600"),
+        FunctionPatch(76326, "useIsGuildEligibleForRoleSubscriptionsUpsell", 317, "96007e7600"),
+        FunctionPatch(76373, "GuildUpsellChannelList", 2702, "94007e7600"),
+        FunctionPatch(76374, "GuildUpsellChannelList", 643, "94007e7600"),
+        FunctionPatch(76387, "OneColumnGuildUpsellList", 834, "94007e7600"),
+        FunctionPatch(76388, "OneColumnGuildUpsellList", 465, "94007e7600"),
+        FunctionPatch(76389, "GameCommunityMultiGuildUpsellCard", 1939, "94007e7600"),
+        FunctionPatch(77960, "GroupDMNitroCapBanner", 1458, "94007e7600"),
+        FunctionPatch(77961, "GroupDMNitroCapBanner", 597, "94007e7600"),
+        FunctionPatch(78118, "componentDidMount", 405, "93007e7600"),
+        FunctionPatch(78119, "componentDidUpdate", 1503, "93007e7e7e7600"),
+        FunctionPatch(
+            78269, "YouScreenUserProfileContent", 5753,
+            "340e00400f1e8908013b140e003b090e025e0a090c93026e0b14020a440a0b00128b00b66e0a0a0b00441d0801f6370f001d440c0802e3451708037173451c08044c6c453a0805e63c370f013a453908061c90370f023945380807f2dd370f033845290808393d370f0429450808093c9217250208b006251025083b0d0e015e0809116e080d02086c1b0802370f051b5e08092b6e0b14020845080b0a0e656c28080b370f06285e0809186e0b14020845080b0b9ff26c08080b4523080cf3c0370f07235e08092c6e0b0d020844081d0d4d6e100b0208370f08105e08092d6e0b14020845080b0ec4ef6c24080b370f09245e08092e6e080d02086e220802105e110a003d084812080f2300440b12107e9119c2da02006e0b0b1219d30e110b5e130a005e120a01ae283b110e08080b01005a0b110085110e040202009700610a000b8b0001610a001110121110130b5e0b092f6e1114020b440b1111f56f150b1113125e0b0a02d5120b105e0b0a03d50a0b1d5e110a04ae2c020bf3370000b6770400520b1d00520b10018b0002610a00108b0003610a001d8b0004610a000b10110b5e0b09306e0b0d020b6e0b0b021145110b12618945160b1341dc45130b14d9b4940318070316390f0a075e0b0a05d51a0b165e0b0a06d5120b135e0b0a07d50a0b115e120a08ae37020bed3700000c780400520b1100520b1601520b13028b0005610a00168b0006610a00138b0007610a00118b0008610a000b10120b5e0b09316e1114020b450b1115a0f26e0b0b111245210b166361370f0b2145340b17c202370f0c34451e0b18ac9745120b19e1933b2d0e04440b2d1af26e270b2d035e0b0a09d50a0b235e200a0aae1a850b0f050202008b0009610a00238b000a610a000b10200b5e0b09326e1114020b450b111bb2f26c0b0b1144310b1c74370f0d31440b2d1df46e0b0b2d033b110e038b00026f0b11020b005e1f0b005e0b0b01370f0e0b5e0b09336e1314020b450b131e1af26c370b13370f0f375e130a0b4816080f2300440b16107e6e0b0b1619d30a130b5e180a0bae183b130e09080b01005a0b13008b010b610a010b10180b5e130a0c440b1d0d4dd50a130b5e160a0dae1f850b0f0602020044131d0d4d8b010c610a01138b010d610a010b10160b5e0b092f6e1314020b440b1311f56f130b131816370f10135e0b09346e1814020b4516181fdfef440b1d0d4d6e0b16180b5e1609356e181402164516182027be911acd9402006e1616181a440b0b21a497011c0b0b01b0060b100b165e1609366e1814021645161822727e6e3016181a5e1609376e181402164516182395f19504701616180b300445351624c75e370f113545361625926e370f1236451616263981370f131610320b102629cf4003295e0b09376e1a14020b45181a279b8b020b586600000c780400520b1600520b3501520b36026f0b181a290b102629b90e0b013b0b0e0a45260b285413370f1426440b2d1df46e0b0b2d016f0b11020b005e1a0b00370f151a5e0b0b01370f160b5e110a0e4818080f2300440b18107e6e0b0b1819d30a110b5e180a0eae13850b0f070202008b000e610a000b10180b5e0b09386e1114020b450b11296cf16c0b0b11452b0b2a25b945330b2b20cb370f17335e0b0a0fd51a0b295e0b0a10d5120b285e0b0a11d50a0b235e110a12ae28850b0f080202008b000f610a00298b0010610a00288b0011610a00238b0012610a000b10110b5e0b0a13d52a0b365e0b0a14d5220b355e0b0a15d51a0b115e0b0a16d5120b265e0b0a17d50a0b165e230a18ae4d020bed530000f3830800520b2600520b1601520b3502520b3603520b11048b0013610a00368b0014610a00358b0015610a00118b0016610a00268b0017610a00168b0018610a000b10230b5e0b09376e1114020b450b112c94f16e0b0b112345290b2d4f8d370f182945110b2e0692370f1911452a0b2f2d76452f0b30bf43370f1a2f452c0b31508d3b0b0e0a450b0b3235101705290b390f1b055e0b0a19d50a0b245e3c0a1aae1a850b0f090202008b0019610a00248b001a610a000b103c0b370f1c3c5e0b0a1bd50e0b3c5e2e0a1c5e230a1dae2c850b0f0a020200083b01005a3b3c008b001b610a003c8b001c610a000b8b001d610a003b10233b102e0b440b2d33f06f0b0b2d2e235e0b0a1ed50a0b1f5e230a1fae251806031f930bb20c06442e1f34a16c0b2e1f8b001e610a001f8b001f610a000b10230b5e0b0a20d6820000000b215e0b0a21d5770b345e0b0a22d56f0b105e0b0a23d5670b075e0b0a24d55f0b3a5e0b0a25d5570b395e0b0a26d54f0b385e2e0a27450b1b355a7fd5412e0b5e2e0a28450b1b360aa1d5332e0b5e2e0a29450b1b376c3dd5252e0b5e0b0a2ad51d0b375e0b0a2bd5150b1d5e0b0a2cd50d0b315e2e0a2daf83000000850b0f0b0202008b0020610a00218b0021610a00348b0022610a00108b0023610a00078b0024610a003a8b0025610a00398b0026610a003845381b355a7f8b0027610a003845381b360aa18b0028610a003845381b376c3d8b0029610a00388b002a610a00378b002b610a001d8b002c610a00318b002d610a000b102e0b5e0b0a2ed5350b055e0b0a2fd52d0b1a5e310a30450b1b376c3dd51f310b5e310a31440b1d0d4dd512310b5e0b0a32d50a0b135e310a33ae41850b0f0c0202008b002e610a00058b002f610a001a45371b376c3d8b0030610a003744371d0d4d8b0031610a00378b0032610a00138b0033610a000b10310b5e130a344837080f2300440b37107e6e0b0b3719d30a130b5e380a34ae385e0b091c6e0b14020b44370b389544133739e25e0b091c6e0b14020b440b0b3a0a450b0b3b24276e0b13370b8b0034610a000b10380b5e0b0a35d50a0b335e370a36ae1a850b0f0d0202008b0035610a00338b0036610a000b10370b5e0b0a37d50a0b2e5e130a38ae176c0b2e028b0037610a002e8b0038610a000b10130b5e0b0a39d5120b375e0b0a3ad50a0b135e2e0a3bae48020b6749000090680d00520b38013b3a0e0e3b390e050138ee53dca952383701523813026f383a023938520b38028b0039610a00378b003a610a00138b003b610a000b102e0b5e0b0a3cd5650b295e0b0a3dd55d0b365e0b0a3ed5550b355e0b0a3fd54d0b215e0b0a40d5450b345e0b0a41d53d0b335e0b0a42d5350b325e0b0a43d52d0b315e0b0a44d5250b305e0b0a45d51d0b2e5e0b0a46d5150b1d5e0b0a47d50d0b165e130a48af7b040000080b01005a0b2e00b388010000025e380a494839080f2300443739107e6e37373919d30a38375e3b0a49ae385e37091c6e37140237443937389544383939e25e37091c6e371402374437373a0a4537373c420a6e373839378b0049610a0037103b375e370a4ad51237355e370a4bd50a37335e3a0a4cae2185370f0e0202008b004a610a00358b004b610a00338b004c610a0037103a375e370a4dd52737295e370a4ed51f37215e370a4fd51737345e380a5044371d0d4dd50a38375e390a51ae5a3b3c0e0e3b380e1302375966000018780400443d1d0d4d52373d005237290152372102523734036f373c0238378b004d610a00298b004e610a00218b004f610a003444381d0d4d8b0050610a00388b0051610a00371039375e370a52d51a37355e370a53d512373a5e370a54d50a37395e380a55ae50023767490000d079240052373b013b3d0e0e3b3c0e05013bee53dca9523b3a01523b3902703b3d023c3b3552373b028b0052610a00358b0053610a003a8b0054610a00398b0055610a003710383744370b3dc86e37370b38b366010000305e380a564839080f2300443739107e6e37373919d30a38375e3b0a56ae385e37091c6e37140237443937389544383939e25e37091c6e371402374437373a0a4537373ecfa36e373839378b0056610a0037103b375e370a57d51237365e370a58d50a37335e3a0a59ae2185370f0f0202008b0057610a00368b0058610a00338b0059610a0037103a375e370a5ad51a37215e370a5bd51237345e370a5cd50a371d5e390a5dae453b3c0e0e3b380e1402375a6600000c78040052371d0052372101523734026f373c0238378b005a610a00218b005b610a00348b005c610a001d8b005d610a00371039375e370a5ed51a37365e370a5fd512373a5e370a60d50a37395e380a61ae50023767490000cb800d0052373b013b3d0e0e3b3c0e05013bee53dca9523b3a01523b3902703b3d023c3b3652373b028b005e610a00368b005f610a003a8b0060610a00398b0061610a003710383744370b3dc86e37370b385e380a624839080f2300443739107e6e37373919d30a38375e3b0a62ae385e37091c6e37140237443937389544383939e25e37091c6e371402374437373a0a4537373fb00e6e373839378b0062610a0037103b375e370a63d51237335e370a64d50a37165e3a0a65ae2185370f100202008b0063610a00338b0064610a00168b0065610a0037103a375e370a66d50a37315e390a67ae176c3731028b0066610a00318b0067610a00371039375e370a68d51a373a5e370a69d51237395e370a6ad50a37165e380a6bae50023767490000af680d0052373b013b3d0e0e3b3c0e05013bee53dca9523b3a01523b3902703b3d023c3b1652373b028b0068610a003a8b0069610a00398b006a610a00168b006b610a003710383744370b3dc8af050000008b003c610a00298b003d610a00368b003e610a00358b003f610a00218b0040610a00348b0041610a00338b0042610a00328b0043610a00318b0044610a00308b0045610a002e8b0046610a001d8b0047610a00168b0048610a000b10130b5e0b0a6cd5220b2c5e0b0a6dd51a0b2a5e0b0a6ed5120b1a5e0b0a6fd50a0b135e160a70ae5a020bf1530000f3830800520b1a00520b2c015e2e09176e2e0d022e442e2e40da452e2e41196a520b2e02520b1303520b2a048b006c610a002c8b006d610a002a8b006e610a001a8b006f610a00138b0070610a000b10160b5e0b09456e1314020b450b1342f0f16e0b0b1316370f1d0b5e1309386e1614021345131643cd4a6e1313161745171344a88b452a134524b9451a13466a4e5e130a71d516132f5e130a72d50e130b5e2c0a735e160a74ae3785130f11020200082e02005a2e0b005a2e2f018b0071610a002f8b0072610a000b8b0073610a00138b0074610a002e10162e102c1345132d47fff06f13132d2c165e1309386e16140213451316486df1701613160b2b2a5e130a75d52213295e130a76d51a13285e130a77d51213265e130a78d50a13115e130a79ae2f850f0f120202008b0075610a00298b0076610a00288b0077610a00268b0078610a00118b0079610a000f10130f5e0f092b6e1114020f450f114992056e0f0f11135e110a7a4813080f2300440f13107e6e0f0f1319d30a110f5e110a7aae16020fd60000001e8308008b007a610a000f10110f5e130a7b450f1b4a08b1d50a130f5e130a7cae2b45261b4a08b1080f02005a0f26005a0f110145111b4a08b18b007b610a00118b007c610a000f10130f5e0f0a7dd50a0f125e110a7eae1d010fbf0132d2520f12008b007d610a00128b007e610a000f10110f5e0f0a7fd5220f255e0f0a80d51a0f1e5e0f0a81d5120f115e0f0a82d50a0f1d5e120a83ae503b280e0e3b260e11020f5b66000018780400520f1d00520f1e01520f1102520f25036f0f2802260f8b007f610a00258b0080610a001e8b0081610a00118b0082610a001d8b0083610a000f10120f5e110a84450f1b4bdcadd518110f5e110a85450f1b4cddadd50a110f5e1e0a86ae3e45111b4bdcad080f02005a0f110045111b4cddad5a0f110145111b4bdcad8b0084610a001145111b4cddad8b0085610a00118b0086610a000f101e0f5e0f0a87d5380f245e0f0a88d5300f075e0f0a89d5280f235e0f0a8ad5200f1f5e110a8b450f1b4d6e3ed512110f5e0f0a8cd50a0f1e5e110a8dae7b3b260e0e5e0f09466e250d020f020f5c66000033920a00520f2700520f2401520f0702520f1e0345271b4d6e3e520f2704520f2306520f1f076f0f2602250f8b0087610a00248b0088610a00078b0089610a00238b008a610a001f451f1b4d6e3e8b008b610a001f8b008c610a001e8b008d610a000f10110f16051003930fb00905450f104e73d416031003931fb00903451f104fbeae5e100a8ed50a10155e240a8fae605e10091c6e10140210442510389544232550815e10091c6e101402104410103a0a461e10517a7f040001107f1132d25e2609476e271402264526275209c76e26262715521026006f1023251e108b008e610a00158b008f610a00101024105e150a90481e080f230044101e107e6e10101e19d30a15105e230a90ae385e10091c6e10140210441e10389544151e39e25e10091c6e101402104410103a0a45101053a3146e10151e108b0090610a0010102310481008540f00441e1055569115e80401009010ff00701e1e102415235e100a91d53210225e100a92d52a10215e100a93d52210205e100a94d51a101f5e100a95d512101e5e100a96d50a101d5e150a97ae6602105d66000065652c0052101d0052101f0152102202521021035210200452101e053b230e0b45232356473a521023068b0091610a00228b0092610a00218b0093610a00208b0094610a001f8b0095610a001e8b0096610a001d8b0097610a00101015101704040f5e0f0a98d51a0f1c5e0f0a99d5120f045e0f0a9ad50a0f155e100a9bae453b1e0e0e3b1d0e16020f5e6600000c780400520f0400520f1c01520f15026f0f1e021d0f8b0098610a001c8b0099610a00048b009a610a00158b009b610a000f10100f5e0f0a9c4815080f2300440815107e6e08081519d30a0f085e190a9cae1602086b000000578308008b009c610a00081019089315b20707901586675e080a9dd51208155e080a9ed50a080b5e0f0a9fae453b1d0e0e5e0809486e08140208451c08570d540208b54a0000b677040052080b00520815016f081d021c088b009d610a00158b009e610a000b8b009f610a0008100f085e150aa045081b5857d9d51215085e080aa1d50a080f5e150aa2ae463b1d0e0e3b1c0e060208b5240000b6770400451e1b5857d952081e0052080f016f081d021c08451b1b5857d98b00a0610a001b8b00a1610a000f8b00a2610a00081015085e080aa3d50a080b5e0f0aa4ae363b1c0e0e5e0809496e08140208451b085948730108020832d252080b006f081c021b088b00a3610a000b8b00a4610a0008100f085e080aa5d522081a5e080aa6d51a08175e080aa7d51208165e080aa8d50a080f5e0b0aa9ae5a3b1c0e0e5e08094a6e080d0208441b085a29020830300000187804005208170052081a015208160252080f036f081c021b088b00a5610a001a8b00a6610a00178b00a7610a00168b00a8610a000f8b00a9610a0008100b085e080aaad51208155e080aabd50a080b5e0f0aacae4a3b170e0f3b160e060208dc2c00000c7804005208190052081801081802005a1815005a180b01520818026f08170216088b00aa610a00158b00ab610a000b8b00ac610a0008100f085e080aadd52d08135e080aaed52508125e080aafd51d08115e080ab0d51508105e080ab1d50d080f5e0b0ab2af8d0000003b150e0e5e08094b6e081402084514085bf95d0208f4610000465f09003b180e0f3b170e060216b5240000b677040052161300081904005a1912005a1911015a1910025a190f03521619016f1618021716520816016f08150214088b00ad610a00138b00ae610a00128b00af610a00118b00b0610a00108b00b1610a000f8b00b2610a0008100b085e080ab3d512080c5e080ab4d50a080b5e080ab5ae443b0e0e0e5e09094a6e090d0209440d095a290209b5240000b677040052090c0052090b016f090e020d098b00b3610a000c8b00b4610a000b8b00b5610a00091008097608"
+        ),
+        FunctionPatch(78283, "useShouldShowExpiringTrialOfferCard", 516, "96007e7600"),
+        FunctionPatch(78284, "useShouldShowExpiringTrialOfferCard", 338, "96007e7600"),
+        FunctionPatch(78286, "YouExpiringTrialOfferCard", 2186, "94007e7600"),
+        FunctionPatch(78287, "YouExpiringTrialOfferCard", 895, "94007e7600"),
+        FunctionPatch(78837, "NitroFileUploadAnnouncementPromoSheet", 795, "94007e7600"),
+        FunctionPatch(78838, "NitroFileUploadAnnouncementPromoSheet", 438, "94007e7600"),
+        FunctionPatch(78841, "NitroFileUploadUpsellPromoSheet", 960, "94007e7600"),
+        FunctionPatch(78842, "NitroFileUploadUpsellPromoSheet", 572, "94007e7600"),
+        FunctionPatch(79190, "PremiumSoundboardFeatureUpsell", 277, "94007e7600"),
+        FunctionPatch(79191, "PremiumSoundboardFeatureUpsell", 165, "94007e7600"),
+        FunctionPatch(79418, "VoicePanelGamesSection", 341, "94007600"),
+        FunctionPatch(79419, "VoicePanelGamesSection", 167, "94007600"),
+        FunctionPatch(79861, "trackHttpRequest", 220, "93007600"),
+        FunctionPatch(80062, "_trackStartSpeaking", 238, "93007e7e7600"),
+        FunctionPatch(80063, "_trackStartListening", 237, "93007e7600"),
+        FunctionPatch(80164, "openDmSettingsUpsellModal", 220, "93007e7600"),
+        FunctionPatch(80165, "DmSettingsUpsellActionSheet", 2176, "94007e7600"),
+        FunctionPatch(80166, "DmSettingsUpsellActionSheet", 1028, "94007e7600"),
+        FunctionPatch(81067, "GuildSettingsServerTagUpsellCard", 1971, "94007e7600"),
+        FunctionPatch(81068, "GuildSettingsServerTagUpsellCard", 960, "94007e7600"),
+        FunctionPatch(82134, "handleAppStateUpdate", 230, "93007e7e7600"),
+        FunctionPatch(82174, "installWebsocketTelemetryHook", 183, "93007e7e7e7600"),
+        FunctionPatch(82216, "setupLibdiscoreTimersMonitor", 39, "93007e7e7e7600"),
+        FunctionPatch(82282, "logDangerously", 146, "93007e7e7600"),
+        FunctionPatch(82283, "log", 206, "93007e7e7600"),
+        FunctionPatch(82284, "verboseDangerously", 146, "93007e7e7600"),
+        FunctionPatch(82285, "verbose", 206, "93007e7e7600"),
+        FunctionPatch(82286, "info", 206, "93007e7e7600"),
+        FunctionPatch(82289, "trace", 146, "93007e7e7600"),
+        FunctionPatch(82291, "fileOnly", 148, "93007600"),
+        FunctionPatch(86319, "track", 544, "3d00480100001d004500010018306c0000017600"),
+        FunctionPatch(86324, "submitEventsImmediately", 247, "3d00480100001d004500010018306c0000017e7e7e7600"),
+        FunctionPatch(86445, "", 134, "93007e7e7600"),
+        FunctionPatch(92434, "_handleVoiceQualityPeriodicsStats", 508, "93007600"),
+        FunctionPatch(92783, "sampleStats", 395, "93007e7e7e7600"),
+        FunctionPatch(92799, "sampleStats", 68, "93007600"),
+        FunctionPatch(92818, "sampleStats", 112, "93007600"),
+        FunctionPatch(112777, "flush", 82, "93007e7e7600"),
+        FunctionPatch(112888, "add", 511, "93007e7e7e7600"),
+        FunctionPatch(112891, "_flush", 374, "93007e7e7600"),
+        FunctionPatch(112892, "_captureMetrics", 97, "93007e7600"),
+        FunctionPatch(112913, "add", 443, "93007e7e7e7600"),
+        FunctionPatch(112914, "flush", 114, "93007e7e7600"),
+        FunctionPatch(
+            118763, "", 213,
+            "34030142050301000000890701370500073b0803003b0403025e03040a93016e060801034503060057d36e06030607130306b1a1000000063406005e09040b6e0a08010945090a010b766e09090a07b04b095e09040b6e0a08010945090a0276b66e09090a07b019095e04040b6e080801044504080351766e04040807ae1b3b0a060145090a043dbf8508057b4102006e08090a08130408ae3845070705566745070706cbb544070707a497001c010000b21c013b070601450607043dbf8505057a4102006e050607051301051004011003047603"
+        ),
+        FunctionPatch(
+            118888, "", 624,
+            "34050002036749000090680d003409013b0b09003b0609025e02061e93006e020b0002440702009544040701e25e02061e6e020b0002440202020a4502020324276e02040702520302013b0809143b0709050102ee53dca985040594410200520204013b0405286c040400520204026f020800070252030202080201005a0203003b030519b3a70000000044040204c8020367490000d07924005e0a061e6e0a0b000a440d0a0095440c0d01e25e0a061e6e0a0b000a440a0a020a450a0a05420a6e0a0c0d0a52030a01010cee53dca9850a0595410200520c0a013b0d091c020aef530000187804003b0e0500440e0e064d520a0e003b010525520a01013b01050b520a01023b0e0515520a0e036f0a08000d0a520c0a023b0a051b700a0800070c0a52030a026e030402033b03051ab20d033b04050a940118030104b3ba0000000344040204c8020367490000cb800d005e0a061e6e0a0b000a440d0a0095440c0d01e25e0a061e6e0a0b000a440a0a020a450a0a07cfa36e0a0c0d0a52030a01010aee53dca9850c0596410200520a0c013b0c091d0209f0530000f38308003b0d050052090d003b0d050a52090d013b0d050252090d023b0e0501940116010e01930db00801440d0e064d52090d033b0d051552090d046f0908000c09520a09023b09051c70090800070a09520309026e030402033b010518b2730044040204c8020367490000af680d005e09061e6e090b0009440a09009544090a01e25e06061e6e060b0006440606020a45060608b00e6e06090a06520306010106ee53dca985090597410200520609013b0905296c090900520609023b05051d70050800070605520305026e030402037602"
+        ),
+        FunctionPatch(125330, "navigateToNitroPage", 79, "93007e7600"),
+        FunctionPatch(
+            131612, "", 572,
+            "34040002026749000090680d003408013b0a08003b0508025e01051c93006e010a0001440601009544030601e25e01051c6e010a0001440101020a4501010324276e01030601520201013b07080e3b0608050101ee53dca98503041b520200520103013b03041f6c030300520103026f010700060152020102080101005a0102003b020411b3a70000000044030104c8020267490000d07924005e09051c6e090a0009440c090095440b0c01e25e09051c6e090a0009440909020a45090905420a6e090b0c0952020901010bee53dca98509041c520200520b09013b0c0813020959660000187804003b0d0400440d0d064d52090d003b0d041a52090d013b0d040b52090d023b0d040c52090d036f0907000c09520b09023b09041370090700060b09520209026e020301023b020412b39a0000000244030104c8020267490000cb800d005e09051c6e090a0009440c090095440b0c01e25e09051c6e090a0009440909020a45090907cfa36e090b0c09520209010109ee53dca9850b041d52020052090b013b0b081402085a6600000c7804003b0c040052080c003b0c040b52080c013b0c040c52080c026f0807000b08520908023b08041470080700060908520208026e0203010244030104c8020267490000af680d005e08051c6e080a0008440908009544080901e25e05051c6e050a0005440505020a45050508b00e6e05080905520205010105ee53dca98508041e520200520508013b0804206c080800520508023b0404157004070006050452020402af050000007601"
+        ),
+        FunctionPatch(136939, "handlePostConnectionOpen", 373, "93007e7600"),
+        FunctionPatch(
+            147836, "", 213,
+            "34030142050301000000890701370500073b0803003b0403025e03040a93016e060801034503060057d36e06030607130306b1a1000000063406005e09040b6e0a08010945090a010b766e09090a07b04b095e09040b6e0a08010945090a0276b66e09090a07b019095e04040b6e080801044504080351766e04040807ae1b3b0a060045090a043dbf850805466602006e08090a08130408ae3845070705566745070706cbb544070707a497001c010000b21c013b070600450607043dbf850505456602006e050607051301051004011003047603"
+        ),
+        FunctionPatch(152951, "", 31, "93007e7e7e7600"),
     )
 
     private fun String.hexToBytes(): ByteArray {

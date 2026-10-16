@@ -140,7 +140,7 @@ jobs:
           python3 - <<'PY' > /tmp/sources.tsv
           import json
           source = next(s for s in json.load(open("sources.json"))["sources"]
-                        if s["id"] == "discord_351200")
+                        if s["id"] == "discord_351205")
           print(source["url"], source["sha256_expected"], "base.apk")
           for split in source["splits"]:
               name = split["url"].rsplit("/", 1)[1]

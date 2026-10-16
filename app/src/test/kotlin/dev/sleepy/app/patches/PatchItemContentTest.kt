@@ -18,10 +18,9 @@ class PatchItemContentTest {
     fun everyPatchedFunctionHasAFeatureGroupAndADescription() {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
-            "the set is the 208 functions the patch table covers: 49956's module, " +
-                "modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx, is not in " +
-                "351.2.0 at all, so that entry has no target and is not in the table",
-            208,
+            "the set is the 208 functions the patch set has carried since 351.2.0, plus the " +
+                "four the game-activity feature adds, plus the 208 the declutter features add",
+            420,
             patched.size
         )
         assertEquals(
@@ -123,7 +122,7 @@ class PatchItemContentTest {
     @Test
     fun everyItemHasAKeyThatDoesNotDependOnItsPosition() {
         val items = DiscordHermesFunctionCatalog.items()
-        assertEquals(38, items.size)
+        assertEquals(47, items.size)
         assertEquals(
             "two items that share a key are one item as far as a saved selection is concerned",
             items.size,

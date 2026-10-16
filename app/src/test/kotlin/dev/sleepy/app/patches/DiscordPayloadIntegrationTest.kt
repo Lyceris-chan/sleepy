@@ -26,7 +26,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The Discord patch payloads applied to the shipped 351.2.0 build.
+ * The Discord patch payloads applied to the shipped 351.2.5 build.
  *
  * Dynamic name resolution and surgical DEX patching run against the real base split: the native
  * patch set has to find every anchor it names, the Hermes patches have to write the functions
@@ -34,28 +34,28 @@ import org.junit.Test
  */
 class DiscordPayloadIntegrationTest {
 
-    /** The Discord 351.2.0 base split, which lives outside the repository. */
+    /** The Discord 351.2.5 base split, which lives outside the repository. */
     private val discordBaseApk = ComparisonApks.discordBaseApk
 
     /**
      * Function id -> (body offset, bytecode size) for every Discord Hermes target in the
-     * 351.2.0 bundle, transcribed from `hermes-decomp dump --kind functions`.
+     * 351.2.5 bundle, transcribed from `hermes-decomp dump --kind functions`.
      */
     private val LOCATED_TARGETS = mapOf(
-        85406 to intArrayOf(43345741, 544),
-        24184 to intArrayOf(28778592, 288),
-        24051 to intArrayOf(28768411, 54),
-        24047 to intArrayOf(28767970, 87),
-        24062 to intArrayOf(28771019, 43),
-        20435 to intArrayOf(28275999, 345),
-        67883 to intArrayOf(37907355, 257),
-        41748 to intArrayOf(31063992, 292),
-        70031 to intArrayOf(38490817, 34),
-        70037 to intArrayOf(38491836, 298),
-        52519 to intArrayOf(33293940, 446),
-        51395 to intArrayOf(32955088, 82),
-        50875 to intArrayOf(32843107, 107),
-        49519 to intArrayOf(32532381, 468)
+        86319 to intArrayOf(43646458, 544),
+        24536 to intArrayOf(28947626, 288),
+        24403 to intArrayOf(28937445, 54),
+        24399 to intArrayOf(28937000, 87),
+        24414 to intArrayOf(28940053, 43),
+        20772 to intArrayOf(28441979, 345),
+        70014 to intArrayOf(38726730, 257),
+        42245 to intArrayOf(31248649, 292),
+        72185 to intArrayOf(39320293, 34),
+        72191 to intArrayOf(39321312, 298),
+        53029 to intArrayOf(33486400, 446),
+        51898 to intArrayOf(33145676, 82),
+        51398 to intArrayOf(33036149, 107),
+        50009 to intArrayOf(32720861, 468)
     )
 
     @Test

@@ -32,8 +32,9 @@ import org.junit.Test
  * spelled four R8-obfuscated coroutine class names, a later build renamed the package, its
  * anchor stopped matching, and the only trace was a skip line in a long log. It happened again
  * for 351.2.0, where the package moved from `Lmr/` to `Ltr/` and `SupervisorJobImpl` changed its
- * simple name as well; the names here were read out of that build's own `MainImmediateScopeKt`,
- * which builds the same scope. Two assertions here exist because of the first time. The anchor must occur exactly once *in the stock build*, so a
+ * simple name as well, and again for 351.2.5, where the package moved from `Ltr/` to `Lsr/` with
+ * the simple names unchanged. The names here were read out of the build's own `MainImmediateScopeKt`,
+ * which builds the same scope, and checked against the class relationships the injection relies on. Two assertions here exist because of the first time. The anchor must occur exactly once *in the stock build*, so a
  * rename fails this test instead of quietly leaving the fault in place; and the four classes
  * the injection references must all exist in the build, so a stale name cannot produce a
  * dangling reference that verifies at assemble time and fails on the device.
@@ -47,17 +48,17 @@ class MediaScopeSupervisorTest {
 
         /** The line the injection is written after, which the patch leaves in place. */
         const val DISPATCHER_CTOR =
-            "    invoke-direct {v2, v1}, Ltr/r0;-><init>(Ljava/util/concurrent/Executor;)V"
+            "    invoke-direct {v2, v1}, Lsr/r0;-><init>(Ljava/util/concurrent/Executor;)V"
 
         /** The scope factory call that follows the injection, now built on the supervisor. */
-        const val SCOPE_FACTORY = "Ltr/x;->b("
+        const val SCOPE_FACTORY = "Lsr/x;->b("
 
         /** The supervisor the injection builds, and the job base whose constructor it calls. */
-        const val SUPERVISOR_JOB = "Ltr/m1"
-        const val JOB_BASE = "Ltr/y0"
+        const val SUPERVISOR_JOB = "Lsr/m1"
+        const val JOB_BASE = "Lsr/y0"
 
         /** Every class the injection names, checked against the build before it is written. */
-        val REFERENCED = listOf("Ltr/r0;", "Ltr/x;", SUPERVISOR_JOB + ";", JOB_BASE + ";")
+        val REFERENCED = listOf("Lsr/r0;", "Lsr/x;", SUPERVISOR_JOB + ";", JOB_BASE + ";")
 
         /** The context merge that attaches the supervisor to the dispatcher. */
         const val CONTEXT_PLUS = "Lkotlin/coroutines/e;->c("

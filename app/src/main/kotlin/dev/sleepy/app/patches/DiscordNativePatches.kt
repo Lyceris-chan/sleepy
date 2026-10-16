@@ -5,15 +5,34 @@ import dev.sleepy.app.model.SmaliPatch
 
 /**
  * Native (smali/DEX) modifications for Discord, transcribed from the recorded change set for
- * Discord 349.5 Alpha and re-pointed at 351.2.0.
+ * Discord 349.5 Alpha and re-pointed at 351.2.5.
  *
  * This object carries the part of that change set that [DiscordPatches] does not: the edits that
  * are neither the Hermes JavaScript bundle nor a whole-method stub of the handful of
  * telemetry entry points already covered there. Every entry corresponds to a call the
  * recorded change set makes, and the smali it writes is the recorded output, with one exception:
- * R8 renumbers classes and methods on every release, so where a name moved in 351.2.0 the new name
- * is substituted—read out of the build's own code and checked to have the same body before it
+ * R8 renumbers classes and methods on every release, so where a name moved the new name is
+ * substituted—read out of the build's own code and checked to have the same body before it
  * replaced the recorded one.
+ *
+ * The move to 351.2.5 left all 47 class paths this object names where they were—checked by
+ * comparing each against the class list of the build's own DEX files rather than by assuming
+ * it—but four kinds of name inside them did move, and each is re-pointed here from the build's
+ * own smali:
+ *
+ * — Five experiment lambdas take the enclosing `NativeExperiments` where they used to take a
+ *   libdiscore module, so their signatures and the bodies written for them name a different
+ *   parameter.
+ * — `FrameMetricsAggregator.bindTo` is private where it was public, and the method the second
+ *   patch stubbed as `initialize(Landroid/view/Window;)` is now `enableTracking`, so both the
+ *   signature and the access flags move. The neighbouring `JankStatsAggregator` keeps the name
+ *   `initialize`, which is why the two are not interchangeable.
+ * — The coroutine classes the supervisor-scope injection names moved from `Ltr/` to `Lsr/`,
+ *   suffixes unchanged, and their relationships were checked in the new build (`sr/m1` extends
+ *   `sr/y0`, and `sr/y0` still has the no-argument constructor the injection calls).
+ * — The obfuscated okhttp cache type moved from `Lvs/g;` to `Lus/g;`, on the same
+ *   `OkHttpClient$Builder` field `k`, so the shared-cache patches and the field they declare
+ *   name the new type.
  *
  * Three kinds of edit are deliberately absent, because an on-device patcher that edits DEX
  * files cannot apply them:
@@ -530,8 +549,8 @@ object DiscordNativePatches {
                 title = "Removing the per-frame metrics listener",
                 explanation = "Stops the frame-metrics listener and its dedicated thread from running for the whole foreground session.",
                 smaliPath = "com/discord/jank_stats/FrameMetricsAggregator.smali",
-                methodSignature = ".method public final bindTo(Landroid/view/Window;)V",
-                replacementBody = """.method public final bindTo(Landroid/view/Window;)V
+                methodSignature = ".method private final bindTo(Landroid/view/Window;)V",
+                replacementBody = """.method private final bindTo(Landroid/view/Window;)V
     .locals 0
     # Patch: no-op.
     return-void
@@ -567,11 +586,11 @@ object DiscordNativePatches {
     new-instance v1, Ljava/io/File;""",
                 replacement = """    :cond_c
     # Patch: reuse one disk cache instead of opening three over the same dir.
-    sget-object v1, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Lvs/g;
+    sget-object v1, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Lus/g;
 
     if-eqz v1, :new_cache
 
-    iput-object v1, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lvs/g;
+    iput-object v1, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lus/g;
 
     return-object v0
 
@@ -582,13 +601,13 @@ object DiscordNativePatches {
                 title = "Remembering the disk cache for reuse",
                 explanation = "Stores the newly created disk cache so later clients reuse it instead of opening the directory again.",
                 smaliPath = "com/facebook/react/modules/network/OkHttpClientProvider.smali",
-                anchor = """    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lvs/g;
+                anchor = """    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lus/g;
 
     return-object v0
 .end method""",
-                replacement = """    sput-object p0, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Lvs/g;
+                replacement = """    sput-object p0, Lcom/facebook/react/modules/network/OkHttpClientProvider;->httpCache:Lus/g;
 
-    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lvs/g;
+    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lus/g;
 
     return-object v0
 .end method"""
@@ -600,7 +619,7 @@ object DiscordNativePatches {
                 anchor = ".field private static client:Lokhttp3/OkHttpClient;",
                 replacement = """.field private static client:Lokhttp3/OkHttpClient;
 
-.field private static httpCache:Lvs/g;"""
+.field private static httpCache:Lus/g;"""
             )
         )
     )
@@ -1229,8 +1248,8 @@ object DiscordNativePatches {
                 title = "Skipping frame metrics aggregator setup",
                 explanation = "Stops the per-frame FrameMetrics listener from installing on the window.",
                 smaliPath = "com/discord/jank_stats/FrameMetricsAggregator.smali",
-                methodSignature = ".method public final initialize(Landroid/view/Window;)V",
-                replacementBody = """.method public final initialize(Landroid/view/Window;)V
+                methodSignature = ".method public final enableTracking(Landroid/view/Window;)V",
+                replacementBody = """.method public final enableTracking(Landroid/view/Window;)V
     .locals 0
     # Patch: no-op.
     return-void
@@ -1450,17 +1469,17 @@ object DiscordNativePatches {
                 title = "Keeping the media engine alive after one failure",
                 explanation = "Builds the media engine's coroutine scope on a supervisor job, so one failed operation no longer cancels the scope and turns every later media call into a no-op.",
                 smaliPath = "com/discord/media/engine/MediaEngineModule.smali",
-                anchor = """    invoke-direct {v2, v1}, Ltr/r0;-><init>(Ljava/util/concurrent/Executor;)V
+                anchor = """    invoke-direct {v2, v1}, Lsr/r0;-><init>(Ljava/util/concurrent/Executor;)V
 """,
-                replacement = """    invoke-direct {v2, v1}, Ltr/r0;-><init>(Ljava/util/concurrent/Executor;)V
+                replacement = """    invoke-direct {v2, v1}, Lsr/r0;-><init>(Ljava/util/concurrent/Executor;)V
 
     # Patch: supervisor scope - a plain Job cancels itself and every
     # child on the first throw, turning all ~66 appScope.launch sites
     # into no-ops for the rest of the process. Copied from Discord's own
     # MainImmediateScopeKt.MainImmediateScope().
-    new-instance v1, Ltr/m1;
+    new-instance v1, Lsr/m1;
 
-    invoke-direct {v1}, Ltr/y0;-><init>()V
+    invoke-direct {v1}, Lsr/y0;-><init>()V
 
     invoke-static {v1, v2}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
 
@@ -1646,8 +1665,8 @@ object DiscordNativePatches {
                 title = "Using the smaller image cache experiment",
                 explanation = "Pins the image cache experiment to its cheap treatment instead of following the server assignment.",
                 smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
-                methodSignature = ".method private static final frescoCacheExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/FrescoMemoryCacheExperimentSettings;",
-                replacementBody = """.method private static final frescoCacheExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/FrescoMemoryCacheExperimentSettings;
+                methodSignature = ".method private static final frescoCacheExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/FrescoMemoryCacheExperimentSettings;",
+                replacementBody = """.method private static final frescoCacheExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/FrescoMemoryCacheExperimentSettings;
     .locals 2
     sget-object v0, Lcom/discord/native_experiments/FrescoMemoryCacheExperimentBootstrap;->INSTANCE:Lcom/discord/native_experiments/FrescoMemoryCacheExperimentBootstrap;
     const/4 p0, 0x1
@@ -1660,8 +1679,8 @@ object DiscordNativePatches {
                 title = "Using the background JavaScript memory target",
                 explanation = "Pins the JavaScript engine memory-target experiment to its background-oriented treatment.",
                 smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
-                methodSignature = ".method private static final hermesOccupancyTargetExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/HermesOccupancyTargetExperimentSettings;",
-                replacementBody = """.method private static final hermesOccupancyTargetExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/HermesOccupancyTargetExperimentSettings;
+                methodSignature = ".method private static final hermesOccupancyTargetExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/HermesOccupancyTargetExperimentSettings;",
+                replacementBody = """.method private static final hermesOccupancyTargetExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/HermesOccupancyTargetExperimentSettings;
     .locals 2
     sget-object v0, Lcom/discord/native_experiments/HermesOccupancyTargetExperimentBootstrap;->INSTANCE:Lcom/discord/native_experiments/HermesOccupancyTargetExperimentBootstrap;
     const/4 p0, 0x1
@@ -1674,8 +1693,8 @@ object DiscordNativePatches {
                 title = "Using the shared image pool for chat images",
                 explanation = "Pins the chat image pool experiment to the shared-pool treatment.",
                 smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
-                methodSignature = ".method private static final chatMosaicSharedPoolExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentSettings;",
-                replacementBody = """.method private static final chatMosaicSharedPoolExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentSettings;
+                methodSignature = ".method private static final chatMosaicSharedPoolExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentSettings;",
+                replacementBody = """.method private static final chatMosaicSharedPoolExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentSettings;
     .locals 2
     sget-object v0, Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentBootstrap;->INSTANCE:Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentBootstrap;
     const/4 p0, 0x1
@@ -1688,8 +1707,8 @@ object DiscordNativePatches {
                 title = "Turning per-screen jank tracking off",
                 explanation = "Pins the per-screen jank experiment to control, which is the treatment that switches per-screen tracking off.",
                 smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
-                methodSignature = ".method private static final jankPerScreenExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/JankPerScreenExperimentSettings;",
-                replacementBody = """.method private static final jankPerScreenExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)Lcom/discord/native_experiments/JankPerScreenExperimentSettings;
+                methodSignature = ".method private static final jankPerScreenExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/JankPerScreenExperimentSettings;",
+                replacementBody = """.method private static final jankPerScreenExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/JankPerScreenExperimentSettings;
     .locals 2
     sget-object v0, Lcom/discord/native_experiments/JankPerScreenExperimentBootstrap;->INSTANCE:Lcom/discord/native_experiments/JankPerScreenExperimentBootstrap;
     const/4 p0, 0x0
@@ -1702,8 +1721,8 @@ object DiscordNativePatches {
                 title = "Pinning the React Native mounting mode",
                 explanation = "Pins the mounting-mode experiment to the value that matches the individually forced React Native flags, so the two cannot drift apart.",
                 smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
-                methodSignature = ".method private static final mountingModeExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)I",
-                replacementBody = """.method private static final mountingModeExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule;)I
+                methodSignature = ".method private static final mountingModeExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I",
+                replacementBody = """.method private static final mountingModeExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I
     .locals 1
     const/4 p0, 0x3
     return p0

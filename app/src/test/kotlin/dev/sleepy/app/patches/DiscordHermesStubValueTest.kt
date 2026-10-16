@@ -13,17 +13,17 @@ import org.junit.Test
 /**
  * The typing hook's stub returns a value of the shape its caller reads.
  *
- * 57893 is the uncompiled variant of `useTypingUserIdsForDisplay`, in
+ * 62137 is the uncompiled variant of `useTypingUserIdsForDisplay`, in
  * `modules/chat/native/TypingIndicator.tsx`, and the React Compiler experiment defaults off, so
  * it is the variant the app runs. What the recorded change set did with the id it held in an
- * earlier release was to stub it to `undefined`, and the caller dereferences the return: 57869
+ * earlier release was to stub it to `undefined`, and the caller dereferences the return: 62113
  * passes it to `hasTypingIndicatorContent`, which reads `.length`, and that read throws a
  * TypeError on `undefined`. The stub here builds an empty array instead - the hook's own shape
  * with no typing users - so the read finds 0.
  *
  * The earlier release had a second function with the same problem, the SHOW_CONFIRM_MODAL handler
  * in `modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx`, and the same reasoning
- * shaped its stub. It is not here any more: 351.2.0 ships no `modules/vibegrations/` path at all,
+ * shaped its stub. It is not here any more: no release since 349.5 ships a `modules/vibegrations/` path at all,
  * so the module and the function are gone and there is nothing to return a value from.
  *
  * The first test pins the replacement, which is the change itself. The second applies the whole
@@ -35,7 +35,7 @@ class DiscordHermesStubValueTest {
     private val baseApk = ComparisonApks.discordBaseApk
     private val hermesDecomp = ComparisonApks.hermesDecomp
 
-    /** 57893: `NewArray r0, 0; AsyncBreakCheck; Ret r0`, an empty array. */
+    /** 62137: `NewArray r0, 0; AsyncBreakCheck; Ret r0`, an empty array. */
     private val typingHookStub = "080000007e7600"
 
     /** What the recorded change set wrote for the id: `LoadConstUndefined r0; ...; Ret r0`. */
@@ -127,7 +127,7 @@ class DiscordHermesStubValueTest {
          * The uncompiled variant of `useTypingUserIdsForDisplay`, in
          * `modules/chat/native/TypingIndicator.tsx`.
          */
-        const val TYPING_HOOK = 57893
+        const val TYPING_HOOK = 62137
 
         /**
          * Its caller, the chat input, which reads `.length` off the return.
@@ -137,6 +137,6 @@ class DiscordHermesStubValueTest {
          * through, but it names 120 strings no other function in the bundle names, which is a
          * stronger match than a closure ordinal.
          */
-        const val TYPING_HOOK_CALLER = 57869
+        const val TYPING_HOOK_CALLER = 62113
     }
 }

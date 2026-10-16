@@ -4,35 +4,36 @@
   "manifest_url": "https://raw.githubusercontent.com/Lyceris-chan/sleepy/main/sources.json",
   "project_url": "https://github.com/Lyceris-chan/sleepy",
   "known_limitations": {
-    "discord_351200": [
-      "The JavaScript patches are written for Discord 351.2.0 and refuse any other bundle. Hermes numbers functions per bundle, so an id from one release names an unrelated function in another; every entry therefore declares the size of the body it replaces, and the patcher skips an entry whose declaration does not match rather than writing bytes into a function it was not built for. Of the 208 entries, 175 are constant-shaped stubs whose bytes name nothing bundle-specific and carry unchanged, 17 are promise-shaped stubs that are re-assembled against this bundle because they name the strings “Promise” and “resolve” through the bundle’s own string identifiers, and 16 are edits of an original body, re-derived against the body this build has. The set is one entry smaller than the one written for the previous release: entry 49956 lived in modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx, and 351.2.0 ships no modules/vibegrations/ module path at all, so that entry has no target here.",
-      "What the previous release’s set could claim and this one cannot: that set was extracted from a build that had been patched and verified by hand, and every function of the patched bundle was compared against that build’s shipped bundle byte for byte. There is no recorded patched 351.2.0 build, so that comparison has no counterpart here and is gone. What replaces it is narrower and is stated plainly: every entry must apply with nothing skipped to the build it names, and a real Hermes disassembler must read every one of the 208 patched functions back. That catches a body which occupies the right number of bytes but is not valid bytecode, which is the failure that matters most and the one an earlier table was found to carry. It does not catch a body that assembles cleanly and does something other than what its entry says.",
-      "The functions the patch set stubs keep the exception-handler table of the much larger body they had before, and those entries name ranges that end past where the new, shorter body does. The bytes are copied through from the unpatched bundle unchanged, so they are inherited rather than introduced here. A stub calls nothing and cannot throw, except at the padding that follows it, which no entry covers, so the entries are believed unreachable—but that is a reading of the bytecode and not something observed on a running app, and it is recorded here rather than left out.",
-      "The network blocklist is generated against the selected APK rather than shipped as fixed text. Three of the names a fixed list would need are renamed by R8 on every release—the okhttp3.Response constructor, the Protocol enum and that enum's HTTP/1.1 field—so this build reads all three out of the target's DEX instead. The method it produces reproduces the compared build's byte for byte; a build where they cannot be resolved is skipped with the reason stated rather than patched with another release's names.",
-      "Every AndroidManifest edit is applied. The split declarations, extractNativeLibs, the six dead permissions, the two Sentry providers, the three Play split metadata entries, the AppsFlyer intent query, the RPC service's exported flag and the three Google Analytics components—AnalyticsReceiver, AnalyticsService and AnalyticsJobService, rewritten from android:enabled=true to false—are all edited into the compiled manifest, and each is reported as its own step. The permissions and the Analytics components are the two groups no switch moves, because each is a fact about the build rather than a decision about a run, and the six permission names are removed on Discord builds only: OctoGram declares READ_CONTACTS and WRITE_CONTACTS for real and syncs the address book through them, so an edit that traveled to every app would take a live permission from that one.",
-      "Resources are merged in from the density and language splits, and the resource table is rebuilt around them. Every split ships a partial table naming only the files it carries—the base's names its own 3,853 and not one of the density split's 1,239—so without this the merged-in files would sit in the archive with nothing in the APK's table pointing at them. The table shipped in the result is merged from the base's and the splits' tables at patch time, keeping each source's resource ids, configurations and compiled file paths; the merge is refused, and the base's table kept, when the tables cannot be reconciled. The merged table names 5,091 paths, which is every resource file the merged APK holds and no others. That is one fewer than the tables it is merged from name between them, because res/xml/splits0.xml—the split-install metadata, which describes an installation whose configuration splits have all been merged into one APK—is left out of the table and the archive together: the file goes as a pair with the row that named it, so the table never resolves to a path the APK does not hold.",
-      "The RPC service is closed without a switch. com.discord.socialrpc.DiscordRpcService is exported with no permission declared on it and no check on its caller, so any app installed on the device can bind it and publish presence frames as the user. There is no switch that re-opens it, because the other position of such a switch would be the unsafe one.",
-      "Three media edits stay disabled: one crashes the camera as soon as it opens, one records video below the encoder's minimum, and one passes a value the media engine does not document.",
-      "Signed with sleepy's own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates."
-    ],
     "octogram_361": [
       "Only the OctoGram 3.6.1 build this source names is patchable. Entries written for 3.6.0 exist and are not shipped: no source here offers that build, so an entry targeting it could never run and would read as a live patch that never does anything. A build that is not identified as 3.6.1 does not receive the entries written for that release: each names obfuscated classes from it, and the step log states that the build's version could not be identified. The four Firebase registrar edits carry no version tag; they resolve by class name and still apply where those classes exist.",
       "The OTA update check is disabled and the logger is silenced, but stub bodies here use .locals 0 where the original methods carry their own register count. The assembled code is equivalent; the text differs.",
       "Every way the premium screen can open is blocked, across three switches switched on by default: the navigation router and the main window's override, the eight sheet presentations, and the rows that lead there. Two premium surfaces still render because they show real account state rather than an advert: the premium feature cells and the usage-limit screen. A premium subscriber loses the screen where they manage their subscription.",
       "Signed with sleepy's own key, so it installs as a different app identity and will not receive official updates."
+    ],
+    "discord_351205": [
+      "The JavaScript patches are written for Discord 351.2.5 and refuse any other bundle. Hermes numbers functions per bundle, so an id from one release names an unrelated function in another; every entry therefore declares the size of the body it replaces, and the patcher skips an entry whose declaration does not match rather than writing bytes into a function it was not built for. Of the 212 entries, 180 are constant-shaped stubs whose bytes name nothing bundle-specific and carry unchanged, 17 are promise-shaped stubs that are re-assembled against this bundle because they name the strings “Promise” and “resolve” through the bundle’s own string identifiers, and 15 are edits of an original body, re-derived against the body this build has. Four are new: the game-activity presence, which this and no earlier release removes.",
+      "What the previous release’s set could claim and this one cannot: that set was extracted from a build that had been patched and verified by hand, and every function of the patched bundle was compared against that build’s shipped bundle byte for byte. There is no recorded patched build for any release since, so that comparison has no counterpart here and is gone. What replaces it is narrower and is stated plainly: every entry must apply with nothing skipped to the build it names, and a real Hermes disassembler must read every one of the 212 patched functions back. That catches a body which occupies the right number of bytes but is not valid bytecode, which is the failure that matters most and the one an earlier table was found to carry. It does not catch a body that assembles cleanly and does something other than what its entry says.",
+      "The edits that make a tab’s guard always fire name a register that must still hold a constant at that point in this build. Which register that is does not survive a release, so it was chosen again from this body: the register is only used when the instruction that last wrote it before the guard is a constant load and nothing writes it in between. The same treatment was given to the guard that hides the friends’ Spotify listened-session rows.",
+      "The functions the patch set stubs keep the exception-handler table of the much larger body they had before, and those entries name ranges that end past where the new, shorter body does. The bytes are copied through from the unpatched bundle unchanged, so they are inherited rather than introduced here. A stub calls nothing and cannot throw, except at the padding that follows it, which no entry covers, so the entries are believed unreachable—but that is a reading of the bytecode and not something observed on a running app, and it is recorded here rather than left out.",
+      "The network blocklist is generated against the selected APK rather than shipped as fixed text. Three of the names a fixed list would need are renamed by R8 on every release—the okhttp3.Response constructor, the Protocol enum and that enum’s HTTP/1.1 field—and so are the two okhttp3.Interceptor$Chain accessors the generated interceptor calls, so this build reads all five out of the target’s DEX instead. The method it produces reproduces the compared build’s byte for byte; a build where they cannot be resolved is skipped with the reason stated rather than patched with another release’s names.",
+      "Every AndroidManifest edit is applied. The split declarations, extractNativeLibs, the six dead permissions, the two Sentry providers, the three Play split metadata entries, the AppsFlyer intent query, the RPC service’s exported flag and the three Google Analytics components—AnalyticsReceiver, AnalyticsService and AnalyticsJobService, rewritten from android:enabled=true to false—are all edited into the compiled manifest, and each is reported as its own step. The permissions and the Analytics components are the two groups no switch moves, because each is a fact about the build rather than a decision about a run, and the six permission names are removed on Discord builds only: OctoGram declares READ_CONTACTS and WRITE_CONTACTS for real and syncs the address book through them, so an edit that traveled to every app would take a live permission from that one.",
+      "Resources are merged in from the density and language splits, and the resource table is rebuilt around them. Every split ships a partial table naming only the files it carries—the base’s names its own and not one of the density split’s—so without this the merged-in files would sit in the archive with nothing in the APK’s table pointing at them. The table shipped in the result is merged from the base’s and the splits’ tables at patch time, keeping each source’s resource ids, configurations and compiled file paths; the merge is refused, and the base’s table kept, when the tables cannot be reconciled.",
+      "The RPC service is closed without a switch. com.discord.socialrpc.DiscordRpcService is exported with no permission declared on it and no check on its caller, so any app installed on the device can bind it and publish presence frames as the user. There is no switch that re-opens it, because the other position of such a switch would be the unsafe one.",
+      "Three media edits stay disabled: one crashes the camera as soon as it opens, one records video below the encoder’s minimum, and one passes a value the media engine does not document.",
+      "Signed with sleepy’s own key, so it installs as a different app identity: uninstall the official Discord first, and it will not receive official updates."
     ]
   },
   "sources": [
     {
-      "id": "discord_351200",
-      "display_name": "Discord Alpha 351.2",
+      "id": "discord_351205",
+      "display_name": "Discord Alpha 351.2.5",
       "package_name": "com.discord",
-      "version_name": "351.0 Alpha",
-      "version_code": 351200,
-      "url": "https://tracker.vendetta.rocks/tracker/download/351200/base",
+      "version_name": "351.5 Alpha",
+      "version_code": 351205,
+      "url": "https://tracker.vendetta.rocks/tracker/download/351205/base",
       "apk_type": "split_base",
-      "sha256_expected": "0826c70e326b99172859f41e08ab4097bf2ea19209e4c80a4706f548ba1c0043",
-      "description": "Discord Alpha from Vendetta tracker. Automatically merges ARM64 native shared libraries and the density and language splits' resources into a universal APK and rebuilds the resource table around them, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, and locks the patched JS bundle.",
+      "sha256_expected": "da74fc6d72b2f50acb1bf9f5b0152336c1a78eee659e73c16e6d8e4a51be65a9",
+      "description": "Discord Alpha from Vendetta tracker. Automatically merges ARM64 native shared libraries and the density and language splits' resources into a universal APK and rebuilds the resource table around them, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, locks the patched JS bundle, and removes the game-activity presence.",
       "changelog_url": "https://discord.com/blog",
       "patch_ids": [
         "discord_ota_bundle",
@@ -64,23 +65,23 @@
       ],
       "splits": [
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.arm64_v8a",
-          "sha256_expected": "93c5d1e8f20dcf76336adb41771b8715c2ca767ec92515565398e54587b58ec5",
-          "size_bytes": 73514771
+          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.arm64_v8a",
+          "sha256_expected": "1af4e2ea7aef356316fd4b65e0cf81acc596023d88ac3ec2336088e08898e16a",
+          "size_bytes": 73580307
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.hdpi",
-          "sha256_expected": "7c6362b22ea370442f2de49ecee58701a6188d0214c01a0dc60cc4275bac822c",
-          "size_bytes": 6802308
+          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.hdpi",
+          "sha256_expected": "2f6ec3a983ad43a7812ad6beba2206346feb400abbd6bb668b20228178bd0a8d",
+          "size_bytes": 6806559
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.de",
-          "sha256_expected": "7e4d2127480fe429458f3a8f6cda08c26fa77e1cdd3a5f7a8e371373598fd2b6",
+          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.de",
+          "sha256_expected": "505a40b9787ac918d4f9084c5f1b8401683bf8dbe14c7efa0df57e02f51aa19c",
           "size_bytes": 37273
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351200/config.en",
-          "sha256_expected": "c76849d290dbce3b98e6cb43f35a3112163b1eb277a856aab053b291dcb6acba",
+          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.en",
+          "sha256_expected": "41d4c10352493ef9c147070a21b50a53d737903780813a914c4cd7d851b631ac",
           "size_bytes": 70041
         }
       ]

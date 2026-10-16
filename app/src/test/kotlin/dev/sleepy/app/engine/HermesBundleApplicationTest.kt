@@ -24,7 +24,7 @@ import org.junit.Test
  * other half: on the build the table was extracted from, *nothing* may be skipped.
  *
  * What it cannot check is whether a replacement does what its table entry says. There is no
- * recorded build of the patched 351.2.0 bundle to compare against, and the earlier suite's
+ * recorded build of the patched 351.2.5 bundle to compare against, and the earlier suite's
  * function-for-function comparison is gone with it. The check that survives is structural and
  * still catches the failure that matters most - a body that is not valid bytecode, which is how
  * a truncated replacement would ship - so a real disassembler reads every patched function back.
@@ -54,13 +54,14 @@ class HermesBundleApplicationTest {
     /**
      * The functions whose replacements do not fit where the bodies they replace are.
      *
-     * Five are longer than the body they replace, which no in-place write can hold: 7762 inserts
+     * Five are longer than the body they replace, which no in-place write can hold: 8346 inserts
      * the cache clamp into the middle of the function, and the four settings rows append a
-     * `usePredicate` property. The other two share a body with another entry - 62265 with 62264,
-     * and 73034 with 73022 - and a shared region can hold only one replacement, so the lower
+     * `usePredicate` property. Three share a body with another entry - 65890 with 65889, 75050
+     * with 75038, and 42009 with 42008, whose two compiler variants were compiled to identical
+     * code and deduplicated - and a shared region can hold only one replacement, so the lower
      * function id keeps it and the other is relocated beside it.
      */
-    private val relocated = listOf(8121, 15264, 15268, 15275, 16197, 62265, 73034)
+    private val relocated = listOf(8346, 15959, 15965, 15972, 16829, 42009, 65890, 75050)
 
     @Test
     fun everyEntryAppliesToTheBuildTheTableNames() {
