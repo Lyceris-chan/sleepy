@@ -114,6 +114,24 @@ class ReleaseWorkflowTest {
         )
     }
 
+    @Test
+    fun androidSdkInstallDisablesMetricsCollectionAndDoesNotUseSdkmanager() {
+        val workflow = workflow()
+
+        assertFalse(
+            "the workflow must not use deprecated sdkmanager CLI",
+            workflow.contains("sdkmanager")
+        )
+        assertTrue(
+            "android CLI invocation must include --no-metrics flag",
+            workflow.contains("android --no-metrics sdk install")
+        )
+        assertFalse(
+            "android CLI invocation must not omit --no-metrics flag",
+            Regex("(?<!--)android sdk install").containsMatchIn(workflow)
+        )
+    }
+
     // --- the workflow as text ------------------------------------------------------------------
 
     private fun workflow(): String = source(".github/workflows/release.yml")
