@@ -749,16 +749,10 @@ class PatchingPipeline(private val context: Context) {
                 }
             }
 
-            // Each group of edits is reported against its own selectors rather than against the
-            // pass's total: one pass carries the permissions, the crash reporter's providers, the
-            // Play markers and the attribution query, and a count taken from the whole edit
-            // credits every group with the others' removals.
-            //
-            // This group goes first because it is the one no switch moves: the declarations the
-            // build has no code behind are removed on every run, and the permissions the user
-            // switched off are removed after them. Both report through the same helper, so a build
-            // that declares fewer dead permissions than were asked for reports the shortfall
-            // rather than six removals it did not make.
+            // Each group reports against its own selectors, not the pass's total, or every group
+            // would be credited with the others' removals. This one goes first because no switch
+            // moves it: dead declarations are removed on every run, then the permissions the user
+            // switched off.
             if (manifestEdits.deadPermissions.isNotEmpty()) {
                 log(
                     manifestRemovalStep(
@@ -845,16 +839,10 @@ class PatchingPipeline(private val context: Context) {
                 )
             }
 
-            // The Google Analytics components. Disabled in place rather than removed, so the
-            // signal that the edit landed is not a removal count but which of the three elements
-            // the override found—the same signal reported for the RPC service step that follows.
-            //
-            // Like the RPC service, the step is logged whether or not the edit landed, but only
-            // for the app it applies to: on a build that does not declare these components the
-            // override matches nothing, which is expected; reporting that is a Discord concern,
-            // not an OctoGram one. For Discord, reporting that no such component exists is
-            // useful: it shows that the build no longer matches the one this patch was written
-            // against.
+            // Disabled in place, so the signal is which of the three elements the override
+            // found, not a removal count — the same signal the RPC service step reports. Logged
+            // for Discord only: on OctoGram, and on a build that no longer declares the
+            // components, matching nothing is expected.
             val analyticsLabels = manifestEdits.googleAnalytics.map { it.element.label }
             val analyticsFound = analyticsLabels.count { it in edit.elementOverridesApplied }
             val analyticsDisabled = BinaryXmlEditor.ATTR_ENABLED in edit.attributesRewritten

@@ -27,19 +27,18 @@ data class SplitSource(
 /**
  * One downloadable build of an app, as the app's asset configuration declares it.
  *
- * @property id The identifier the configuration uses for this source.
- * @property displayName The name the UI shows for this source.
- * @property packageName The application ID of the build.
- * @property versionName The version name recorded for the build.
- * @property versionCode The version code recorded for the build.
- * @property url The URL the base APK is downloaded from.
- * @property apkType The packaging of the download.
- * @property sha256Expected The SHA-256 the configuration publishes for the download, or null when
- *   it publishes no hash.
- * @property description A description of the source.
- * @property changelogUrl The URL of the release notes, or an empty string when there are none.
- * @property patchIds The patch set ids selected for this source by default.
- * @property splits The configuration splits, empty for a universal APK.
+ * @property id Identifier the configuration uses for this source.
+ * @property displayName Name the UI shows.
+ * @property packageName Application ID of the build.
+ * @property versionName Version name recorded for the build.
+ * @property versionCode Version code recorded for the build.
+ * @property url URL the base APK is downloaded from.
+ * @property apkType Packaging of the download.
+ * @property sha256Expected Published SHA-256, or null when none is published.
+ * @property description Description of the source.
+ * @property changelogUrl Release-notes URL, or an empty string.
+ * @property patchIds Patch set ids selected by default.
+ * @property splits Configuration splits, empty for a universal APK.
  */
 data class AppSource(
     val id: String,

@@ -29,15 +29,16 @@ import org.junit.Test
  * context, so a child's failure stops at that child.
  *
  * The recorded change set shipped this patch broken for a whole release without noticing: it
- * spelled four R8-obfuscated coroutine class names, a later build renamed the package, its
- * anchor stopped matching, and the only trace was a skip line in a long log. It happened again
- * for 351.2.0, where the package moved from `Lmr/` to `Ltr/` and `SupervisorJobImpl` changed its
- * simple name as well, and again for 351.2.5, where the package moved from `Ltr/` to `Lsr/` with
- * the simple names unchanged. The names here were read out of the build's own `MainImmediateScopeKt`,
- * which builds the same scope, and checked against the class relationships the injection relies on. Two assertions here exist because of the first time. The anchor must occur exactly once *in the stock build*, so a
- * rename fails this test instead of quietly leaving the fault in place; and the four classes
- * the injection references must all exist in the build, so a stale name cannot produce a
- * dangling reference that verifies at assemble time and fails on the device.
+ * spelled four R8-obfuscated coroutine class names, a later build renamed the package, its anchor
+ * stopped matching, and the only trace was a skip line in a long log. It happened again for
+ * 351.2.0, where the package moved from `Lmr/` to `Ltr/` and `SupervisorJobImpl` changed its simple
+ * name as well, and again for 351.2.5, where the package moved from `Ltr/` to `Lsr/` with the
+ * simple names unchanged. The names here were read out of the build's own `MainImmediateScopeKt`,
+ * which builds the same scope, and checked against the class relationships the injection relies on.
+ * Two assertions here exist because of the first time. The anchor must occur exactly once *in the
+ * stock build*, so a rename fails this test instead of quietly leaving the fault in place; and the
+ * four classes the injection references must all exist in the build, so a stale name cannot produce
+ * a dangling reference that verifies at assemble time and fails on the device.
  */
 class MediaScopeSupervisorTest {
 

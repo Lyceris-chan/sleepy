@@ -73,29 +73,17 @@ import dev.sleepy.app.ui.state.TriState
 import dev.sleepy.app.viewmodel.PatchViewModel
 
 /**
- * Chooses which changes to apply, alone or item by item, and optionally gives the result its own
- * package name so it can be installed next to the app it was built from.
+ * Chooses which changes to apply, alone or item by item.
  *
- * A section is a header—its own switch, and how many of its items are on—over a flat list of rows.
- * The header's switch is tri-state, so a section with one row on and the rest off is shown as such
- * rather than rounded to on or off, and a tap completes or clears the whole section: that is what
- * turns "all of the ads" or "none of them" into one tap. Each row under it has its own switch and
- * its own description of what turning it on does, and there is no heading between rows, because a
- * heading under a heading would be the third level of disclosure the list used to have.
+ * A section header carries a tri-state switch and the count of its selected rows; a tap
+ * completes or clears the section. Rows are lazy items keyed by their stable item key, so a long
+ * section composes only what is on screen. A row that cannot change states why — a blocklist rule
+ * covered by another, an interceptor gate that is locked — recomputed from the selection on
+ * every change.
  *
- * The rows are emitted as lazy list items rather than as one composable per section, with each row
- * keyed by the item's own stable key, so expanding the eighty-one-rule blocklist or the JavaScript
- * section's thirty-seven rows composes only the rows on screen.
- *
- * A row can also be inert, and the row then states why: a blocklist rule that another enabled
- * rule covers is grayed with the pattern that covers it named in full, and the interceptor's two
- * prefix gates are locked with their own reason. Both come from
- * [dev.sleepy.app.model.BlocklistCoverage], recomputed from the selection on every change, so
- * switching a covering rule off makes what it covered live again immediately.
- *
- * @param sourceId The id of the target whose patch sets are listed.
- * @param viewModel The view model that supplies and edits the selection.
- * @param onStartPatch Called when the user starts a run.
+ * @param sourceId Id of the target whose patch sets are listed.
+ * @param viewModel Supplies and edits the selection.
+ * @param onStartPatch Called when a run starts.
  * @param onBack Called when the user leaves the screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,8 +101,8 @@ fun PatchSelectScreen(
     val source by viewModel.selectedSource.collectAsState()
     val selection by viewModel.selection.collectAsState()
 
-    // A set listed twice in a source's ids is one set: the rows that follow are keyed by set id, and two
-    // entries for the same set are two items with one key.
+    // A set listed twice in a source's ids is one set: the rows that follow are keyed by set id,
+    // and two entries for the same set are two items with one key.
     val availablePatches = remember(source) {
         source?.patchIds?.let { PatchRegistry.getAllForSource(it) }?.distinctBy { it.id }
             ?: emptyList()
@@ -562,9 +550,9 @@ private fun ReadProgress() {
  *
  * Both directions are named in full rather than counted, because they are different problems with
  * different answers. A declaration the list does not name has no row, so it stays whatever the user
- * does; a listed permission the build does not declare means the earlier switch governs nothing. The
- * list is not rewritten in either case: it describes the release sleepy supports, and a run goes by
- * the choice the user made against it.
+ * does; a listed permission the build does not declare means the earlier switch governs nothing.
+ * The list is not rewritten in either case: it describes the release sleepy supports, and a run
+ * goes by the choice the user made against it.
  */
 @Composable
 private fun PermissionCheckReport(check: PermissionCheck, onRead: () -> Unit) {
@@ -737,7 +725,8 @@ private fun PermissionSummary(rows: List<PatchRow>) {
 }
 
 /**
- * "251 of 253 items selected"—the line shown with the list, and what the button's count is drawn from.
+ * "251 of 253 items selected"—the line shown with the list, and what the button's count is drawn
+ * from.
  *
  * Items rather than sets: a set is a grouping the pipeline happens to apply in one pass, while an
  * item is what the user chose between, and "22 selected" is the same number for a run that

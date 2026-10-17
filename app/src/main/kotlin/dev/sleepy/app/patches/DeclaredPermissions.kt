@@ -3,29 +3,10 @@ package dev.sleepy.app.patches
 /**
  * The permissions each supported release declares, shipped with the app.
  *
- * ## Why the list is here rather than downloaded
- * The list exists so a permission can be read, weighed and switched off *before* anything is
- * fetched. It used to be read out of the build being patched, which meant the section had nothing
- * in it until the whole archive—96 MB for one of these builds—had been downloaded and opened,
- * and a list that costs a download to see is a list most people do not open. What a release
- * declares is fixed when the release is published, so it can be written down once, here, and
- * shown at once.
- *
- * A source specifies an exact build, not "the latest Discord": `sources.json` pins a version, a
- * URL and—for one of them—a SHA-256, and a list here is the list of that build. [packages]
- * names what is shipped, and a source pointing anywhere else is handled by reading the build
- * instead of by guessing from a list that does not describe it.
- *
- * ## The order is the manifest's order
- * Each list is written in the order its manifest declares the permissions, which is the order the
- * rows are shown in, so the list a user reads is the list a manifest edit follows. Declaration
- * order is also the only order that is a fact about the build rather than a choice made here.
- *
- * ## A build that no longer matches is a thing to report
- * A shipped list matches the build only while the build at the source's URL is the build it was
- * read from. Where it is not, the difference is reported rather than left for the user to find: a
- * permission the build declares and this list does not name is a permission no row shows, so the
- * permission section and the run's step log both report it rather than passing it over.
+ * Shipped rather than downloaded so the list can be read before anything is fetched; a source
+ * pins an exact build, so each list describes that build. Each is in manifest declaration order,
+ * which is also the order the rows are shown in. Where the build at the source no longer matches
+ * its list, the difference is reported in the step log rather than left for the user to find.
  */
 object DeclaredPermissions {
 

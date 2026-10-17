@@ -228,24 +228,12 @@ object PermissionCoverage {
      * [permissions] as rows, each fixed when the user's choice cannot change what the build
      * declares.
      *
-     * A permission is fixed when the table locks it ([Permission.lockReason]), when this build
-     * removes the declaration anyway ([removedRegardless]—see [ALWAYS_REMOVED_REASON]), or when
-     * it is the last permission the current choice keeps. The last rule is computed from the same
-     * [isKept] the list renders from, so it follows the user's choices rather than being a fixed
-     * property of a permission: the last remaining permission becomes locked, and becomes
-     * switchable again the moment another one is switched on.
-     *
-     * The rule is stated over the survivor rather than over the kept count alone, so that at least
-     * one declaration survives for every input, not only for the inputs a user can produce
-     * through the UI. A selection that names none of these permissions at all—a stale selection,
-     * or one made against a different build—otherwise leaves every row switched off and every
-     * declaration removable. A row this build removes regardless is not a survivor either, so it
-     * takes no part in that rule: it is not a declaration the user is choosing to keep.
-     *
-     * The rule applies only when the table locks nothing on its own: a locked permission is kept
-     * regardless of the selection, so a build with a locked permission declares at least one
-     * permission, and an app that declares `INTERNET` keeps declaring it however many of the rest
-     * are removed.
+     * A row is fixed when the table locks it ([Permission.lockReason]), when the build removes
+     * the declaration anyway ([removedRegardless]), or when it is the last one the choice keeps.
+     * The last rule is computed from the same [isKept] the list renders from, so it follows the
+     * selection, and it is stated over the survivor so at least one declaration remains even for
+     * a stale selection. A locked permission keeps the app declaring one on its own, which makes
+     * the rule moot.
      */
     fun rows(
         permissions: List<Permission>,

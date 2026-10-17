@@ -3,67 +3,17 @@ package dev.sleepy.app.engine
 import java.io.ByteArrayOutputStream
 
 /**
- * Builds one `resources.arsc` from the partial tables that an App Bundle ships as a base and a
- * set of configuration splits.
+ * Builds one `resources.arsc` from the partial tables an App Bundle ships as a base and its
+ * configuration splits.
  *
- * ## The problem this exists for
+ * The merge is a chunk copy, not a relink. A bundle's base and its own splits already agree on
+ * package ids, type ids, entry indexes and configuration bytes, so each entry is copied verbatim
+ * and only the two per-table pool indexes move — `ResTable_entry.key` and any `TYPE_STRING`
+ * value — by the offset of their pool in the merged one. Rebuilding the table would re-derive
+ * file paths that no longer match the archive.
  *
- * An App Bundle assigns resource ids once, at bundle build time, and then distributes them: the
- * base split carries the entries whose configurations stayed with the base, a density split
- * carries the ones that did not, and a language split carries one locale's strings. Each split
- * therefore ships a `resources.arsc` naming only what it carries—this base names 11,802
- * entries and the density split names 1,247, and the two sets of file paths do not intersect at
- * all. Merging a split's *files* into the base, which [SplitMerger] does, leaves those files at
- * the right paths with nothing in the merged APK referring to them: present but unreachable.
- *
- * ## Why this is a chunk merge and not a relink
- *
- * A relink decodes every split with apktool, merges the trees and rebuilds with aapt2. The
- * `resources.arsc` it produces cannot be spliced into this APK, for a measurable reason.
- * apktool's *decode* drops resource-configuration qualifiers that are redundant for the build's
- * `minSdkVersion`, so `res/drawable-xhdpi-v4/icon.png` comes out of the decoder as
- * `res/drawable-xhdpi/icon.png` and is written back under that spelling. The relinked table
- * matches the APK it was built into, because both came out of the same decode; the base
- * APK's own entries use the original spelling, and so do the files [SplitMerger] copies. A
- * relinked table dropped into this repack names 1,925 files that do not exist in the archive
- * being written, which is worse than the unreachable files it replaces.
- *
- * A chunk merge avoids that problem, because it re-derives nothing. The tables of a base and its
- * own configuration splits already agree on package id, on type ids, on entry indexes and on the
- * bytes of every configuration: the bundle build fixed all of those before it split the tables
- * apart. So [merge] walks the tables and copies each entry across verbatim, keeping the
- * configuration it was written with, which is what makes the paths it names the paths
- * [SplitMerger] copies.
- *
- * ## The two things that do have to move
- *
- * An entry's identity is its index, but two of the fields it holds index pools that are
- * per-table:
- *
- * - `ResTable_entry.key` indexes the package's `keyStrings` pool, where the entry's name lives.
- * - A `Res_value` of type `TYPE_STRING` holds an index into the table's global string pool. An
- *   entry holds one of those after its header, or—when it is a bag—one inside each of its
- *   maps, and both places are the same field with the same index in it.
- *
- * Both pools are merged by **appending**, not by rebuilding: every string keeps its position, so
- * every index that already referred to one still does. A split's index is therefore rewritten by
- * a single addition—the offset of its pool in the merged pool—and the rest of the entry is
- * copied untouched. That is the whole of the rewrite, which is why the merge can copy entry
- * bytes it does not otherwise interpret.
- *
- * ## What it drops, and what it does not merge
- *
- * [merge] rebuilds a package's type and type-spec chunks from the merged entries, carries over
- * the package's two name pools and the table's global pool, and carries over the base's package
- * header whole, so the base's type-id offset and public-name counts keep the values the base
- * declares. A table carrying anything else—an RRO overlayable block, a shared-library
- * declaration, a staged alias—is not merged, rather than merged with that part missing.
- *
- * Where the merge cannot check a structure, it returns a refusal instead. The caller responds by
- * keeping the base's own table: a resource table naming files the APK does not have is worse
- * than one naming none of them. So [merge] checks the structures it relies on, and then reads
- * back what it built—every entry against the entry it came from, field by field—before
- * returning anything.
+ * A split whose table carries anything this merge does not understand is refused rather than
+ * merged partially, and the caller keeps the base's table.
  */
 object ResourceTableMerger {
 
@@ -325,8 +275,8 @@ object ResourceTableMerger {
                     )
                 }
                 // A type and configuration whose every entry was left out carries nothing, and an
-                // empty map is not a shape the writer that follows can lay out: it is dropped here rather
-                // than written as a type chunk with no entries in it.
+                // empty map is not a shape the writer that follows can lay out: it is dropped here
+                // rather than written as a type chunk with no entries in it.
                 if (merged.isEmpty()) entries.remove(key)
             }
             for ((typeId, flags) in source.specFlags) {
@@ -1189,27 +1139,12 @@ object ResourceTableMerger {
     /**
      * What is wrong with [table] as a merged result, or null if nothing is.
      *
-     * This re-reads the bytes that were produced rather than relying on the writer: the chunk tree
-     * has to tile, every entry's name index has to land inside the key pool, and every
-     * string-valued field has to land inside the global pool.
-     *
-     * Those are the checks the table can answer about itself, and on their own they are not
-     * enough. A rebase that was not applied leaves a *valid* index—one that is in range in the
-     * merged pool because the split's segment sits above it—pointing at the wrong string, and
-     * reading the merged table alone does not reveal the difference. So each entry is also
-     * compared against the entry it was made from ([difference]), which a rewrite that skipped a
-     * field, or wrote at the wrong offset, does not survive.
-     *
-     * The comparison deliberately does not go through the arithmetic that produced the entry:
-     * [valueOffsets] determines where a value sits, and a validator that asked the same function
-     * where to look misses the mistake that function makes—which is how the bag-map defect in
-     * an earlier version of this merge passed the check. The offsets the
-     * comparison uses are checked against the bytes that are actually there first ([checkValue]),
-     * against the source entry rather than anything this merge wrote, so an offset that names some
-     * other field fails the build instead of passing both the writer and the reader.
-     *
-     * Last, the entries are counted: the number the caller receives as how many came out must
-     * match the number the table holds.
+     * Re-reads the produced bytes rather than trusting the writer: the chunk tree must tile, name
+     * indexes must land in the key pool and string values in the global pool. Each entry is also
+     * compared with its source ([difference]) using offsets checked against the bytes actually
+     * there, not recomputed through [valueOffsets]: a validator that repeats the writer's
+     * arithmetic cannot catch the writer's mistake, which is how an earlier bag-map defect
+     * passed.
      */
     private fun validate(
         table: ByteArray,

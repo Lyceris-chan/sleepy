@@ -21,9 +21,9 @@ data class VerificationReport(
      */
     val outcome: BuildOutcome,
     /**
-     * Whether the JAR signature check passed, `null` when the build's `minSdkVersion` puts it earlier than
-     * the API level at which Android stopped honoring JAR signing—a question that does not
-     * apply, not one answered "no".
+     * Whether the JAR signature check passed, `null` when the build's `minSdkVersion` puts it
+     * earlier than the API level at which Android stopped honoring JAR signing—a question that does
+     * not apply, not one answered "no".
      */
     val v1SignatureValid: Boolean?,
     /** Whether the APK Signature Scheme v2 signature check passed. */

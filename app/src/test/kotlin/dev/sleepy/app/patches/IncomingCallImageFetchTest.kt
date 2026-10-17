@@ -41,7 +41,9 @@ class IncomingCallImageFetchTest {
             ".method private final fetchImage(Ljava/lang/String;" +
                 "Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
 
-        /** What the stock fetch does before it can return: build Fresco, then fetch over the net. */
+        /**
+         * What the stock fetch does before it can return: build Fresco, then fetch over the net.
+         */
         const val FRESCO_INIT = "FrescoModuleDiscord\$Companion;->initializeFresco("
         const val NETWORK_FETCH = "FrescoFetchDecodedImageKt;->fetchDecodedImage("
 

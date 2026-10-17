@@ -19,13 +19,9 @@ val SLEEPY_SURFACE_CONTAINER_LOW_DARK     = Color(0xFF1A1723)
 val SLEEPY_SURFACE_CONTAINER_DARK         = Color(0xFF201C2B)
 val SLEEPY_SURFACE_CONTAINER_HIGH_DARK    = Color(0xFF2A2536)
 val SLEEPY_SURFACE_CONTAINER_HIGHEST_DARK = Color(0xFF352F42)
-// The outline is the border of components that carry no fill of their own—an unchecked
-// Switch, an OutlinedTextField—so it is a non-text component, and WCAG 2.2 asks 3:1 of it
-// against whatever it is drawn on (SC 1.4.11). WCAG 3.0 measures the same pair with APCA, whose
-// non-text guidance sets the floor at |Lc| 45. The previous 0xFF8A8599 measured 5.25:1 but
-// Lc -37.9 on SLEEPY_SURFACE, and 0xFF35313F measured Lc -3.7, so neither border met both
-// requirements. These are the same hue family raised until both formulas pass on every surface
-// in the scheme; OutlineContrastTest computes both and asserts both.
+// The outline is a non-text component: WCAG 2.2 SC 1.4.11 asks 3:1 and WCAG 3.0's APCA asks
+// |Lc| 45. The previous values missed one or both, so these are the same hue raised until both
+// pass on every surface. OutlineContrastTest asserts both.
 val SLEEPY_OUTLINE = Color(0xFFAFACB9)
 // The divider tone is the lower-contrast of the two while it clears the same non-text floor: it
 // reads at Lc -46.7 or better on every surface, compared with -52.6 for the preceding outline.
@@ -56,13 +52,9 @@ val SLEEPY_LIGHT_OUTLINE_VARIANT           = Color(0xFF817C8A)
 val SLEEPY_LIGHT_ERROR                     = Color(0xFFB3261E)
 val SLEEPY_LIGHT_ON_ERROR                  = Color(0xFFFFFFFF)
 
-// Status accents. The dark values do not meet the contrast floor on the light surfaces, so each
-// has a light counterpart; each is paired with an icon and a word in the UI.
-//
-// SLEEPY_SUCCESS is also label text (an audit row's verdict, for example), so it has to clear the
-// APCA body-text floor of |Lc| 60 and not only the 4.5:1 that WCAG 2.2 asks of text. The previous
-// 0xFF4EBA6F measured 7.64:1 but Lc -53.5 on SLEEPY_SURFACE and -49.1 on the lightest container,
-// and the following green measures Lc -61.7 or better on every surface in the scheme.
+// Status accents, with light counterparts for the light surfaces, each paired with an icon and a
+// word in the UI. SLEEPY_SUCCESS is also body text, so it clears the APCA |Lc| 60 floor as well
+// as 4.5:1.
 val SLEEPY_SUCCESS       = Color(0xFF82CE99)
 val SLEEPY_WARNING       = Color(0xFFFFB74D)
 val SLEEPY_ERROR         = Color(0xFFFFB4AB)

@@ -5,41 +5,17 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Renames an `AndroidManifest.xml`'s package, in the one sense a rename can mean.
+ * Renames an `AndroidManifest.xml`'s package, in the three senses a rename can mean.
  *
- * A manifest does not hold one kind of occurrence of the package name, and a rename that treats
- * them alike is how a clone came to launch a class that does not exist. The three kinds:
+ * Identity strings — `package`, provider authorities, custom permissions — must move, because
+ * the platform derives them from the package name. Literals — class names, actions, meta-data
+ * keys — must not: they are matched by the DEX, which this rename does not touch. Relative class
+ * names are written out in full against the old package first, so they still name the compiled
+ * class.
  *
- * - **Identity.** `package`, a provider's `android:authorities` and this app's own `<permission>`
- *   declarations are the application ID and the identifiers the platform keeps unique per device.
- *   They have to move: a second installation that declares `com.discord.fileprovider` is rejected
- *   outright (`INSTALL_FAILED_CONFLICTING_PROVIDER`), and the runtime value of each of them is
- *   *derived* from the package name—`Context.getPackageName() + ".fileprovider"`,
- *   `getPackageName() + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"`—so a manifest that leaves
- *   them behind names identifiers the app does not ask for. The `DYNAMIC_RECEIVER_NOT_EXPORTED_`
- *   permission is the case that makes this fail visibly: `ContextCompat.registerReceiver` throws
- *   when the app does not hold the name it builds from its own package.
- * - **Literals.** A class name, an `<action>`, a `<meta-data android:name>` key, the package a
- *   `<queries>` entry looks for. Each is a string that something else matches, and for the DEX that
- *   something else is Discord's own code, which this rename does not touch. Rewriting one of them
- *   renames nothing; it points at code, components and other apps that do not exist. The rewrite
- *   this replaces replaced every string beginning with the package, which is why a clone launched
- *   `com.discord.sleepy.MainApplication` while the DEX still held `com.discord.MainApplication`.
- * - **Relative class names.** `android:name=".main.MainActivity"` is resolved against `package`, so
- *   a component declared that way changes which class it names when `package` changes,
- *   though the string itself looks untouched. Those are written out in full against the *old*
- *   package before it moves, which is the only way the class they name can stay the one the build
- *   compiled.
- *
- * ## Why the string pool is appended to rather than rewritten in place
- *
- * A pool entry is shared by every attribute that spells the same string, so the decision cannot be
- * made per entry—and in this build it is not even the same decision twice: the pool holds one
- * `com.discord`, referred to by `<manifest package>`, which is identity and must move, and by a
- * `<queries><package>` and a `<meta-data android:value>`, which are not and must not. Replacing the
- * entry's text in place cannot express that. Appending a new entry and repointing the one attribute
- * that asked for the rename can, and it leaves every other byte of the document—every other
- * entry, the resource map, every node—where the build put it.
+ * The string pool is appended to rather than rewritten in place: one entry is shared by
+ * attributes that must move and attributes that must not, and only a new entry can separate
+ * them. Every other byte of the document stays where the build put it.
  */
 object BinaryXmlModifier {
 

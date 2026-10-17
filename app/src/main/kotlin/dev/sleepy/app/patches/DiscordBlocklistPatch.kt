@@ -18,26 +18,15 @@ import dev.sleepy.app.model.TargetWrittenGenerator
 /**
  * The network blocklist interceptor for Discord.
  *
- * One method—`DeviceResourceUsageRecorder$Companion.requestStatsInterceptor`—is shared by
- * every OkHttp client this patch concerns: the React Native XHR client (which carries all of the
- * client's JavaScript traffic), the media download client, the bundle updater and Fresco. This
- * set replaces its body with one that matches the request URL against the rules in
- * [DiscordBlocklistRules] and answers a match with a synthetic HTTP 204, so the request is not
- * sent.
+ * One method, `DeviceResourceUsageRecorder$Companion.requestStatsInterceptor`, is shared by every
+ * OkHttp client this set concerns. Its body is replaced with one that matches the request URL
+ * against [DiscordBlocklistRules] and answers a match with a synthetic HTTP 204 — a dropped
+ * response would make the client retry without a limit — so the request is never sent. It only
+ * works where the interceptors are on OkHttp's application list, which
+ * [DiscordNativePatches.INTERCEPTORS] arranges.
  *
- * The 204 rather than a dropped response is deliberate: the JavaScript side reads it as a
- * successful empty response and clears its retry buffer, whereas dropping the response makes the
- * client retry without a limit.
- *
- * Unlike every other set in this package this patch cannot be a static string. It constructs an
- * `okhttp3.Response` by hand, so it has to spell out names R8 renames on every release; the body
- * is therefore generated against the APK the user selected—see [OkHttpNameResolver]. Because it
- * answers a request without calling `chain.proceed()`, it only works where the interceptors are
- * on OkHttp's application list, which is what [DiscordNativePatches.INTERCEPTORS] arranges.
- *
- * The rules are data ([DiscordBlocklistRules]) rather than lists compiled in here, so a build can
- * carry some of them: a selected subset compiles an interceptor that scans for those rules and
- * answers the rest of the traffic normally. See [generatedPatches].
+ * The body cannot be a constant: it constructs an `okhttp3.Response` by hand, so it is generated
+ * against the selected APK's own method names ([OkHttpNameResolver]).
  */
 object DiscordBlocklistPatch {
 
@@ -181,26 +170,18 @@ object DiscordBlocklistPatch {
     /**
      * Builds the replacement body for `requestStatsInterceptor`.
      *
-     * The recorded change set gates two debug blocks on a `BLOCKLIST_LOG` environment variable,
-     * which is how it was tuned against the live app. An on-device patcher has no such switch
-     * and the recorded build is generated without it, so the body here is what that build's
-     * method contains: the block in full, the debug logging absent. Everything else is
-     * reproduced as written, down to the blank lines and the label names—a subset changes
-     * which rules are emitted and nothing else, so the comparison still holds rule for rule.
+     * The recorded change set gates two debug blocks on a `BLOCKLIST_LOG` environment variable;
+     * an on-device patcher has no such switch, so this emits the build's output without the
+     * logging. `:not_proxied` and `:skip_<n>` bracket each API rule, and every host rule branches
+     * to the shared `:block` after the early return, so the blocked path is built once.
      *
-     * The labels are the interesting part. `:not_proxied` and `:skip_<n>` bracket each API rule so
-     * a rule only blocks when the URL is an API call, and every host rule branches to the shared
-     * `:block`, which is emitted after the early return—smali resolves forward branches, so the
-     * blocked path can be built once at the end of the method instead of per rule.
-     *
-     * @param ctorDescriptor `Lokhttp3/Response;`'s hand-built constructor, return type included.
+     * @param ctorDescriptor The hand-built `Lokhttp3/Response;` constructor.
      * @param protocolClass The Protocol enum, without `L`/`;`.
-     * @param protocolField The Protocol field holding the `HTTP_1_1` constant.
-     * @param chainRequestMethod The chain's no-argument `Request` accessor, read from the build.
-     * @param chainProceedMethod The chain's `Request -> Response` method, read from the build.
-     * @param hostRules The host patterns to emit, in order. Defaults to the whole table.
-     * @param apiRules The API path patterns to emit, in order. The `:skip_<n>` labels are numbered
-     *   within this list, so it has to match the rules the caller selected.
+     * @param protocolField The field holding the `HTTP_1_1` constant.
+     * @param chainRequestMethod The chain's no-argument `Request` accessor.
+     * @param chainProceedMethod The chain's `Request -> Response` method.
+     * @param hostRules Host patterns to emit, in order. Defaults to the whole table.
+     * @param apiRules API path patterns to emit; `:skip_<n>` labels are numbered within this list.
      */
     fun interceptorBody(
         ctorDescriptor: String,

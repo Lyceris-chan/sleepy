@@ -9,50 +9,17 @@ import dev.sleepy.app.model.PermissionCoverage
 import dev.sleepy.app.model.PermissionRow
 
 /**
- * What sleepy records about permissions: one entry per permission, describing what it lets an app
- * do, what stops working without it, and whether removing it is offered at all.
+ * One entry per permission: what it allows, what stops working without it, and whether removing
+ * it is offered at all.
  *
- * ## What this is, and what it deliberately is not
- * This table answers one question—given the name of a permission, what does it mean and what
- * does removing it cost—and nothing else. Which permissions are on offer is not determined
- * here: that is the declarations of the release being patched, which [DeclaredPermissions] ships
- * and a build nothing is shipped for supplies from its own manifest. The split is deliberate,
- * because the two go stale differently: a name this table does not cover is still a row (it is
- * described as unknown rather than hidden), while a permission a build declares and its shipped
- * list does not name has no row at all, which is why that case is reported rather than omitted.
+ * Removal is permanent — Android grants only what the manifest declares, and an installed app
+ * cannot add a declaration later — so every description ends with [REMOVAL_CONSEQUENCE]. A
+ * permission is locked only where removing it breaks the app's core function ([INTERNET] and
+ * [ACCESS_NETWORK_STATE]); the rest are offered, and a build whose patch removes one regardless
+ * shows the reason instead of a switch.
  *
- * ## Which declarations are not a choice
- * Two of the rows a build declares are fixed rather than offered, and neither decision lives
- * here. The app's own essential permissions carry a [Permission.lockReason]; the declarations the
- * patch takes out of this build whatever the user selects are named by
- * [DiscordManifestEdits.deadPermissionsIn], which is the same call the manifest pass edits with. A
- * row over one of those is shown as removed and gives the reason, so the section describes the
- * build the run produces rather than a switch that would change nothing.
- *
- * ## Removal is permanent, and every description records it
- * Android grants an app only the permissions its manifest declares. An installed app cannot add a
- * declaration later—there is no API for it, and an update is a different install—so a
- * permission removed here cannot be asked for again, by this build or by anything the app does at
- * runtime. That is not a consequence a user can be expected to infer from "contacts", so every
- * entry's description ends with [REMOVAL_CONSEQUENCE], written once and appended by the two
- * builders that follow so no entry can be written without it.
- *
- * ## Essentiality
- * A permission is locked only where removing the declaration breaks the app's *core* function—
- * the thing the app is for—and not merely a feature. Where that was not certain the permission
- * is left switchable and its description states what would stop working, because a lock the user
- * cannot override is worse than a consequence they can read: a feature that checks for the
- * permission degrades, while a feature that assumes it throws.
- *
- * Two are locked: [INTERNET] and [ACCESS_NETWORK_STATE]. Both are install-time permissions that
- * prompt for nothing and reveal nothing about the user, so there is no privacy to gain from
- * removing them; both are enforced by the platform with an exception rather than an ordinary
- * result, so the app does not degrade without them, it crashes or hangs on the first thing it
- * tries to do. Every other declaration here—a camera, a contact list, an advertising id—is a
- * feature the user can weigh, and is offered as a choice. Which of those choices a given build
- * gets to make is a separate question, and it is the one described in the preceding section: on Discord the
- * contact list is removed by every build this patch makes, and its row records that rather than
- * offering a switch over it.
+ * Which declarations a build offers is not decided here: that is the build's own manifest,
+ * through [DeclaredPermissions].
  */
 object PermissionCatalog {
 

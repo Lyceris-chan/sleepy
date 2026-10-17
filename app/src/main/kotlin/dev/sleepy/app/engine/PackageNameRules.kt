@@ -51,10 +51,10 @@ sealed class PackageNameProblem(val message: String) {
  * The rules a clone package name has to meet before a build can start.
  *
  * A name is written into the manifest's `package` attribute and into the resource table's package
- * chunk, and the platform resolves both against the rules that follow: the segments of a Java package
- * name, the length that the table's fixed field can store, and the name of the build being
- * cloned. A name that breaks one of them is rejected here rather than by a later step of a run
- * that has already downloaded an APK.
+ * chunk, and the platform resolves both against the rules that follow: the segments of a Java
+ * package name, the length that the table's fixed field can store, and the name of the build being
+ * cloned. A name that breaks one of them is rejected here rather than by a later step of a run that
+ * has already downloaded an APK.
  */
 object PackageNameRules {
 

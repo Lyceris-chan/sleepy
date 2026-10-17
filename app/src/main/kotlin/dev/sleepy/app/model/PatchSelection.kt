@@ -3,26 +3,10 @@ package dev.sleepy.app.model
 /**
  * Which patch items the user has switched on, as a set of item keys.
  *
- * ## Why keys rather than items
- * A saved selection outlives the app version that wrote it, and it can be read by a version whose
- * patch tables have moved on. Storing whole [PatchItem]s persists labels and descriptions that a
- * later release rewords; storing keys persists only the identity of the choice—see
- * [PatchItem.key]. Everything else about an item is looked up from the current tables, so a
- * reworded description or a renamed label cannot invalidate a saved selection.
- *
- * ## The set switch
- * A patch set's own switch is not a separate flag. Switching a set on selects every one of its
- * items and switching it off deselects all of them ([setEnabled]); a set all of whose items are
- * on is a set whose switch is on. This keeps a single source for the state: [isEnabled] defines
- * "a set with nothing selected contributes nothing", and a user who turns a set on, switches two
- * of its items off, and turns the set off and on again gets the whole set back, because a set
- * switch applies to the set, not to the previous item selection.
- *
- * ## Backward compatibility
- * Selections used to be patch set ids, so [fromSavedIds] reads a saved value as a set id and
- * expands it to every item of that set, which is what selecting that set meant before. A value
- * that names no set is kept as it is, which covers both an item key written by this scheme and an
- * id for a set a release has since removed.
+ * Keys rather than items: a saved selection outlives the release that wrote it, and storing
+ * labels or descriptions would persist text a later release rewords. A set's switch is not a
+ * separate flag — [setEnabled] selects or deselects every item of the set. [fromSavedIds] reads a
+ * legacy value as a set id and expands it, which is what selecting that set used to mean.
  */
 data class PatchSelection(val keys: Set<String> = emptySet()) {
 

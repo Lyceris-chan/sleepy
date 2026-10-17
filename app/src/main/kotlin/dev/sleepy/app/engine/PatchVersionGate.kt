@@ -7,16 +7,11 @@ import dev.sleepy.app.patches.OctoGramPatches
  * Selects the patches that may run against a target APK, from the app version its classes
  * identify.
  *
- * A patch written against obfuscated class names belongs to one release of one app: R8 gives
- * those classes new names on every release, so the patch carries a version tag. An untagged patch
- * targets a class whose name does not change, such as a Firebase registrar, and the class being
- * present identifies it.
- *
- * [detectOctoGramVersion] recognizes the OctoGram build that `sources.json` registers by one
- * class that build carries. A build it does not recognize is unidentified. [admits] returns false
- * for every tagged patch on an unidentified build, and [refusalReason] supplies the reason the
- * step log states. A tagged patch whose class name happens to resolve on another release can edit
- * an unrelated method, which is worse than a patch that does nothing.
+ * A patch written against obfuscated names carries the version it was written for; an untagged
+ * patch targets a class whose name does not change. [detectOctoGramVersion] recognizes the
+ * registered OctoGram build by one class it carries. On an unrecognized build [admits] refuses
+ * every tagged patch, because a tag that happens to resolve on another release would edit an
+ * unrelated method.
  */
 object PatchVersionGate {
 

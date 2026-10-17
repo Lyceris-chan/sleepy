@@ -1,32 +1,18 @@
 package dev.sleepy.app.model
 
 /**
- * A change to one method in a smali file, applied in memory and selected by signature, anchor
- * text, or switch case.
+ * A bytecode function replacement in a Hermes bundle.
  *
- * A patch targets one of three locations in a smali file: a packed-switch case body, an anchor
- * block, or a whole method body identified by signature.
+ * [functionId] is per-bundle and must be re-mapped against the target before use. The written
+ * bytes come from [stubShape], not from [hasmStub], so a shape the engine cannot express is an
+ * error rather than a different value.
  *
- * @property title The step name shown for this patch, or null to fall back to the targeted
- *   signature or path.
- * @property explanation The explanation shown for this patch, or null when it records none.
- * @property dexName The DEX entry that holds the target class, for example `classes3.dex`, or null
- *   when the pipeline resolves the entry from the target APK.
- * @property smaliPath The path of the smali file inside the disassembled DEX.
- * @property methodSignature The signature that identifies the method body to replace, or null when
- *   the patch targets an anchor block or a switch case.
- * @property replacementBody The body that replaces the method [methodSignature] identifies, or
- *   null when the patch targets an anchor block or a switch case.
- * @property anchor The exact text the patch searches for in [smaliPath], or null when the patch
- *   targets a method body or a switch case.
- * @property replacement The text that replaces [anchor], or null when the patch targets a method
- *   body or a switch case.
- * @property switchCaseLabel The label of the packed-switch case to replace, or null when the patch
- *   targets a method body or an anchor block.
- * @property switchCaseBody The body that replaces the case [switchCaseLabel] names, or null when
- *   the patch targets a method body or an anchor block.
- * @property versionTag The app version the patch was written against, or null when the patch
- *   applies to every version the set supports.
+ * @property title Step name, or null to build one from the function name and id.
+ * @property explanation Explanation shown with the step, or null.
+ * @property functionId Hermes function id to replace.
+ * @property functionName Function name used in the default step name.
+ * @property stubShape Value the stub leaves in the return register.
+ * @property hasmStub Recorded source text for this stub, kept for auditability.
  */
 data class SmaliPatch(
     val title: String? = null,

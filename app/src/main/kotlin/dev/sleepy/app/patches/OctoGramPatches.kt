@@ -4,52 +4,15 @@ import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
 
 /**
- * Bytecode patches for OctoGram (Telegram client fork).
+ * Bytecode patches for OctoGram (a Telegram client fork).
  *
- * Transcribed from the local patch scripts:
- * - work361/patch_dex_361.py (OctoGram 3.6.1 Beta 2 / build 38275)
- * - work361/patch_premium_361.py (Paywall upsell removal)
- * - work361/patch_octolog_361.py (OctoGram logger emitters)
- * - work361/patch_logging_361.py (Diagnostic uploaders, and the global logging flag)
- * - work361/patch_crashlog_361.py (OctoGram's own crash reporter, which the logging flag misses)
- * - work361/patch_premium_settings.py (The premium rows in the profile's settings list)
- * - work361/patch_external_browser_361.py (The external-browser setting's default)
- * - work361/patch_hide_business_361.py (The Telegram Business upsell row, and its commands)
- * - work361/patch_premium_sheets_361.py (The paywall's remaining sheet presentations)
+ * Each entry corresponds to an edit in one of the local 3.6.1 patch scripts, transcribed rather
+ * than recorded from a built artifact. The engine resolves the DEX container at runtime, and a
+ * version tag restricts an entry to the build it was written for.
  *
- * patch_dex.py (OctoGram 3.6.0) is deliberately not transcribed: no source here offers a 3.6.0
- * build, and the engine patches only a build identified as [REGISTERED_BUILD], so its entries
- * cannot run on any build this app accepts. A patch that cannot run is a row in the selection
- * list that describes a change it does not make. The edits it describes are noted where they would
- * have gone, so adding a 3.6.0 source means recording them rather than rediscovering them.
- *
- * Every entry corresponds to an edit in one of those scripts. The engine resolves all DEX
- * container assignments at runtime by inspecting the target APK's DEX headers, so no patch
- * hardcodes a container. Version tags mark an entry for one build, so version-specific obfuscated
- * class names are targeted without conflicting with unrelated classes.
- *
- * Two deliberate differences from the recorded change set, both behavior-preserving: stub bodies
- * here use `.locals 0` where the recorded change set reuses the method's original `.registers N`.
- * With a body that only returns, the two assemble to equivalent code. The recorded change set's
- * line-anchored edits are expressed as unique-string anchors.
- *
- * The user reads an entry's `title` and `explanation` while a patch runs and in the selection
- * screen's technical panel, which lists both for every entry under the class and method it
- * touches. They are written for that reader—what the entry suppresses, fetches or shows, in
- * terms of what would otherwise happen—while the class, method and version stay in the entry's
- * own fields.
- *
- * The levels of the [LOG_EMITTERS] entries come from the 3.6.1 build's own method bodies: R8's
- * single-letter names do not indicate a level, and the bodies differ only in which emitter they
- * funnel into and at which level.
- *
- * The following edits are grouped by the choice each belongs to, and [OctoGramPatchItems] is the table
- * that pairs a group with an item the user can switch: the item's name, the feature it belongs to
- * and the line describing what switching it on does. A set here therefore declares only its own
- * switch and passes the engine a generator rather than a patch list, because the engine applies a
- * set's static patches whether or not they are selected and calls a generator only for the subset
- * a selection names—which is the only way a set whose items are switched one at a time can
- * express that.
+ * Stub bodies use `.locals 0` where the scripts reused the original register frame; the two
+ * assemble to equivalent code. [OctoGramPatchItems] pairs an edit group with the switch a user
+ * sees, and each entry's `title` and `explanation` are written for that reader.
  */
 object OctoGramPatches {
 
@@ -670,25 +633,11 @@ object OctoGramPatches {
     /**
      * OctoGram's own crash reporter, switched off at the call that installs it.
      *
-     * `yb3` is OctoGram's crash-logging subsystem: the strings in it contain the word
-     * "Crashlytics", but no Firebase library is behind them, and this APK contains no crashlytics
-     * package at all. `g()` is its init, called from exactly one place, `LaunchActivity` at
-     * startup, and it performs four steps: it logs a line, creates the crash-notification channel,
-     * installs OctoGram's own `UncaughtExceptionHandler` (`rx0`), and posts a runnable (`wb3`) that
-     * checks for a crash log left by an earlier run.
-     *
-     * This handler is why the edit is separate from [LOGGING_GATE]: the flag that gate pins false
-     * determines whether the handler inside `sx0` is installed, and `yb3.g()` installs a second,
-     * independent one on every launch that does not consult that flag. With `g()` stubbed no crash
-     * is captured, so the file it would write and the "OctoGram just crashed!" notification it
-     * would raise are both gone.
-     *
-     * Nothing else depends on `g()` having run: `yb3.<clinit>` sets its own statics, and
-     * `yb3.e()`—the logs-directory getter the rest of the reporter uses—resolves that
-     * directory itself.
-     *
-     * The recorded change set keeps the method's original `.registers 5` line. A body that only
-     * returns reads no register, so this entry uses `.locals 0` (see the header).
+     * `yb3.g()` runs once per launch from `LaunchActivity` and installs an
+     * `UncaughtExceptionHandler` that does not consult the logging flag, which is why
+     * [LOGGING_GATE] does not cover it. With `g()` stubbed no crash is captured, so neither the
+     * log file nor the crash notification is produced, and nothing else depends on it: the
+     * reporter resolves its own directory in `yb3.e()`.
      */
     internal val CRASH_REPORTER_STARTUP = listOf(
         SmaliPatch(
@@ -720,28 +669,14 @@ object OctoGramPatches {
     )
 
     /**
-     * The four edits that take the Telegram Premium row out of the settings lists.
+     * Takes the Telegram Premium row out of the settings lists.
      *
-     * Three are in `ProfileActivity.yd()`, which resets every row index to -1 and then inserts each
-     * row by asking a condition and storing the row it took, so replacing the branch with an
-     * unconditional `goto` to the same label leaves that row's index at -1—hidden, and unclickable
-     * as well, because the click router matches rows by index and -1 matches nothing.
-     *
-     * The third of those is what makes the first two work. The combined premium-sections row is
-     * inserted when *any* of premiumRow, starsRow, tonRow or businessRow is still -1, and skipped
-     * only when all five premium-ish rows are present, so hiding the Premium row on its own would
-     * have made the sections row appear in its place. Forcing the first of those checks to jump
-     * past the insert keeps it out of the list altogether.
-     *
-     * The fourth is the same upsell on the app's own Settings screen, which builds its rows in a
-     * class of its own rather than in the profile's list, so the three edits above never reached
-     * it. Its row is drawn only while the account is not subscribed, and its tap opens the premium
-     * screen.
-     *
-     * `starsRow` (Telegram Stars) and `tonRow` (TON) are separate paid products rather than
-     * Telegram Premium and are deliberately left visible, so their checks and their rows are
-     * untouched. `businessRow` is hidden too, by [BUSINESS_UPSELL] rather than here, because it is
-     * the Business row on both screens that the one switch removes.
+     * Three edits are in `ProfileActivity.yd()`, where replacing an insert branch with an
+     * unconditional jump leaves that row's index at -1 and the click router ignores it. The
+     * combined premium-sections row is forced out too: it is inserted while any premium row is
+     * still -1, so hiding Premium alone would have made it appear in its place. The fourth edit
+     * is the same row on the app's Settings screen. `starsRow` and `tonRow` are separate paid
+     * products and stay visible; the Business row is removed by [BUSINESS_UPSELL].
      */
     internal val PREMIUM_SETTINGS_ROWS = listOf(
         SmaliPatch(
@@ -859,28 +794,13 @@ object OctoGramPatches {
     )
 
     /**
-     * The four edits that take the Telegram Business upsell row out and close its commands.
+     * Takes the Telegram Business upsell row out and closes its commands.
      *
-     * 3.6.1: `ProfileActivity.yd()` inserts `businessRow` behind the same kind of condition as the
-     * premium rows, so replacing the branch with an unconditional jump to the same label leaves the
-     * row's index at -1—hidden, and unclickable as well, because the click router matches rows by
-     * index. The row is an upsell for the premium screen rather than an entry to the Business
-     * settings, and the navigation guard in [PREMIUM_UPSELL] already refuses that screen, which
-     * would leave a visible row that does nothing.
-     *
-     * The same upsell is on the app's own Settings screen, built in a class of its own, and that row
-     * is the fourth edit. Its tap opens the premium screen with the same `"settings"` source the
-     * premium row beside it uses, so the two are one surface reached from two screens.
-     *
-     * The last two edits close the `/premium` and `/business` command slugs in `hq6.k(List)`, the
-     * dispatcher that turns a typed slug into a fragment. Each slug's branch is replaced with a
-     * jump to the next slug's check, so the cascade continues normally and no fragment is
-     * constructed. The `/business` branch's fall-through also holds OctoGram's `do-not-hide-ads`
-     * debug command, which the same jump makes unreachable: it only ran when the first slug was
-     * `business`.
-     *
-     * The Telegram Business feature itself is not touched: its package ships unchanged, and only
-     * this upsell row and the two commands that open the premium screen are edited.
+     * Replacing `ProfileActivity.yd()`'s insert branch with an unconditional jump leaves the
+     * row's index at -1, which hides it and makes it unclickable. The same upsell on the app's
+     * Settings screen is the fourth edit. The last two close the `/premium` and `/business` slugs
+     * in `hq6.k(List)` by jumping to the next check, which also makes the `do-not-hide-ads` debug
+     * command that followed them unreachable. The Business feature itself ships unchanged.
      */
     internal val BUSINESS_UPSELL = listOf(
         SmaliPatch(
@@ -996,8 +916,8 @@ object OctoGramPatches {
      * they are selected and calls a generator only for the subset a selection names, so a set whose
      * edits are switched one at a time has to pass the engine a generator instead. The generator is
      * built here rather than asked for by name, because asking [OctoGramPatchItems] for anything
-     * would initialize it, and its entries read the preceding edit groups—see that file's header for
-     * why the two must not reach into each other while building.
+     * would initialize it, and its entries read the preceding edit groups—see that file's header
+     * for why the two must not reach into each other while building.
      */
     private fun octoGramSet(id: String, label: String, description: String) = PatchSet(
         id = id,

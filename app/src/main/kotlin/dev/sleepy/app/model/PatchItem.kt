@@ -3,25 +3,18 @@ package dev.sleepy.app.model
 /**
  * One switchable item inside a patch set.
  *
- * A patch set was a single on/off switch, which is too coarse for some choices: "hide the gift
- * button but keep quests" cannot be expressed when the gift button and the quests belong to the
- * same set. An item is the unit the user selects, and this type holds what the UI needs to render
- * one: a name, the feature it belongs to, and a line that describes the effect of switching it
- * on.
+ * An item is the unit the user selects; a set is one switch, which cannot express "hide the gift
+ * button but keep quests" when both live in one set.
  *
- * @property setId The patch set the item belongs to, for example `discord_hermes`.
- * @property identity The item's identity *within* its set. This is what a saved selection
- *   records, so it has to be stable across releases and across app restarts: not an index into a
- *   list, and not a display label. A Hermes function is identified by its function id (the names
- *   are not unique, and this bundle has three functions called `track`), and a blocklist rule by
- *   its own pattern, which is all there is of the rule.
- * @property label The item's name as the UI shows it. Free to change; nothing persists it.
- * @property group The user-facing feature the item belongs to, named so that it describes what it
- *   covers.
- * @property section The section of the patch list the item is sorted under, for example
- *   `Ads and promotions`. Empty for an item that is not part of that list, which today is the
- *   declared permissions: they keep their own card and are not filed under a section.
- * @property description One line that describes the effect of switching the item on.
+ * @property setId Patch set the item belongs to, for example `discord_hermes`.
+ * @property identity Identity within the set, persisted in a saved selection: stable across
+ *   releases, so not an index and not a label. A Hermes function is identified by its id (names
+ *   are not unique) and a blocklist rule by its pattern.
+ * @property label Name the UI shows; free to change.
+ * @property group User-facing feature the item belongs to.
+ * @property section Section of the patch list, empty for an item listed elsewhere (the declared
+ *   permissions keep their own card).
+ * @property description One line describing the effect of switching the item on.
  */
 data class PatchItem(
     val setId: String,

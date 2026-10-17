@@ -27,11 +27,12 @@ class DiscordBlocklistPatchTest {
      *
      * The resolver reads an `okhttp3.Response` constructor, the `Protocol` class and that class's
      * HTTP/1.1 field out of the target's own DEX, because R8 renames all three on every release.
-     * The earlier form of this test compared the generated method character for character against
-     * a recorded patched build's copy of it. There is no recorded patched build for any release since 349.5, so that
-     * comparison is gone - which makes this the check that has to carry the claim: every name the
-     * generator is handed must be a name the target actually carries, or the generated method is
-     * assembled from another release's spellings and fails on the phone rather than here.
+     * The earlier form of this test compared the generated method character for character against a
+     * recorded patched build's copy of it. There is no recorded patched build for any release since
+     * 349.5, so that comparison is gone - which makes this the check that has to carry the claim:
+     * every name the generator is handed must be a name the target actually carries, or the
+     * generated method is assembled from another release's spellings and fails on the phone rather
+     * than here.
      */
     @Test
     fun theDiscoveredNamesAreTheOnesThisBuildCarries() {

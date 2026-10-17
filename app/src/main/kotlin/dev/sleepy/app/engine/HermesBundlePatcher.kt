@@ -6,59 +6,18 @@ import java.security.MessageDigest
 /**
  * Writes whole replacement function bodies into a Hermes bundle.
  *
- * A function body is a fixed-size region of the bundle: the function header specifies where it
- * starts and how long it is, and nothing else in the file addresses its interior. Replacement
- * therefore depends on size alone. When the replacement is no longer than the body the
- * bundle already has, the patcher writes it over the old one and fills the remainder—which
- * sits after the body's final `Ret` and is unreachable—with `AsyncBreakCheck` (`0x7E`, a
- * valid one-byte zero-operand opcode in HBC 98), so that no part of the old function's
- * instructions remains. When the replacement is longer, the patcher appends it to the end
- * of the file behind a large `FunctionHeader` and re-points the function's 96-bit table entry
- * at it, because the function's original region cannot contain the extra bytes.
+ * A body is a fixed-size region addressed only by its header. A replacement no longer than the
+ * body is written over it and the rest, which is unreachable, is filled with `AsyncBreakCheck`
+ * (`0x7E`); a longer one is appended behind a large `FunctionHeader` and the function's entry
+ * repointed. Either way the declaration is narrowed to the replacement's length.
  *
- * ## Bodies are declared at the replacement's size, not at the bundle's
+ * Two functions can share one body: the lower id keeps the region and the other is relocated,
+ * carrying its own header rather than an invented one. The input array is not modified; the
+ * result is the input plus the appended bytes and a fresh SHA-1 footer.
  *
- * A replacement is usually shorter than the body it replaces, so the declaration is narrowed to
- * the replacement's length: in the 96-bit entry's `bytecodeSizeInBytes` bits or in the large
- * header's `+12` slot, as the recorded change set's output did. Function 15089's body is 186
- * bytes in the bundle and its replacement is 6. Padding without narrowing the declaration also
- * runs identically, because the padding is unreachable, but it leaves the function declaring a
- * body longer than the one that was written. Applied to the Discord 349.5 bundle, the patcher
- * produced 155,427 function bodies byte-identical to the recorded build's, which is the check
- * that comparison could make; the current 351.2.5 table has no recorded build, so what is
- * checked there is the declaration itself and the padding behind it
- * ([dev.sleepy.app.engine.HermesBundleApplicationTest]).
- *
- * ## One body, two functions
- *
- * Functions 65889 and 65890 (`isVirtualCurrencyEnabled`, `useVirtualCurrencyMobileEnabled`)
- * share a single 47-byte body in this bundle, and the table gives each of them the same 19-byte
- * replacement. So do 75038 and 75050, over a shared 37-byte body and a 5-byte replacement. One
- * write cannot serve both, so the lower id keeps the shared region and the other function is
- * relocated: its own replacement bytes are written at the end of the file, where its large header
- * declares that size. Nothing is overwritten; writing both into the shared region would leave one
- * of them holding `AsyncBreakCheck`.
- *
- * ## What is not invented
- *
- * A relocated function needs a large `FunctionHeader` (37 bytes: nine 32-bit fields, then a
- * flags byte). Every function relocated here already has one, because a body past 2^25 or
- * longer than 16,383 bytes needs a large header. The patcher copies that header from the
- * function itself, so the fields it does not name—the flags byte and the word at `+32`—
- * keep the bundle's own values rather than values invented by the patcher; only `+0 offset` and
- * `+12 bytecodeSizeInBytes` are written. A function small enough to be encoded entirely in its
- * 96-bit entry has no header to copy: the patcher then builds one over a byte template taken
- * from any other overflowed function, with the entry's packed fields unpacked into its 32-bit
- * slots ([largeHeader]). That path follows the format but is unexercised by the Discord patch
- * set, which relocates only functions that already have a header.
- *
- * ## Ordering
- *
- * The output is the input's bytes up to the old footer, then the relocated bodies and headers
- * four-byte aligned, then a fresh SHA-1 footer, with `fileLength` increased to cover the
- * appended bytes. Anything the input carried past `fileLength` is dropped: it is not part of
- * the bundle. The input array is not modified, and when no patch applies the patcher returns
- * it unchanged.
+ * [dev.sleepy.app.engine.HermesBundleApplicationTest] applies the table and reads every patched
+ * function back. There is no recorded patched build for any release since 349.5 to compare
+ * against.
  */
 object HermesBundlePatcher {
 
@@ -406,14 +365,9 @@ object HermesBundlePatcher {
         }
         writeU32Le(header, LARGE_HEADER_OFFSET_FIELD, bodyOffset)
         writeU32Le(header, LARGE_HEADER_SIZE_FIELD, plan.replacement.size)
-        // The exception-handler table and the function's debug offsets are not part of the
-        // body: Hermes reads them from immediately behind this header, and only when the flags
-        // say they are there (`BCProviderFromBuffer::getExceptionTableAndDebugOffsets`). A
-        // relocated header is written on its own with nothing behind it, so a copied flag
-        // sends Hermes into whatever the layout put next - the following body, or zeroes - and
-        // it aborts on the first frame it tries to read. Both flags are therefore cleared, which
-        // is also what the replacement is: a body with no handler table, and no line numbers to
-        // report for code that is not the code that was there.
+        // The exception table and debug offsets sit behind this header and are present only when
+        // the flags say so. A relocated header has nothing behind it, so both flags are cleared -
+        // copied, Hermes would read the following body (or zeroes) and abort on the first frame.
         header[LARGE_HEADER_FLAGS_FIELD] =
             (header[LARGE_HEADER_FLAGS_FIELD].toInt() and
                 (FLAG_HAS_EXCEPTION_HANDLER or FLAG_HAS_DEBUG_INFO).inv()).toByte()

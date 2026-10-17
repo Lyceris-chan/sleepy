@@ -76,13 +76,9 @@ fun SourceCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
-                    // The weight is what keeps the chevron its own size. Row measures children
-                    // without a weight first and hands each what the ones before it left, so a
-                    // long name—OctoGram's carries its build number—took the whole width and the
-                    // chevron was measured into the remainder. Material sizes an icon with
-                    // Modifier.size, which clamps to the constraint it is given, so the remainder
-                    // was the size it got. Weighted, this Row is measured last, against what the
-                    // chevron leaves, and the names ellipsize instead.
+                    // Row measures unweighted children first, so a long name took the whole width
+                    // and the icon got the remainder; weighted, the name measures last and
+                    // ellipsizes. Modifier.size clamps an icon to whatever constraint it gets.
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)

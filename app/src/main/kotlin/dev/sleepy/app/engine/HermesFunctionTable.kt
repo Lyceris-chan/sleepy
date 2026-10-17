@@ -3,15 +3,8 @@ package dev.sleepy.app.engine
 /**
  * Locates a Hermes bytecode function's body and length inside an HBC bundle.
  *
- * Patching a JavaScript function on-device means writing new bytecode over the old, which
- * requires the offset where that function's bytecode starts and its length. Hermes stores
- * both in a function header table that begins immediately after the 128-byte file header.
- *
- * ## The layout
- *
- * For HBC 97 and newer ("Modern12") each entry is a 96-bit word, not the 128-bit
- * `SmallFuncHeader` the format used before 97. Fields are packed across the three 32-bit
- * words like this:
+ * The function header table starts after the 128-byte file header. For HBC 97 and newer
+ * ("Modern12") each entry is three 32-bit words:
  *
  * ```
  * offset                  bits  0..24   (25)
@@ -29,31 +22,14 @@ package dev.sleepy.app.engine
  * flags                   bits 88..95   ( 8)   overflowed = 0x20
  * ```
  *
- * `offset` and `bytecodeSizeInBytes` give the location for the 1,850 functions small enough
- * to store them directly. The other 156,789 are marked overflowed and store a pointer to a
- * second, wider header instead:
- * `largeOffset = (functionName shl 24) or (offset and 0x00FFFFFF)`, whose record holds
- * `offset` at `+0` and `bytecodeSizeInBytes` at `+12` as full 32-bit fields.
+ * `offset` and `bytecodeSizeInBytes` locate the functions small enough to store them; the rest
+ * are marked overflowed and point at a wide header holding `offset` at `+0` and
+ * `bytecodeSizeInBytes` at `+12`.
  *
- * ## Verification
- *
- * The offsets returned by [locate] were compared with `hermes-decomp dump --kind functions`
- * for all 160,128 functions of the Discord 351.2.5 bundle, including the 14 targets the stub
- * catalog uses, and the two outputs matched for every one of them. The same comparison was made
- * for the 351.2.0 and 349.5 bundles before this one. That dump is what this table is checked
- * against: if this file changes, compare the result against a real bundle rather than against
- * the arithmetic alone.
- *
- * Two properties of the format that this implementation accounts for:
- *
- * - The body offsets are **not** stored in the function header table as values that can be
- *   found by searching for them. Only 1,850 of them appear there directly; the rest are in the
- *   large-header table near the end of the file. Finding an offset only in the large-header
- *   table does not mean that the function header table lacks an entry for it.
- * - Hermes bodies are **not** stored contiguously. Only 118,058 of 158,638 consecutive pairs
- *   satisfy `offset[i] + size[i] == offset[i + 1]`, and 6,944 consecutive pairs share a body
- *   exactly. A check that assumes contiguous bodies rejects this layout, so it does not
- *   validate one.
+ * [locate] was checked against `hermes-decomp dump --kind functions` for all 160,128 functions
+ * of the Discord 351.2.5 bundle. Bodies are not contiguous, and an offset that is missing from
+ * the header table is still located through the large-header table, so neither property is a
+ * valid check.
  */
 object HermesFunctionTable {
 

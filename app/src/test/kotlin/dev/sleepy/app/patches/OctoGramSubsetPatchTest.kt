@@ -485,8 +485,8 @@ class OctoGramSubsetPatchTest {
     /**
      * The call that registers the external-browser default, and where it sits in the constructor.
      *
-     * The invoke alone occurs in the class once per setting, so the key's own `const-string` locates
-     * this one: it is the first invoke after that string.
+     * The invoke alone occurs in the class once per setting, so the key's own `const-string`
+     * locates this one: it is the first invoke after that string.
      */
     private fun defaultInvoke(steps: List<DexView.Step>): DefaultInvoke {
         val key = steps.indexOfFirst {

@@ -4,26 +4,16 @@ import dev.sleepy.app.patches.DiscordNativePatches
 import dev.sleepy.app.patches.DiscordPatches
 
 /**
- * The `AndroidManifest.xml` edits that a Discord run requests, selected from what the run does
- * rather than from a fixed list.
+ * The `AndroidManifest.xml` edits a Discord run requests, selected from what the run does.
  *
- * This object expresses the edits as selectors against the compiled document—a patcher on a
- * phone does not have the text form—and it selects each of them rather than applying them
- * unconditionally, because the edits fall into several groups:
+ * The edits are selectors against the compiled document, because a patcher on a phone has no text
+ * form. They fall into groups: the Sentry providers, Play split markers and attribution query
+ * follow the switches they belong to, so manifest and code stay in step; the dead permissions and
+ * inert Analytics components are not decisions and are requested on every run against the build
+ * they were read from; closing the RPC service is not a preference either ([Plan.rpcService]).
  *
- * - The Sentry providers, the Play split markers and the attribution query each belong to
- *   something the user switched on or off. Removing a component whose code is still being
- *   installed, or keeping one whose code has been stubbed out, leaves the manifest and the code
- *   out of step, so each edit is tied to the switch it belongs to.
- * - The dead permissions and the inert Google Analytics components are not decisions about a run
- *   at all—no switch makes either of them true or false—so the plan requests them on every
- *   run against the build they were read from, and on no other.
- * - Closing the RPC service is not a preference. [Plan.rpcService] carries it and records the
- *   reason.
- *
- * Keeping the decision in one pure function makes it checkable: the pipeline applies the plan and
- * reports it, and a test can assert the plan for a given run without a device, an APK or a
- * manifest.
+ * Keeping the decision in one pure function is what lets a test assert a plan without a device or
+ * an APK.
  */
 object DiscordManifestEdits {
 
@@ -124,14 +114,10 @@ object DiscordManifestEdits {
         // the plan requests them only when the job targets this build.
         val isDiscordBuild = packageName == PACKAGE_NAME
 
-        // The declarations that this build does not use. No switch controls this group: the app
-        // does not use these permissions under any setting, so unlike the Sentry providers and the
-        // attribution query there is no alternative state for a run to choose—the recorded
-        // change set removes them from every build.
-        //
-        // The list comes from a function rather than a literal here, because it is also what the
-        // permission list marks its rows with: a permission section that offers a switch for one
-        // of these describes a manifest that this pass is about to edit.
+        // Declarations this build never uses. No switch controls this group: the recorded change
+        // set removes them from every build, and the permission list marks the same rows, so a
+        // section offering a switch over one would describe a manifest this pass is about to
+        // edit.
         val deadPermissionSelectors = deadPermissionsIn(packageName).map { permission ->
             BinaryXmlEditor.ElementSelector(
                 namePrefix = BinaryXmlEditor.ELEMENT_USES_PERMISSION,
@@ -182,14 +168,9 @@ object DiscordManifestEdits {
             emptyList()
         }
 
-        // The AppsFlyer package-visibility query, tied to the switch that no-ops that SDK's only
-        // initializer. The query is how the app asks the platform whether the install-referrer
-        // provider is present; with the initializer stubbed, no caller reads the answer, and a
-        // visibility declaration left behind is a capability that the app does not use. A build
-        // that still runs the initializer keeps the query.
-        //
-        // `<intent>` carries no attributes of its own, so the `<action>` inside it is what
-        // distinguishes this one from the others.
+        // The AppsFlyer visibility query, tied to the switch that no-ops its initializer: with
+        // the initializer stubbed no caller reads the answer. The `<intent>` carries no
+        // attributes, so its `<action>` is what identifies it.
         val attributionQuerySelectors = if (DiscordNativePatches.DEEP_LINKS.id in activePatchIds) {
             listOf(
                 BinaryXmlEditor.ElementSelector(

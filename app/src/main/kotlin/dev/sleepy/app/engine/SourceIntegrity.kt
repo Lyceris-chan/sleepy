@@ -30,7 +30,10 @@ internal class SourceIntegrity private constructor(
 ) {
     companion object {
 
-        /** Compares [bytes] with [expectedSha256] and [expectedSizeBytes] and records the result. */
+        /**
+         * Compares [bytes] with [expectedSha256] and [expectedSizeBytes] and records the
+         * result.
+         */
         fun of(
             expectedSha256: String?,
             bytes: ByteArray,

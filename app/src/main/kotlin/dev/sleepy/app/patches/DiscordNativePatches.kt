@@ -4,64 +4,20 @@ import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
 
 /**
- * Native (smali/DEX) modifications for Discord, transcribed from the recorded change set for
- * Discord 349.5 Alpha and re-pointed at 351.2.5.
+ * Native (smali/DEX) modifications for Discord 351.2.5.
  *
- * This object carries the part of that change set that [DiscordPatches] does not: the edits that
- * are neither the Hermes JavaScript bundle nor a whole-method stub of the handful of
- * telemetry entry points already covered there. Every entry corresponds to a call the
- * recorded change set makes, and the smali it writes is the recorded output, with one exception:
- * R8 renumbers classes and methods on every release, so where a name moved the new name is
- * substituted—read out of the build's own code and checked to have the same body before it
- * replaced the recorded one.
+ * Every entry is a call the recorded 349.5 change set makes, re-pointed at this build. All 47
+ * class paths survived unchanged, but four kinds of name inside them moved: five
+ * experiment-lambda signatures, `FrameMetricsAggregator.bindTo` and `enableTracking`, two
+ * coroutine classes, and the obfuscated okhttp cache type. Each is read out of the build's own
+ * smali here rather than carried.
  *
- * The move to 351.2.5 left all 47 class paths this object names where they were—checked by
- * comparing each against the class list of the build's own DEX files rather than by assuming
- * it—but four kinds of name inside them did move, and each is re-pointed here from the build's
- * own smali:
+ * Manifest edits, resource-table changes and bundled-file deletions are applied elsewhere in the
+ * pipeline because a DEX edit cannot make them. The recorded edits that are off by default stay
+ * off: they change behaviour upstream depends on.
  *
- * — Five experiment lambdas take the enclosing `NativeExperiments` where they used to take a
- *   libdiscore module, so their signatures and the bodies written for them name a different
- *   parameter.
- * — `FrameMetricsAggregator.bindTo` is private where it was public, and the method the second
- *   patch stubbed as `initialize(Landroid/view/Window;)` is now `enableTracking`, so both the
- *   signature and the access flags move. The neighbouring `JankStatsAggregator` keeps the name
- *   `initialize`, which is why the two are not interchangeable.
- * — The coroutine classes the supervisor-scope injection names moved from `Ltr/` to `Lsr/`,
- *   suffixes unchanged, and their relationships were checked in the new build (`sr/m1` extends
- *   `sr/y0`, and `sr/y0` still has the no-argument constructor the injection calls).
- * — The obfuscated okhttp cache type moved from `Lvs/g;` to `Lus/g;`, on the same
- *   `OkHttpClient$Builder` field `k`, so the shared-cache patches and the field they declare
- *   name the new type.
- *
- * Three kinds of edit are deliberately absent, because an on-device patcher that edits DEX
- * files cannot apply them:
- *
- * - **AndroidManifest.xml**: the recorded change set removes split/meta-data declarations, six dead
- *   permissions, the Sentry providers, the AppsFlyer intent query and the exported flag on
- *   the RPC service. Binary XML editing lives in the pipeline, not in a [SmaliPatch].
- * - **Resources**: the ExoPlayer drawable aliases in `res/values/drawables.xml` and the
- *   `res/raw/cache_intl_*` strip both need the resource table rebuilt.
- * - **Bundled files**: deleting `libsentry.so` / `libsentry-android.so` and dropping the OTA
- *   patch asset happen in the repack ([dev.sleepy.app.engine.ZipRepacker]), and nulling the DSN
- *   inside `assets/index.android.bundle` happens when the bundle is rewritten
- *   ([dev.sleepy.app.engine.HermesPatcher]). All three are applied; they edit entries inside the
- *   APK rather than a DEX, so none of them is a [SmaliPatch].
- *
- * The recorded change set's smali edits that are switched off by default are also left out:
- * bounding the surface-release wait changes behaviour upstream depends on, lowering the capture
- * resolution makes the capture request smaller than the encoder, and passing 0 to the native
- * media engine is an undocumented value. They are recorded as off for those reasons.
- *
- * Labels: the recorded change set edits an apktool tree, whose branch labels are numbered
- * sequentially per method (`:cond_3`). The engine disassembles the APK itself and gets
- * address-based labels (`:cond_4c`). An anchor that names a label therefore uses the engine's
- * spelling, while every emitted replacement keeps the recorded text byte for byte—the
- * labels a patch *introduces* (`:cond_gate_skip`, `:cond_no_stall`, `:new_cache`,
- * `:cond_patch_skip`) are its own and are reproduced as written.
- *
- * [versionTag] and [dexName] are left null: Discord ships every class in a version-dependent
- * DEX, so the pipeline resolves the DEX from the class descriptor.
+ * [versionTag] and [dexName] are null because Discord ships every class in a
+ * version-dependent DEX; the pipeline resolves it from the class descriptor.
  */
 object DiscordNativePatches {
 

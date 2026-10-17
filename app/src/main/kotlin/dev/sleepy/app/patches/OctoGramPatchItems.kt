@@ -9,30 +9,13 @@ import dev.sleepy.app.model.SmaliPatch
 import dev.sleepy.app.model.TargetApk
 
 /**
- * What every OctoGram edit is, in the user's terms: the switch it belongs to, the feature it sits
- * under, and the line describing what switching it on does.
+ * Pairs each OctoGram edit group with the switch a user sees: its feature, its name, and the line
+ * describing what switching it on does.
  *
- * One switch per set does not fit a set that holds more than one decision. The clearest case is
- * the logger: silencing the emitters and silencing the uploaders are two choices, and a user who
- * wants the log written to logcat but nothing shipped to Telegram's servers cannot express that
- * behind one switch. The premium rows are the opposite case and are deliberately *one* item over
- * three edits—hiding the premium row alone makes the sections row appear in its place, so a list
- * offering that edit on its own would offer a state that is incorrect.
- *
- * The patches themselves stay in [OctoGramPatches], grouped one list per item, next to the set they
- * belong to: this table pairs a group with the switch that turns it on, and owns the wording. An
- * entry's patches are the same objects the engine applies, so there is one definition of each edit
- * and no second copy to fall out of step.
- *
- * Every entry names a group of patches in the recorded change set, and a test asserts
- * that the entries and the sets cover each other exactly—a set with no entry would be a set that
- * cannot be selected at all, and an entry with no patch would be a row describing a change it does
- * not make.
- *
- * The per-entry wording matches the sets' own descriptions in [OctoGramPatches]: it describes how
- * the app stops spending the user's data and attention rather than which method a letter-name
- * replaced this release. The class, the method and the version tag stay in the entry's own fields,
- * where the technical panel reads them from.
+ * The logger's emitters and uploaders are separate items because they are separate choices; the
+ * premium rows are one item over three edits because hiding one alone leaves the section
+ * incorrect. The patches themselves stay in [OctoGramPatches], so each edit has one definition. A
+ * test asserts the entries and the groups cover each other exactly.
  */
 object OctoGramPatchItems {
 

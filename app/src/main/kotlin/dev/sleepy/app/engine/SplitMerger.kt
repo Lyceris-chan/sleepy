@@ -10,32 +10,17 @@ import java.util.zip.ZipInputStream
 /**
  * Merges Android App Bundle configuration splits into the base APK.
  *
- * A `split_base` download is only the master split: it carries the DEX, the resources and
- * the JS bundle, but no native library entries at all—every shared object is in the
- * ABI configuration split. Installing the base alone gives an APK whose first
- * `System.loadLibrary` call throws `UnsatisfiedLinkError`, and whose manifest still
- * declares `android:requiredSplitTypes`, so the platform rejects it outright.
+ * A `split_base` download carries no native libraries and none of the resources only a density
+ * or language split provides, so a split contributes every shared object under `lib/` and every
+ * file under `res/` except its own `values/` — those are placeholder stubs that would replace
+ * resources the base already has.
  *
- * The base is not the whole app either. A density split holds the bitmaps that suit one
- * screen density and a language split the strings of one locale, and both are as absent
- * from the base as the libraries are: a base-only APK has none of the resources only those
- * splits carry. So a split contributes two things here—every
- * shared object under `lib/`, and every file under `res/` except the split's own `values/`
- * directory. That last exception is required: a configuration split's `values/` holds
- * placeholder stubs for the values it replaces rather than resources of its own, and copying
- * those in replaces resources that the base already has.
+ * The splits' `resources.arsc` files are deliberately not merged: each names only the files its
+ * split carries, and making those names resolve means relinking the tables. The merge produces
+ * the right file set and size, not a resource-complete archive.
  *
- * What is deliberately *not* merged is the splits' `resources.arsc`, and that is the whole of
- * this object's limitation rather than a detail. Every split contains a partial table naming
- * only the files that split carries—this base's names its own 3,853, the density split's
- * names its 1,239, and the two sets share no path string at all—so the files merged in here
- * are written at the right paths, but nothing in the merged APK refers to them. Making them
- * resolve means relinking the tables, which is aapt2's job and more than a repack; what this
- * produces is the file set and the size the recorded build has, and no more than that.
- *
- * [mergeSplit] reads those entries into memory; [mergeSplitToDir] writes them to files: a
- * configuration split is tens of megabytes, which is more than a phone heap can hold next to
- * the base APK and the archive being rebuilt.
+ * [mergeSplit] reads entries into memory; [mergeSplitToDir] writes them to files, for splits too
+ * large to hold beside the base.
  */
 object SplitMerger {
 

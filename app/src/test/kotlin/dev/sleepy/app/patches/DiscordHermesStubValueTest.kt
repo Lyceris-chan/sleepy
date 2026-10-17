@@ -23,8 +23,8 @@ import org.junit.Test
  *
  * The earlier release had a second function with the same problem, the SHOW_CONFIRM_MODAL handler
  * in `modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx`, and the same reasoning
- * shaped its stub. It is not here any more: no release since 349.5 ships a `modules/vibegrations/` path at all,
- * so the module and the function are gone and there is nothing to return a value from.
+ * shaped its stub. It is not here any more: no release since 349.5 ships a `modules/vibegrations/`
+ * path at all, so the module and the function are gone and there is nothing to return a value from.
  *
  * The first test pins the replacement, which is the change itself. The second applies the whole
  * table to the real base split and reads the result back, so the value that reaches the

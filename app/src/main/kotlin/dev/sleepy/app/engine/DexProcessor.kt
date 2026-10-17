@@ -58,7 +58,8 @@ object DexProcessor {
      * Patches a DEX file by disassembling and reassembling only the classes being modified,
      * leaving the other classes in their original binary form.
      *
-     * This keeps the memory the patch holds proportional to the classes it changes rather than to the size of the DEX file.
+     * This keeps the memory the patch holds proportional to the classes it changes rather than to
+     * the size of the DEX file.
      */
     suspend fun patchDexSurgically(
         dexBytes: ByteArray,

@@ -40,28 +40,18 @@ import dev.sleepy.app.ui.state.PatchSectionRows
 import dev.sleepy.app.ui.state.TriState
 
 /**
- * One section of the selection list: its own switch, and the disclosure that opens its rows.
+ * One section of the selection list: its own tri-state switch and the disclosure that opens its
+ * rows.
  *
- * The sections are the list's only grouping level—the rows under one are flat, with no heading
- * between them—because a heading under a heading is the third level of disclosure the screen used
- * to have and the reason it was hard to read.
- *
- * The switch is the section's, not a row's, so it is tri-state: on when every item is on, off when
- * none is, and showing a dash when the section is partly on—a state the user reaches on purpose by
- * switching one row on inside it. What a tap on it does is defined by [PatchRows.headerChecked],
- * so the behavior is the same for every section, and the count beside it states which way the next
- * tap will go: a section that is not fully on is completed by a tap, and one that is fully on is
- * cleared by it.
- *
- * The section's rows are not rendered here. They are emitted as their own lazy rows by the screen,
- * so the eighty-one-rule blocklist scrolls without composing all of them, and this card stays a
- * header.
+ * The value is on when every item is on, off when none is, and mixed otherwise; a tap follows
+ * [PatchRows.headerChecked] and the count beside it says which way the next tap goes. Rows are
+ * emitted as their own lazy items by the screen, so this card stays a header.
  *
  * @param section The section to render.
  * @param expanded Whether the section's rows are shown.
- * @param onSectionToggled Called with the new value when the section's switch is moved.
+ * @param onSectionToggled Called with the new value when the switch moves.
  * @param onExpandedChange Called when the disclosure row is tapped.
- * @param modifier The modifier applied to the card.
+ * @param modifier Modifier applied to the card.
  */
 @Composable
 fun PatchSectionCard(

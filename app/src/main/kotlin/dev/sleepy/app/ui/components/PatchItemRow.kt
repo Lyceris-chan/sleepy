@@ -42,23 +42,17 @@ import dev.sleepy.app.ui.state.InertKind
 import dev.sleepy.app.ui.state.PatchRow
 
 /**
- * One row of an expanded patch set: an item with its own switch, or a row with no choice in it—
- * a blocklist rule that another enabled rule already covers, or one of the interceptor's prefix
- * gates.
+ * One row of an expanded patch set: an item with its own switch, or a row with no choice in it —
+ * a rule covered by another, or a prefix gate.
  *
- * The row is the switch's target, so it appears as one labeled control rather than as a small
- * thumb beside an unrelated sentence, and its description is visible in the row itself: a switch
- * whose effect the user cannot read is not a choice.
- *
- * A row whose switch cannot be moved reports that in three ways: a disabled switch, an icon, and
- * the reason in full, which comes from the model rather than from here. Color is not the only
- * signal for the state, and an inert row is not rendered without a reason to read. The two kinds
- * of inertness are different claims: a rule that is only redundant becomes a working switch
- * again when the rule that covers it is turned off, while a gate stays inert.
+ * The row is the switch's target, so it reads as one labeled control, and the description is in
+ * the row. An inert row states why three ways — disabled switch, icon, reason in full — never by
+ * colour alone. A redundant rule becomes switchable again when its coverer is turned off; a gate
+ * stays inert.
  *
  * @param row The row to render.
- * @param onToggle Called with the row's item when the user moves its switch.
- * @param modifier The modifier applied to the row.
+ * @param onToggle Called when the user moves the switch.
+ * @param modifier Modifier applied to the row.
  */
 @Composable
 fun PatchItemRow(

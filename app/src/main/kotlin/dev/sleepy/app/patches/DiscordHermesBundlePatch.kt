@@ -3,119 +3,14 @@ package dev.sleepy.app.patches
 /**
  * The Discord JavaScript bundle patch set for Discord 351.2.5.
  *
- * ## Where the entries come from, and what changed in this release
+ * Each entry names one function of one exact bundle and the body that replaces it: constant
+ * stubs carried by id, promise stubs re-assembled against this bundle's string indices, and
+ * size-preserving body edits. A declared size that does not match the bundle makes the patcher
+ * skip the entry rather than write it. The game-activity and declutter entries added in 3.8.0
+ * are described in CHANGELOG.md.
  *
- * The 349.5 set was extracted from a pair of APKs — a base split and a build that had been
- * patched and verified by hand — so each entry was the recorded build's own output rather than a
- * reconstruction of it, and every function of sleepy's bundle could be compared against that
- * build byte for byte. There is no such pair for any release since, and nothing in this file is
- * taken from one. Each entry is instead carried, re-assembled or re-derived from the 351.2.0
- * entry it replaces:
- *
- * — **176 are constant-shaped stubs** — `LoadConstUndefined; Ret` and its siblings. Their bytes
- *   name nothing that is numbered per bundle, so they carry unchanged; only the function id and
- *   the size the entry declares move.
- * — **17 are promise-shaped stubs.** These read the strings "Promise" and "resolve" through the
- *   bundle's own string identifiers, which are renumbered every release. Carried unchanged they
- *   would resolve to a different string and quietly return the wrong thing, so each is
- *   re-assembled against this bundle and the resulting bytes are baked in here.
- * — **15 are edits of an original body.** A register, a buffer index and a closure id are all
- *   per-bundle values, so each was re-derived against the body this build actually has, from the
- *   difference between the 351.2.0 function and the 351.2.0 replacement. Where that difference is
- *   a one-operand change or a size-preserving swap, nothing shifts and the edit is written in
- *   place; where it inserts instructions the body grows.
- * — **4 are new**, and are the only entries that patch something no earlier release patched: the
- *   game-activity presence described below.
- *
- * ## Games being played
- *
- * 49519 and 54209 are `isPlayingGameActivity` and `isGameActivity`, the two predicates in
- * `modules/activities/utils/` that answer whether an activity is a game being played. They are
- * the choke points: the status line drawn under a name, the activity list on a profile, the
- * label on a private channel, the You bar's accessibility label, the voice panel's games
- * section, and the hook that gathers the games people are playing in a voice channel all ask
- * one of the two before they draw anything. Answering false at both leaves every one of them
- * with nothing to render, which is why the feature is two stubs rather than a change per
- * surface.
- *
- * 79418 and 79419 are the two copies of the voice panel's own games section. That section is
- * the container the list is drawn inside, so an empty list would have left the container on
- * screen; returning null removes the section itself.
- *
- * ## The declutter entries
- *
- * The 208 entries at the end of the table are the storefront, the upsells, the trials and the
- * leaderboard badges. Each is a stub whose replacement is a value its own original returned on
- * some path, which is what makes the shape safe without reading every caller: a component that
- * returns an element or null is stubbed to null, a predicate whose returns are all comparisons
- * answers false, and a function that already returned nothing on every path keeps returning
- * nothing.
- *
- * Which of the three a function is was decided from its own return paths, by following the
- * returned register to the instruction that computed it and resolving the callee of the call.
- * The React Compiler copies are recognised by the call Discord's compiler emits - the props
- * object is built in the destination register and the result is written back over it - and each
- * component is stubbed in both of its copies, because the module chooses between them at load
- * time. A function whose returns fit none of the three shapes was left alone, as were two whose
- * stock bodies are already `LoadConstUndefined; Ret`.
- *
- * ## What is checked, and what is not
- *
- * [dev.sleepy.app.engine.HermesBundleApplicationTest] applies the whole table to the build it
- * names and requires every entry to land with nothing skipped, and then reads all 420 patched
- * functions back with a real Hermes disassembler. That second check is the one that catches a
- * body which occupies the right number of bytes but is not valid bytecode — a replacement whose
- * last instruction is missing its operands passes every check about *where* the bytes are and
- * fails only when something tries to decode them.
- *
- * It is a narrower claim than the one the 349.5 set could make. It cannot tell whether a
- * replacement does what its entry says it does, only that it is well-formed and that it was
- * written where the entry says. An entry that assembles cleanly and does nothing would pass.
- *
- * ## The four settings rows
- *
- * 15959, 15965, 15972 and 16829 append
- * `CreateClosureLongIndex` plus `DefineOwnById … "usePredicate"` to the route object they build,
- * pointing at the closure that `modules/user_settings/defs/native/QuestHomeSetting.tsx` exports
- * and that this set already stubs to false. `SettingHookHarness` hides any entry whose
- * `usePredicate()` answers false, so one always-false closure hides all four rows.
- *
- * ## The tab lists
- *
- * 66259, 78269, 50409 and 118888 are the React Compiler copies of the profile and You-screen
- * content components. Discord ships each of those screens twice and picks between them with an
- * experiment, so removing the tabs from one copy alone leaves them reachable whenever the
- * experiment flips. Each edit points a tab's guard at a register the body has already loaded
- * `undefined` or `null` into and never writes again, which makes the guard always fire; where a
- * push is unguarded the push is replaced by a jump over itself, which is size-preserving. The
- * register is re-chosen for this build and checked against this body, because which register
- * holds a constant at a given point is not a property that survives a release.
- *
- * ## Shop This Look
- *
- * 47551 and 47552 are the two branches of `useIsShopThisLookMobileEnabled`, the Apex experiment
- * gate in `modules/collectibles/experiments/ShopThisLookMobileExperiment.tsx`. An earlier change
- * set removed the sheet and the coachmark and deliberately left the opener alone, because the
- * opener's body is deduplicated with an unrelated display-name sheet, so a row that opened an
- * empty sheet stayed on screen. Answering false at the gate takes the menu row, the coachmark and
- * the sheet together: the overflow menu is the opener's only caller, and it builds that row only
- * when the gate says yes.
- *
- * ## Relocation
- *
- * Seven entries cannot be written where the body they replace is: 8346, 15959, 15965, 15972 and
- * 16829 have replacements longer than the body. 65890 and 75050 share a body with another entry -
- * with 65889 and 75038 — and a shared region can hold only one replacement, so the lower id keeps
- * it and the other is relocated beside it. [dev.sleepy.app.engine.HermesBundlePatcher] describes
- * how.
- *
- * ## Why the set is data
- *
- * A promise-shaped stub has to name "Promise" and "resolve" through the bundle's own string
- * identifiers, which are not the string-table indices and cannot be resolved without the
- * identifier table, and the body edits are whole-body replacements produced by an assembler.
- * Both are recorded here as bytes. [DiscordPatches] derives the smaller stubs at patch time,
- * whose shapes need no identifier table.
+ * [dev.sleepy.app.engine.HermesBundleApplicationTest] applies the table to the build it names
+ * and reads every patched function back with a real Hermes disassembler.
  */
 object DiscordHermesBundlePatch {
 

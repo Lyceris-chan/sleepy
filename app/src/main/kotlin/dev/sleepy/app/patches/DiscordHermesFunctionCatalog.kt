@@ -5,45 +5,12 @@ import dev.sleepy.app.model.PatchSelection
 import dev.sleepy.app.patches.DiscordHermesBundlePatch.FunctionPatch
 
 /**
- * What every function in [DiscordHermesBundlePatch.PATCHES] does to the app, in the user's terms.
+ * The description and feature group for every entry in [DiscordHermesBundlePatch.PATCHES], so
+ * the set can be offered as switches a user can tell apart.
  *
- * The Hermes set is one switch over 212 functions, which is too coarse for the choices a user can
- * make: "hide the gift button but keep quests" is not expressible when both live behind the same
- * switch. This table supplies the per-item list for those functions: each function's feature
- * group, and a line stating what patching it does.
- *
- * ## Where the descriptions come from
- *
- * The set now targets Discord 351.2.5, whose function ids are its own; the descriptions were
- * written for the ids the same functions held in 349.5, and have moved with them twice since. Each
- * move is made by [dev.sleepy.app.patches.DiscordHermesBundlePatch]'s migration, which resolves a
- * function by the name the bundle gives it, by the module it belongs to and its body, or - where
- * a function no name and no closure reaches - by the strings its body reads, and requires the
- * answers to agree. An id and its description therefore move together or not at all, which is the
- * property that makes this table safe to remap.
- *
- * Four entries are grouped under [LEFTOVER_GROUP]: an earlier change set kept those ids from a
- * still earlier release without retargeting them at the functions the entries named, so the id
- * and the description had drifted apart. Those four state the function the id actually holds and
- * what the stub does to it, checked against the bundle's bytecode, rather than repeating an
- * explanation that no longer fits. The fifth of them named a function in
- * `modules/vibegrations/lib/vibegrationsPreviewNativeSurfaces.tsx`, and no release since 349.5
- * ships a `modules/vibegrations/` path at all, so it went with its target.
- *
- * The four entries the game-activity feature adds are new rather than moved: they describe
- * functions no earlier release patched, so their descriptions were written against this bundle's
- * bytecode and have no earlier id behind them.
- *
- * A few entries state what the body at the id does because the earlier table lists them without
- * names.
- *
- * Entries are in [DiscordHermesBundlePatch.PATCHES] order and cover its function ids; a test
- * asserts both, because a function this table describes but the patch table does not carry, or
- * one the patch table carries and this table does not describe, is a mismatch the test reports.
- *
- * Function ids identify an entry, and names do not: this bundle has several functions with the
- * same name. The names also change on every release, so they are labels on an item and not its key
- * (see [PatchItem.identity]).
+ * An id and its description move together: a port resolves the function independently and the
+ * entry follows the id. Entries are listed in patch-table order and cover every id, which a test
+ * asserts. Names are labels, not keys — this bundle has several functions with the same name.
  */
 object DiscordHermesFunctionCatalog {
 

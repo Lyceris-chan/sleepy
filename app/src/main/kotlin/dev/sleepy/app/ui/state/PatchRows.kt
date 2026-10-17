@@ -57,23 +57,19 @@ enum class InertKind {
 
 /**
  * One row of an expanded section: an item with its own switch, or one of the blocklist's prefix
- * gates, which has no item behind it because nothing can select it.
+ * gates, which has no item because nothing can select it.
  *
- * @property key A key stable across recompositions and unique within the list, which is what the
- *   lazy list uses to identify the row. It is the item's own [PatchItem.key] for an item and
+ * @property key Key stable across recompositions and unique in the list: the item's own key, or
  *   [gateKey] for a gate.
- * @property label The row's name.
- * @property description What switching the row on does to the app, in the user's terms.
- * @property enabled Whether the row is on. A gate reports true, because it is applied to every
+ * @property label Row name.
+ * @property description What switching the row on does, in the user's terms.
+ * @property enabled Whether the row is on; a gate reports true because it applies to every
  *   request.
- * @property item The item this row switches, or null for a gate.
- * @property inertKind Which of the two ways the switch is fixed, or null when it can be moved.
- * @property inertReason Why the switch is fixed, in full. This value is not blank when
- *   [inertKind] is set; a grayed row with no reason is what the field prevents.
- * @property technicalTarget The exact thing the patch touches—the emitted smali literal, the
- *   function and its byte count, or the smali files a whole-set item's set rewrites—shown one tap
- *   away rather than in the row itself.
- * @property detail The longer explanation behind [technicalTarget], or null when there is none.
+ * @property item Item this row switches, or null for a gate.
+ * @property inertKind Which way the switch is fixed, or null when it can move.
+ * @property inertReason Why it is fixed, in full; never blank when [inertKind] is set.
+ * @property technicalTarget The exact thing the patch touches, shown one tap away.
+ * @property detail Longer explanation behind [technicalTarget], or null.
  */
 data class PatchRow(
     val key: String,
@@ -91,20 +87,18 @@ data class PatchRow(
 }
 
 /**
- * One section as the list renders it: its rows, and what its own switch reports.
+ * One section as the list renders it: its rows and what its own switch reports.
  *
- * The rows are flat and in the catalogue's own order—there is no heading inside a section, because
- * a heading under a heading is the third level of disclosure this screen exists to lose. The
- * counts are of items, not of rows: a gate is not an item, so Network blocking reports 81 items
- * whether or not its two gates are in the row list, and the section switch covers exactly the
- * items that [PatchRows.sectionsOf] counted.
+ * Rows are flat, in catalogue order, with no heading inside a section. Counts are of items, not
+ * rows: a gate is not an item, so Network blocking reports 81 items whether or not its gates are
+ * listed.
  *
- * @property label The section's name, from [PatchSections].
- * @property description One line saying what the section is for, written for a user.
- * @property rows Every row under the section, in the order the list shows them.
+ * @property label Section name, from [PatchSections].
+ * @property description One line saying what the section is for.
+ * @property rows Every row under the section, in list order.
  * @property itemCount How many items the section holds.
- * @property selectedItemCount How many of those are switched on.
- * @property triState What the section's own switch reports.
+ * @property selectedItemCount How many of those are on.
+ * @property triState What the section's switch reports.
  */
 data class PatchSectionRows(
     val label: String,
@@ -232,31 +226,16 @@ object PatchRows {
     }
 
     /**
-     * The permission section's rows: one per permission the build declares, in the order its
-     * manifest declares them.
+     * The permissions the build declares, as rows, in manifest order.
      *
-     * These are the same rows an expanded section has, rendered by the same row and grayed by the
-     * same mechanism, because a permission that cannot be switched off is the same kind of claim
-     * as a blocklist gate: [InertKind.REQUIRED], the model's own reason, and no switch to move.
-     * What differs is only where the list comes from—the declarations shipped for the release
-     * being patched, or its own manifest when nothing is shipped for it—and that a fixed row is
-     * not necessarily a kept one: [packageName]'s build removes some declarations itself,
-     * regardless of the choice, and those rows report as removed and state why rather than showing
-     * a switch whose position does not reflect the result.
-     *
-     * The switch is labeled "kept", so a permission is removed by switching it off, and the rows
-     * are derived from the selection on every read like everything else here: the last remaining
-     * permission is locked as soon as it is the last, and is unlocked as soon as another is
-     * switched back on.
-     *
-     * The permissions keep their own card rather than being filed under a section: the card states
-     * what removing a declaration costs before it offers the switch, and the list is about the
-     * build being patched rather than about a change sleepy makes.
+     * A permission that cannot be switched off renders inert with [InertKind.REQUIRED] and the
+     * reason, like a blocklist gate; one the build removes regardless reports as removed rather
+     * than showing a switch whose position does not match the result. The switch is labeled
+     * "kept", and the rows are derived from the selection on every read.
      *
      * @param declared The permission names the build declares.
      * @param selection The selection the rows are derived from.
-     * @param packageName The package of the build being patched, which determines which declarations
-     *   the build removes on its own.
+     * @param packageName Package of the build being patched, which determines what it removes.
      * @return One row per declared permission, in declaration order.
      */
     fun permissionRows(

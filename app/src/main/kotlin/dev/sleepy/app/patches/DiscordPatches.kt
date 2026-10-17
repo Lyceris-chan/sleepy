@@ -422,28 +422,19 @@ object DiscordPatches {
     )
 
     /**
-     * The permissions this build declares and has no live code behind, so the recorded change set
-     * strips them from every build it makes.
+     * Permissions this build declares with no live code behind them, stripped from every build.
      *
-     * These are not a preference, so adding a permission to this list is a decision about the app
-     * rather than a switch over it: each was checked against the patched tree before being written
-     * down, and a permission is listed here only when nothing reachable refers to it—stripping
-     * one that is still used turns a working call into a SecurityException.
+     * This is a decision about the app, not a switch: each was checked against the patched tree,
+     * and one is listed only when nothing reachable refers to it — stripping a live permission
+     * turns a working call into a `SecurityException`.
      *
-     *   `READ_CONTACTS`                     - the only reference left is React Native's
-     *       permission-request module; contact sync is stubbed out, so the patched build does not read
-     *       the address book. Removing the declaration makes that structural rather than dependent on the stub
-     *       holding.
-     *   `AD_ID`                             - the advertising identifier. [TELEMETRY] resolves
-     *       every request for it with null, so nothing downstream can be attributed to this
-     *       device.
-     *   `ACCESS_ADSERVICES_ATTRIBUTION`     - Privacy Sandbox attribution, with no ad SDK left to
-     *       report through it.
-     *   `READ_APP_INFO` (Samsung)           - a dead declaration: no code in the dex names it.
-     *   `GET_COMMON_DATA` (Huawei)          - the same, for the Huawei app market.
-     *   `BIND_GET_INSTALL_REFERRER_SERVICE` - bound only by the Play Install Referrer SDK and
-     *       AppsFlyer: `InstallReferrerModule` is stubbed and `AppsFlyerLib.start()` has no callers
-     *       anywhere, so nothing ever binds the service.
+     * - `READ_CONTACTS` — only React Native's permission module refers to it; contact sync is
+     *   stubbed, so the build never reads the address book.
+     * - `AD_ID` — [TELEMETRY] answers every request for it with null.
+     * - `ACCESS_ADSERVICES_ATTRIBUTION` — no ad SDK remains to report through it.
+     * - `READ_APP_INFO`, `GET_COMMON_DATA` — dead declarations, named by no code.
+     * - `BIND_GET_INSTALL_REFERRER_SERVICE` — bound only by the stubbed referrer module and an
+     *   AppsFlyer entry point with no callers.
      */
     val DEAD_PERMISSIONS = listOf(
         "android.permission.READ_CONTACTS",
@@ -459,9 +450,9 @@ object DiscordPatches {
      *
      * Most of the components this object matches on share an element, which is why
      * [SENTRY_PROVIDERS] and [PLAY_SPLIT_MARKERS] are lists of bare names. The Google Analytics set
-     * that follows is not uniform—a receiver and two services—so the element a component is declared
-     * in is part of the fact rather than something the manifest pass should read back out of its
-     * name.
+     * that follows is not uniform—a receiver and two services—so the element a component is
+     * declared in is part of the fact rather than something the manifest pass should read back out
+     * of its name.
      */
     data class ManifestComponent(val element: String, val name: String)
 

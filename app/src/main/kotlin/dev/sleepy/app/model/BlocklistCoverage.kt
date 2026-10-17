@@ -1,15 +1,14 @@
 package dev.sleepy.app.model
 
-/**
- * One row of the blocklist that the UI shows: a rule with a switch, or a gate without one.
- *
- * @property label The row's name.
- * @property description What the row does, in the user's terms.
- * @property lockedReason Why the switch cannot be used, or null when it can. Two reasons share
- *   this field and they are different statements—see
- *   [BlocklistCoverage.COVERED_REASON_PREFIX] and [BlocklistCoverage.REQUIRED_REASON_PREFIX]. A
- *   rule carries the first, a gate the second.
- */
+    /**
+     * Whether [cover] makes [covered] redundant: every URL containing [covered]'s pattern also
+     * contains [cover]'s, so with plain `contains` matching [cover]'s pattern is a substring of
+     * [covered]'s and either rule blocks the request.
+     *
+     * The kind matters because the regimes are asymmetric: a host rule is tested against every URL
+     * and can cover an API rule, while an API rule covers a host rule only for URLs containing
+     * `/api/`, so it cannot.
+     */
 sealed interface BlocklistRow {
     val label: String
     val description: String

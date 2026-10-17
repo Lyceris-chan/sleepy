@@ -13,25 +13,15 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 /**
- * Rebuilds an APK, replacing and appending entries while keeping the archive byte-compatible
- * with what the platform expects.
+ * Rebuilds an APK, replacing and appending entries while keeping the archive byte-compatible.
  *
- * Two properties that a repack has to preserve:
+ * Two properties must survive a repack: alignment — uncompressed entries, `resources.arsc` above
+ * all, start on a 4-byte boundary recomputed from the real output offset — and storage method: an
+ * entry the source stored uncompressed stays uncompressed, except the native libraries whose
+ * caller also flips `android:extractNativeLibs` ([BinaryXmlEditor.makeStandaloneManifest]).
  *
- * 1. **Alignment.** Uncompressed entries—`resources.arsc` above all—must start on a
- *    4-byte boundary. Re-deflating anything shifts every following offset, so the padding
- *    inherited from the source APK is wrong the moment one entry changes size. Alignment
- *    is therefore recomputed from the real output position for every entry.
- * 2. **Storage method.** An entry that the source APK stored uncompressed stays
- *    uncompressed, so a bundled asset keeps the on-device access pattern it had in the
- *    source APK. Native libraries are the exception: they arrive uncompressed in an ABI
- *    split, and callers that deflate them must also flip `android:extractNativeLibs`;
- *    see [BinaryXmlEditor.makeStandaloneManifest].
- *
- * Nothing here is proportional to the size of the archive: [repackTo] reads one entry at a
- * time from a file and writes to a stream, and only [repack] holds the result. A Discord
- * base split is ~96 MB and the libraries merged into it another ~74 MB, so an implementation
- * that materializes either—let alone both—exceeds the heap that a phone grants an app.
+ * Nothing here is proportional to the archive: [repackTo] streams one entry at a time, because a
+ * Discord base plus its merged libraries exceeds what a phone grants an app.
  */
 object ZipRepacker {
 
@@ -122,24 +112,14 @@ object ZipRepacker {
     private val STAMP_ENTRIES = setOf("stamp-cert-sha256")
 
     /**
-     * Rebuilds [inputApk] into [output], reading the source a single entry at a time and not
-     * holding the result: the archive being produced is written directly to [output], so it
-     * exists once rather than as a buffer plus a copy of that buffer.
+     * Rebuilds [inputApk] into [output], one entry at a time, writing straight to [output].
      *
-     * [output] is flushed but not closed—the caller owns it and determines when the file is done.
+     * [output] is flushed but not closed — the caller owns it.
      *
-     * @param replacements entry name -> new contents, written with the source entry's own
-     *   storage method (DEFLATE for entries the source APK lacks).
-     * @param additionalEntries entry name -> contents to append, for entries the source APK lacks.
-     * @param droppedEntries extra names to leave out, on top of the built-in set. The calling
-     *   pipeline supplies these from whichever patch set is active, so the removal of a crash
-     *   reporter's own artifacts happens only when that reporter is being disabled.
-     *
-     *   A dropped name is dropped however the rebuild writes it—from the source archive, from
-     *   [replacements], or as one of [additionalEntries]. That is why the set is taken here rather
-     *   than filtering the source: a merged split contributes entries that the source APK did not
-     *   hold, and a caller cannot filter those for itself without walking the splits' contents a
-     *   second time.
+     * @param replacements entry name -> new contents, written with the source entry's own method.
+     * @param additionalEntries entry name -> contents to append.
+     * @param droppedEntries extra names to leave out, applied however the rebuild would write
+     *   them: from the source, from [replacements], or as an additional entry.
      */
     fun repackTo(
         inputApk: File,
@@ -186,8 +166,8 @@ object ZipRepacker {
         additionalEntries: Map<String, AdditionalEntry>,
         droppedEntries: Set<String>
     ): RepackReport {
-        // Insertion-ordered and a set, because more than one of the walks that follow can reach the same
-        // name—a name can be in the source archive and in the replacements at once—and the
+        // Insertion-ordered and a set, because more than one of the walks that follow can reach the
+        // same name—a name can be in the source archive and in the replacements at once—and the
         // report names each entry once.
         val dropped = mutableSetOf<String>()
         val sourceMethods = mutableMapOf<String, Int>()
@@ -201,14 +181,10 @@ object ZipRepacker {
                 var entry = zis.nextEntry
                 while (entry != null) {
                     val name = entry.name
-                    // Read here, before the drop check, because a replaced entry is dropped from
-                    // the copied stream and rewritten from the replacement—with the source's own
-                    // method, which is the one thing about it the replacement does not carry. If
-                    // read after the check, the method was missing for the entries that needed
-                    // it, and every replacement fell back to DEFLATE: the resource table
-                    // the merge builds and the JavaScript bundle the patch writes both came out
-                    // compressed where the source APK stores them for the platform to map rather
-                    // than unpack.
+                    // Read before the drop check: a replaced entry is rewritten from the
+                    // replacement with the source's own method, which the replacement does not
+                    // carry. Read after, it was missing and every replacement fell back to
+                    // DEFLATE.
                     sourceMethods[name] = entry.method
                     if (shouldDrop(name, replacements, additionalEntries, droppedEntries)) {
                         dropped.add(name)
@@ -224,14 +200,10 @@ object ZipRepacker {
                     }
                     val extra = sanitizeExtra(entry.extra)
                     if (entry.method == ZipEntry.STORED && entry.crc >= 0 && entry.size >= 0) {
-                        // A stored entry needs its size and CRC in the header, before its data,
-                        // and the source header already carries both. Taking them from there is
-                        // what keeps the largest entry a Discord build stores—a 53 MB
-                        // JavaScript bundle—on the same 64 KB buffer as everything else,
-                        // instead of being read in full to be measured and then written.
-                        //
-                        // ZipOutputStream checks the size and the CRC against the bytes it
-                        // receives and rejects the entry if they disagree.
+                        // A stored entry needs size and CRC in its header; the source has both,
+                        // which keeps a 53 MB bundle on the same 64 KB buffer as everything else
+                        // instead of being read in full to be measured. ZipOutputStream still
+                        // verifies both.
                         newEntry.size = entry.size
                         newEntry.compressedSize = entry.size
                         newEntry.crc = entry.crc
