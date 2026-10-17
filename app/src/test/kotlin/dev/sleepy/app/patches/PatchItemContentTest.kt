@@ -19,7 +19,7 @@ class PatchItemContentTest {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
             "the table is the fixed set of functions this release patches",
-            517,
+            518,
             patched.size
         )
         assertEquals(

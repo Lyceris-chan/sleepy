@@ -176,8 +176,10 @@ object DiscordHermesFunctionCatalog {
         entry(32928, "Answers false, so whatever ageEligibleForPremiumUpsell gates stays off."),
         entry(33733, "Silences the emitter behind the forum and clickstream trackers, " +
             "so those impressions are never sent."),
-        entry(34446, "Caps the camera capture at 640×360 at 24 frames per second, about four times " +
-            "fewer pixels than 720p."),
+        entry(34425, "Does nothing, so a channel set to full quality cannot raise the " +
+            "encoder above the lowered camera capture."),
+        entry(34446, "Caps the camera capture at 640×360 at 24 frames per second and the " +
+            "encoder's maximum bitrate at 1 Mbps, about four times fewer pixels than 720p."),
         entry(34451, "Builds the encoder ladder from a 640×360 pixel budget, so the encoder's " +
             "largest rung matches the camera instead of asking it to upscale."),
         entry(36002, "Stops the monitoring agent's counter, which about twenty-five " +
@@ -1377,12 +1379,12 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "lower_camera_resolution",
             group = VIDEO_GROUP,
-            label = "Lower video call resolution",
+            label = "Lower video call cost",
             description = "Sends 640×360 at 24 frames per second instead of 720p at 30, about " +
-                "four times fewer pixels. The camera capture and the encoder's resolution " +
-                "budget are lowered together, so the encoder asks for no more than the camera " +
-                "sends. Screen sharing keeps its own 720p path.",
-            functionIds = listOf(34446, 34451)
+                "four times fewer pixels, and caps the encoder at 1 Mbps. The camera capture " +
+                "and the encoder's resolution budget are lowered together, and a full-quality " +
+                "channel setting cannot override them. Screen sharing keeps its own 720p path.",
+            functionIds = listOf(34425, 34446, 34451)
         ),
     )
 

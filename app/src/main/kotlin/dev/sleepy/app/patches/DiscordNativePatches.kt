@@ -1293,6 +1293,17 @@ object DiscordNativePatches {
 .end method"""
             ),
             SmaliPatch(
+                title = "Stopping the statistics repost itself",
+                explanation = "Returns immediately from the runnable that reposted itself every four seconds for the whole call, once per rendered video tile. Its statistics lambda is already a no-op, so the wakeup was the only work left.",
+                smaliPath = "org/webrtc/EglRenderer${'$'}2.smali",
+                methodSignature = ".method public run()V",
+                replacementBody = """.method public run()V
+    .locals 0
+    # Patch: no-op; the statistics computation this reposted for is stubbed.
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
                 title = "Disabling blocking OTA recovery after crashes",
                 explanation = "Stops ActivityDelegate from doing an unbounded Future.get() on the UI thread checking for OTA updates after a crash.",
                 smaliPath = "com/discord/react_activities/ActivityDelegate.smali",
@@ -1615,8 +1626,32 @@ object DiscordNativePatches {
     val EXPERIMENTS = PatchSet(
         id = "discord_native_experiments",
         label = "Force cheaper performance settings",
-        description = "Pins Discord's server-driven performance experiments to the cheapest treatment: the smaller Fresco cache, the Hermes memory target, the shared ChatMosaic pool, per-screen jank tracking switched off, and the React Native mounting mode that the individual flag patches assume.",
+        description = "Pins Discord's server-driven performance experiments to the cheapest treatment: the smaller Fresco cache, the Hermes memory target, the shared ChatMosaic pool, per-screen jank tracking switched off, the React Native mounting mode that the individual flag patches assume, the versioned UIManager constants cache, and chat preinflation deferred to the first drawn message.",
         smaliPatches = listOf(
+            SmaliPatch(
+                title = "Deferring chat list preinflation",
+                explanation = "Pins the chat preinflation experiment to treatment 1, which fills the recycled-view pool when the first message is drawn instead of while the chat screen is being built.",
+                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                methodSignature = ".method private static final chatPreinflationExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I",
+                replacementBody = """.method private static final chatPreinflationExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I
+    .locals 1
+    # Patch: treatment 1 defers the adapter fill to the first drawn message.
+    const/4 v0, 0x1
+    return v0
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Caching the UIManager constants",
+                explanation = "Pins the UIManager constants cache to its enabled treatment, so React Native reads the view-manager constants from the versioned cache instead of rebuilding them at each launch.",
+                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                methodSignature = ".method private static final androidUIManagerConstantsCacheExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I",
+                replacementBody = """.method private static final androidUIManagerConstantsCacheExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I
+    .locals 1
+    # Patch: treatment 1 enables the versioned UIManager constants cache.
+    const/4 v0, 0x1
+    return v0
+.end method"""
+            ),
             SmaliPatch(
                 title = "Using the smaller image cache experiment",
                 explanation = "Pins the image cache experiment to its cheap treatment instead of following the server assignment.",
