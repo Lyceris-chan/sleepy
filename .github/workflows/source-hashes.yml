@@ -45,9 +45,9 @@ jobs:
       # Every action is pinned to the commit its release tag named, so a moved tag
       # cannot change what runs here.
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up the Android SDK
-        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - name: Install the build tools that carry aapt2
         run: sdkmanager --install "build-tools;37.0.0"
       - name: Refresh the published hashes
@@ -70,7 +70,7 @@ jobs:
           fi
       - name: Upload the refreshed manifest
         if: steps.refresh.outputs.changed == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.2
         with:
           name: sources-json
           path: |
@@ -88,9 +88,9 @@ jobs:
       pull-requests: write
     steps:
       - name: Check out the repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Download the refreshed manifest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.2
         with:
           name: sources-json
       - name: Open a pull request with the refreshed hashes
