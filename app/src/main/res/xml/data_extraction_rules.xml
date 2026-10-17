@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 and higher read these rules alongside allowBackup. Nothing this app holds is backup
+  material: the patched APK is written to the cache directory, the signing key lives in the
+  Android keystore, and the only files kept are the selection and the downloaded sources. Both
+  cloud backup and device-to-device transfer exclude everything rather than rely on the
+  allowBackup switch alone.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>

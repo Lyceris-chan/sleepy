@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      windowLightNavigationBar was added in API 27. Declared in the base theme, an API 26 device
+      would inflate an attribute id the platform does not have, so the light-navigation-bar flag
+      lives here and the base theme keeps only what API 26 understands.
+    -->
+    <style name="Theme.Sleepy" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

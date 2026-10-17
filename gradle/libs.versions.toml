@@ -1,6 +1,6 @@
 [versions]
 agp             = "9.4.1"
-kotlin          = "2.4.20"
+kotlin          = "2.4.21"
 compose-bom     = "2026.09.00"
 activity-compose = "1.13.0"
 navigation      = "2.10.2"
@@ -10,6 +10,9 @@ adaptive        = "1.3.0"
 smali           = "3.0.10"
 apksig          = "9.4.1"
 okhttp          = "5.5.0"
+core-ktx        = "1.19.1"
+junit           = "4.13.2"
+json            = "20260814"
 
 [libraries]
 # Compose—managed by BOM
@@ -24,6 +27,7 @@ navigation-compose      = { group = "androidx.navigation", name = "navigation-co
 lifecycle-viewmodel     = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 adaptive                = { group = "androidx.compose.material3.adaptive", name = "adaptive", version.ref = "adaptive" }
 coroutines-android      = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+androidx-core-ktx       = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
 
 # APK tooling—from google() repo
 smali                   = { group = "com.android.tools.smali", name = "smali", version.ref = "smali" }
@@ -32,6 +36,10 @@ apksig                  = { group = "com.android.tools.build", name = "apksig", 
 
 # Network
 okhttp                  = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+
+# Testing
+junit                   = { group = "junit", name = "junit", version.ref = "junit" }
+json                    = { group = "org.json", name = "json", version.ref = "json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -189,6 +189,7 @@ dependencies {
     // flows with `collectAsState`. activity-compose brings lifecycle-runtime itself in
     // transitively, so removing the declaration removes nothing the app uses.
     implementation(libs.lifecycle.viewmodel)
+    implementation(libs.androidx.core.ktx)
     implementation(libs.adaptive)
     implementation(libs.coroutines.android)
 
@@ -201,8 +202,8 @@ dependencies {
     implementation(libs.okhttp)
 
     // Testing
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.junit)
     // The unit tests read sources.json with org.json. The Android platform's copy is a stub on a
     // JVM test classpath, so the real library stands in for it here.
-    testImplementation("org.json:json:20260814")
+    testImplementation(libs.json)
 }

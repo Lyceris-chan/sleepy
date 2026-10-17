@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The pre-Android-12 counterpart of data_extraction_rules.xml, for API 26 to 30. Nothing this app
+  holds is backup material, and allowBackup is false, so this excludes everything rather than
+  leaving the older platform's default to guess.
+-->
+<full-backup-content>
+    <exclude domain="root" path="." />
+</full-backup-content>

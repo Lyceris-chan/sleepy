@@ -125,15 +125,15 @@ object OkHttpNameResolver {
             "$CHAIN_TYPE is not in this APK, so the request interceptor cannot be rebuilt."
         )
         val chainRequest = chain.methods.firstOrNull {
-            it.parameterTypes.isEmpty() && it.returnType.toString() == REQUEST_TYPE
+            it.parameterTypes.isEmpty() && it.returnType == REQUEST_TYPE
         } ?: return OkHttpResolution.Unresolved(
             "$CHAIN_TYPE has no method taking nothing and returning $REQUEST_TYPE, so the " +
                 "request the interceptor reads cannot be named."
         )
         val chainProceed = chain.methods.firstOrNull {
             it.parameterTypes.size == 1 &&
-                it.parameterTypes.first().toString() == REQUEST_TYPE &&
-                it.returnType.toString() == RESPONSE_TYPE
+                it.parameterTypes.first() == REQUEST_TYPE &&
+                it.returnType == RESPONSE_TYPE
         } ?: return OkHttpResolution.Unresolved(
             "$CHAIN_TYPE has no method taking $REQUEST_TYPE and returning $RESPONSE_TYPE, so " +
                 "the call the interceptor proceeds with cannot be named."

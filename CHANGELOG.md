@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The theme set an attribute the minimum API does not have.** `windowLightNavigationBar`
+  arrived in API 27 and the app supports 26, so the base theme declared an attribute id an API 26
+  device does not know. The flag now lives in `values-v27/themes.xml` and the base theme keeps
+  only what API 26 understands — the one Android Lint error the project had.
+- **Two redundant conversions in the okhttp resolver** are gone, which is the
+  `w: Redundant call of conversion method` warning the release build printed. The Kotlin
+  compilation is now warning-free.
+
+### Changed
+
+- **Backup exclusion is stated on both sides of Android 12.** `allowBackup="false"` is joined by
+  `dataExtractionRules` and `fullBackupContent` rules that exclude everything, so the posture is
+  written in the rules each platform version reads rather than inferred from one switch.
+- **Downloads refuse a cleartext redirect**, and a `file://` source is read only when it is a
+  regular file within the same 512 MB limit as the network path — a device node such as
+  `/dev/zero` has length zero but never ends, so the limit alone would not have stopped it.
+- **Dependencies are current.** Kotlin 2.4.20 → 2.4.21; the Gradle wrapper 9.8.0 → 9.8.1 with the
+  distribution hash pinned; `androidx.core:core-ktx` declared explicitly at 1.19.1, which replaces
+  the two `Uri.parse` calls with `String.toUri`. Every other dependency was already the newest
+  stable release.
+- **The launcher icon declares a monochrome layer** for themed icons, and the
+  `mipmap-anydpi-v26` folder merged into `mipmap-anydpi` now that the minimum API makes the
+  qualifier redundant.
+
+
 ## [3.8.0] - 2026-10-16
 
 ### Added

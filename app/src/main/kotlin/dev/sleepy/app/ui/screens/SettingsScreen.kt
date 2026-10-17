@@ -3,7 +3,7 @@ package dev.sleepy.app.ui.screens
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -471,7 +471,7 @@ private fun SettingsSectionTitle(text: String) {
 /** Opens a URL in whatever the device uses for links, reporting it rather than crashing. */
 private fun openUrl(context: Context, url: String) {
     try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
     } catch (e: ActivityNotFoundException) {
         Toast.makeText(context, "No app can open $url", Toast.LENGTH_SHORT).show()
     }

@@ -1,6 +1,6 @@
 package dev.sleepy.app.ui.components
 
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,7 +29,7 @@ import dev.sleepy.app.model.AppSource
  */
 fun downloadHosts(source: AppSource): List<String> =
     (listOf(source.url) + source.splits.map { it.url })
-        .mapNotNull { url -> Uri.parse(url).host?.takeIf { host -> host.isNotBlank() } }
+        .mapNotNull { url -> url.toUri().host?.takeIf { host -> host.isNotBlank() } }
         .distinct()
 
 /**

@@ -23,7 +23,10 @@ object Downloader {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .followRedirects(true)
-        .followSslRedirects(true)
+        // An HTTPS source must not be redirected down to cleartext. The network security config
+        // already refuses cleartext connections, so a downgrade would fail there anyway; refusing
+        // it here means it fails for the reason it actually is, instead of as a connection error.
+        .followSslRedirects(false)
         .build()
 
     private const val MAX_SIZE_BYTES = 512L * 1024 * 1024 // 512 MB guard
@@ -41,6 +44,16 @@ object Downloader {
         if (url.startsWith("file://", ignoreCase = true)) {
             val file = java.io.File(java.net.URI(url).path)
             if (!file.exists()) throw IOException("Local file not found: ${file.absolutePath}")
+            // Only a regular file is read, and only up to the same limit the network path uses.
+            // A device node such as /dev/zero has length 0 but never ends, so the size check
+            // alone would not stop it; isFile excludes it and anything that is not a file.
+            if (!file.isFile) throw IOException("Local source is not a regular file: ${file.absolutePath}")
+            if (file.length() > MAX_SIZE_BYTES) {
+                throw IOException(
+                    "Local file is ${file.length()} bytes, which exceeds the security limit " +
+                        "of $MAX_SIZE_BYTES bytes."
+                )
+            }
             currentCoroutineContext().ensureActive()
             val bytes = file.readBytes()
             if (bytes.size < 4 || bytes[0] != 0x50.toByte() || bytes[1] != 0x4B.toByte()) {
