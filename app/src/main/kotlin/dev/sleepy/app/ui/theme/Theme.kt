@@ -84,7 +84,8 @@ data class SleepyStatusColors(
     val warning: Color
 )
 
-private val DARK_STATUS_COLORS = SleepyStatusColors(success = SLEEPY_SUCCESS, warning = SLEEPY_WARNING)
+private val DARK_STATUS_COLORS =
+    SleepyStatusColors(success = SLEEPY_SUCCESS, warning = SLEEPY_WARNING)
 
 private val LIGHT_STATUS_COLORS = SleepyStatusColors(
     success = SLEEPY_LIGHT_SUCCESS,

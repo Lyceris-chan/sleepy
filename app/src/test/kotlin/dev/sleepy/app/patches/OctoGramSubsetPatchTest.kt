@@ -228,7 +228,9 @@ class OctoGramSubsetPatchTest {
         val settingsBefore = opcodeCounts(before.opcodes(settings, "c3"), "teb.c3()")
         val settingsAfter = opcodeCounts(after.opcodes(settings, "c3"), "teb.c3()")
         val settingsDelta = (settingsAfter.keys + settingsBefore.keys)
-            .associateWith { opcode -> (settingsAfter[opcode] ?: 0) - (settingsBefore[opcode] ?: 0) }
+            .associateWith { opcode ->
+                (settingsAfter[opcode] ?: 0) - (settingsBefore[opcode] ?: 0)
+            }
             .filterValues { it != 0 }
         assertEquals(
             "hiding the Telegram Premium row in Settings replaces one branch with a jump, and " +
@@ -395,7 +397,9 @@ class OctoGramSubsetPatchTest {
         val settingsBefore = opcodeCounts(before.opcodes(settings, "c3"), "teb.c3()")
         val settingsAfter = opcodeCounts(after.opcodes(settings, "c3"), "teb.c3()")
         val settingsDelta = (settingsAfter.keys + settingsBefore.keys)
-            .associateWith { opcode -> (settingsAfter[opcode] ?: 0) - (settingsBefore[opcode] ?: 0) }
+            .associateWith { opcode ->
+                (settingsAfter[opcode] ?: 0) - (settingsBefore[opcode] ?: 0)
+            }
             .filterValues { it != 0 }
         assertEquals(
             "hiding the Telegram Business row in Settings replaces one branch with a jump, and " +
@@ -624,7 +628,9 @@ private class DexView(bytes: ByteArray) {
             Step(
                 opcode = instruction.opcode.name,
                 registers = registersOf(instruction),
-                reference = when (val reference = (instruction as? ReferenceInstruction)?.reference) {
+                reference = when (
+            val reference = (instruction as? ReferenceInstruction)?.reference
+        ) {
                     null -> null
                     is StringReference -> reference.string
                     is FieldReference -> "${reference.definingClass}->${reference.name}:${reference.type}"

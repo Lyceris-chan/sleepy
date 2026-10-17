@@ -39,7 +39,9 @@ class SourceIntegrityTest {
         val (_, url) = servedFixture()
         val destination = File(tempFolder.root, "download.apk")
 
-        val integrity = fetchSourceApk(url, expectedSha256 = null, destination = destination) { _, _ -> }
+        val integrity = fetchSourceApk(
+            url, expectedSha256 = null, destination = destination
+        ) { _, _ -> }
 
         assertNull("no published hash means no comparison, so the verdict is null", integrity.verified)
         assertEquals(payload.size.toLong(), integrity.sizeBytes)
@@ -67,7 +69,9 @@ class SourceIntegrityTest {
         val destination = File(tempFolder.root, "download.apk")
         val otherBuild = HashUtils.sha256Hex("a different build".toByteArray())
 
-        val integrity = fetchSourceApk(url, expectedSha256 = otherBuild, destination = destination) { _, _ -> }
+        val integrity = fetchSourceApk(
+            url, expectedSha256 = otherBuild, destination = destination
+        ) { _, _ -> }
 
         assertEquals(
             "a published hash that does not match the downloaded bytes must report false",

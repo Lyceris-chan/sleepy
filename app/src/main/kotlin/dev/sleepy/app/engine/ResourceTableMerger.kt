@@ -816,7 +816,8 @@ object ResourceTableMerger {
         }
         // Boxed to Long: `offset + length` is itself a bound check, and two Ints near the top of
         // the range sum to a negative number that passes it.
-        if (length <= 0 || offset.toLong() + length > limit || offset.toLong() + length > table.size) {
+        val end = offset.toLong() + length
+        if (length <= 0 || end > limit || end > table.size) {
             throw TableFormatException(
                 "type 0x%02x has a $length-byte entry that runs past the end of its chunk"
                     .format(typeId)

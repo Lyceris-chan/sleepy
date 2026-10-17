@@ -902,7 +902,9 @@ object DiscordHermesFunctionCatalog {
             label = "Guild tags",
             description = "Stops guild tag chips, badges and voice-channel tags drawing, and answers " +
                 "false to the checks that decide whether to show one.",
-            functionIds = listOf(47318, 47319, 47323, 49524, 49525, 49526, 49527, 49528, 75926, 75927)
+            functionIds = listOf(
+                47318, 47319, 47323, 49524, 49525, 49526, 49527, 49528, 75926, 75927
+            )
         ),
         Feature(
             slug = "profile_badges",
@@ -932,7 +934,9 @@ object DiscordHermesFunctionCatalog {
             label = "Quests in the app",
             description = "Removes the Quests screen, its dock, its navigation button, its settings row " +
                 "and its toggles in Data & Privacy.",
-            functionIds = listOf(50409, 50778, 72185, 72190, 72191, 72218, 72219, 72444, 75038, 75050)
+            functionIds = listOf(
+                50409, 50778, 72185, 72190, 72191, 72218, 72219, 72444, 75038, 75050
+            )
         ),
         Feature(
             slug = "quest_fetching",
@@ -1029,7 +1033,10 @@ object DiscordHermesFunctionCatalog {
             label = "Performance metrics",
             description = "Stops the app sampling its own performance and uploading the result, " +
                 "including the once-a-second process sampler.",
-            functionIds = listOf(20923, 20925, 36002, 36003, 36004, 86445, 112777, 112888, 112891, 112892, 112913, 112914)
+            functionIds = listOf(
+                20923, 20925, 36002, 36003, 36004, 86445, 112777, 112888, 112891, 112892, 112913,
+                112914
+            )
         ),
         Feature(
             slug = "call_sampling",
@@ -1045,7 +1052,9 @@ object DiscordHermesFunctionCatalog {
             label = "Session and network statistics",
             description = "Stops the app recording network, session and message-cache statistics, and " +
                 "the heartbeat that reported them.",
-            functionIds = listOf(42212, 42213, 42214, 42216, 42217, 42218, 42245, 42401, 42402, 42403, 82134)
+            functionIds = listOf(
+                42212, 42213, 42214, 42216, 42217, 42218, 42245, 42401, 42402, 42403, 82134
+            )
         ),
         Feature(
             slug = "gateway_telemetry",
@@ -1060,7 +1069,9 @@ object DiscordHermesFunctionCatalog {
             group = STARTUP_GROUP,
             label = "Startup timing",
             description = "Stops the app recording how long startup takes, milestone by milestone.",
-            functionIds = listOf(19188, 19190, 19192, 19200, 19231, 19232, 19233, 19234, 19235, 19236, 19237, 19240)
+            functionIds = listOf(
+                19188, 19190, 19192, 19200, 19231, 19232, 19233, 19234, 19235, 19236, 19237, 19240
+            )
         ),
         Feature(
             slug = "debug_logging",
@@ -1103,21 +1114,37 @@ object DiscordHermesFunctionCatalog {
             label = "Nitro upsells",
             description =             "Every Nitro upsell surface: the banners, promo sheets, action sheets, cards and the lock " +
             "toasts the app raises when something needs Nitro.",
-            functionIds = listOf(23808, 46252, 46253, 56370, 56371, 56372, 56374, 59727, 59728, 59729, 62030, 65408, 65409, 66617, 66622, 66623, 66629, 66630, 66686, 66687, 66688, 66689, 66694, 66695, 67033, 67034, 67106, 67107, 67361, 67362, 67393, 67394, 71063, 71064, 71065, 71066, 73348, 73349, 73663, 73664, 74915, 77960, 77961, 78837, 78838, 78841, 78842, 125330)
+            functionIds = listOf(
+                23808, 46252, 46253, 56370, 56371, 56372, 56374, 59727, 59728, 59729, 62030, 65408,
+                65409, 66617, 66622, 66623, 66629, 66630, 66686, 66687, 66688, 66689, 66694, 66695,
+                67033, 67034, 67106, 67107, 67361, 67362, 67393, 67394, 71063, 71064, 71065, 71066,
+                73348, 73349, 73663, 73664, 74915, 77960, 77961, 78837, 78838, 78841, 78842, 125330
+            )
         ),
         Feature(
             slug = "premium_upsells",
             group = UPSELL_GROUP,
             label = "Other upsell prompts",
             description =             "The remaining upsell sheets, cards, alerts and the buttons that open them.",
-            functionIds = listOf(32928, 51395, 51397, 51403, 51404, 51405, 51406, 51973, 51974, 52112, 52113, 52114, 52115, 52118, 52119, 52122, 52123, 52124, 52125, 52199, 52200, 52201, 52202, 56379, 56380, 56381, 64027, 65472, 67381, 67382, 67388, 67389, 67427, 67428, 68748, 68749, 71100, 71101, 71749, 71750, 72086, 72087, 72106, 72107, 72110, 72111, 72112, 72113, 74347, 74348, 74349, 74350, 74351, 75245, 75246, 76314, 76315, 76316, 76317, 76318, 76319, 79190, 79191, 80164, 80165, 80166)
+            functionIds = listOf(
+                32928, 51395, 51397, 51403, 51404, 51405, 51406, 51973, 51974, 52112, 52113, 52114,
+                52115, 52118, 52119, 52122, 52123, 52124, 52125, 52199, 52200, 52201, 52202, 56379,
+                56380, 56381, 64027, 65472, 67381, 67382, 67388, 67389, 67427, 67428, 68748, 68749,
+                71100, 71101, 71749, 71750, 72086, 72087, 72106, 72107, 72110, 72111, 72112, 72113,
+                74347, 74348, 74349, 74350, 74351, 75245, 75246, 76314, 76315, 76316, 76317, 76318,
+                76319, 79190, 79191, 80164, 80165, 80166
+            )
         ),
         Feature(
             slug = "guild_upsells",
             group = UPSELL_GROUP,
             label = "Guild and boost upsells",
             description =             "The guild boosting, server tag and role-subscription upsells.",
-            functionIds = listOf(40558, 52110, 52111, 52120, 52121, 54394, 54395, 54396, 64367, 64368, 64369, 64370, 65828, 65829, 67370, 67371, 76312, 76313, 76320, 76321, 76325, 76326, 76373, 76374, 76387, 76388, 76389, 81067, 81068)
+            functionIds = listOf(
+                40558, 52110, 52111, 52120, 52121, 54394, 54395, 54396, 64367, 64368, 64369, 64370,
+                65828, 65829, 67370, 67371, 76312, 76313, 76320, 76321, 76325, 76326, 76373, 76374,
+                76387, 76388, 76389, 81067, 81068
+            )
         ),
         Feature(
             slug = "storefront_screens",
@@ -1125,7 +1152,10 @@ object DiscordHermesFunctionCatalog {
             label = "Storefront screens",
             description =             "The storefront itself: the product page, the gift and purchase flows, the wishlist cards and " +
             "the store item card.",
-            functionIds = listOf(40682, 50060, 50061, 53980, 53981, 53982, 53983, 53984, 54021, 54022, 54023, 54024, 54080, 54081, 54087, 54088, 65015, 65016, 65017, 65018, 65090, 65091)
+            functionIds = listOf(
+                40682, 50060, 50061, 53980, 53981, 53982, 53983, 53984, 54021, 54022, 54023, 54024,
+                54080, 54081, 54087, 54088, 65015, 65016, 65017, 65018, 65090, 65091
+            )
         ),
         Feature(
             slug = "trials",
@@ -1140,7 +1170,10 @@ object DiscordHermesFunctionCatalog {
             group = UPSELL_GROUP,
             label = "Emoji and sticker upsells",
             description =             "The upsells inside the emoji and sticker pickers.",
-            functionIds = listOf(52095, 52096, 52097, 52106, 52107, 52108, 52109, 52116, 52117, 52167, 52168, 52170, 52171, 53038, 53039, 53054, 53055, 63103, 63104, 63117, 63118)
+            functionIds = listOf(
+                52095, 52096, 52097, 52106, 52107, 52108, 52109, 52116, 52117, 52167, 52168, 52170,
+                52171, 53038, 53039, 53054, 53055, 63103, 63104, 63117, 63118
+            )
         ),
         Feature(
             slug = "leaderboards",
@@ -1154,7 +1187,10 @@ object DiscordHermesFunctionCatalog {
             group = UPSELL_GROUP,
             label = "Profile upsells",
             description =             "The upsells drawn on a profile and beside the activity card.",
-            functionIds = listOf(70847, 70848, 70933, 70934, 71058, 71059, 71067, 71068, 71089, 71090, 71743, 71744, 74872, 74873)
+            functionIds = listOf(
+                70847, 70848, 70933, 70934, 71058, 71059, 71067, 71068, 71089, 71090, 71743, 71744,
+                74872, 74873
+            )
         ),
     )
 

@@ -70,7 +70,9 @@ object SmaliReferences {
                     val parameters = text.substring(j, close + 1)
                     val (returnType, _) = readType(text, close + 1)
                     if (returnType != null) {
-                        out += Reference(descriptor, member, parameters + returnType, isField = false)
+                        out += Reference(
+        descriptor, member, parameters + returnType, isField = false
+    )
                     }
                 }
 

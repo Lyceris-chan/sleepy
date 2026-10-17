@@ -86,7 +86,10 @@ class PatchSectionsTest {
         fun sectionsOf(setId: String): List<String> =
             PatchItemCatalog.itemsOf(setId).map { it.section }.distinct()
 
-        assertEquals(listOf(PatchSections.NETWORK), sectionsOf(DiscordBlocklistPatch.NETWORK_BLOCKLIST.id))
+        assertEquals(
+            listOf(PatchSections.NETWORK),
+            sectionsOf(DiscordBlocklistPatch.NETWORK_BLOCKLIST.id)
+        )
         assertEquals(listOf(PatchSections.CRASHES), sectionsOf(DiscordPatches.SENTRY.id))
         assertEquals(listOf(PatchSections.TRACKING), sectionsOf(DiscordPatches.TELEMETRY.id))
         assertEquals(listOf(PatchSections.BACKGROUND), sectionsOf(DiscordNativePatches.WATCHDOG.id))
@@ -94,7 +97,10 @@ class PatchSectionsTest {
         assertEquals(listOf(PatchSections.FIXES), sectionsOf(DiscordPatches.BUNDLE_LOCK.id))
         assertEquals(listOf(PatchSections.ADS), sectionsOf(OctoGramPatches.SPONSORED_MSGS.id))
         assertEquals(listOf(PatchSections.ADS), sectionsOf(OctoGramPatches.PREMIUM_SHEETS.id))
-        assertEquals(listOf(PatchSections.TRACKING), sectionsOf(OctoGramPatches.FIREBASE_DATATRANSPORT.id))
+        assertEquals(
+            listOf(PatchSections.TRACKING),
+            sectionsOf(OctoGramPatches.FIREBASE_DATATRANSPORT.id)
+        )
         assertEquals(listOf(PatchSections.CRASHES), sectionsOf(OctoGramPatches.CRASH_REPORTER.id))
         assertEquals(listOf(PatchSections.FIXES), sectionsOf(OctoGramPatches.OTA_UPDATER.id))
 
