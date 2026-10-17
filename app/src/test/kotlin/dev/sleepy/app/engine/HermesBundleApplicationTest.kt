@@ -54,14 +54,16 @@ class HermesBundleApplicationTest {
     /**
      * The functions whose replacements do not fit where the bodies they replace are.
      *
-     * Five are longer than the body they replace, which no in-place write can hold: 8346 inserts
-     * the cache clamp into the middle of the function, and the four settings rows append a
-     * `usePredicate` property. Three share a body with another entry - 65890 with 65889, 75050
-     * with 75038, and 42009 with 42008, whose two compiler variants were compiled to identical
-     * code and deduplicated - and a shared region can hold only one replacement, so the lower
-     * function id keeps it and the other is relocated beside it.
+     * Six are longer than the body they replace, which no in-place write can hold: 8346 inserts
+     * the cache clamp into the middle of the function, the four settings rows append a
+     * `usePredicate` property, and 34451 clamps the pixel budget to a wider constant. Four share
+     * a body with another entry - 32481 with 32480, 65890 with 65889, 75050 with 75038, and
+     * 42009 with 42008, whose two compiler variants were compiled to identical code and
+     * deduplicated - and a shared region can hold only one replacement, so the lower function
+     * id keeps it and the other is relocated beside it.
      */
-    private val relocated = listOf(8346, 15959, 15965, 15972, 16829, 42009, 65890, 75050)
+    private val relocated =
+        listOf(8346, 15959, 15965, 15972, 16829, 32481, 34451, 42009, 65890, 75050)
 
     @Test
     fun everyEntryAppliesToTheBuildTheTableNames() {

@@ -70,6 +70,7 @@ object DiscordHermesFunctionCatalog {
     private const val ANALYTICS_GROUP = "Analytics"
     private const val CRASH_GROUP = "Crash reporting"
     private const val PERFORMANCE_GROUP = "Performance metrics"
+    private const val VIDEO_GROUP = "Video calls"
     private const val TELEMETRY_GROUP = "Session telemetry"
     private const val STARTUP_GROUP = "Startup timing"
     private const val LOGGING_GROUP = "Debug logs"
@@ -166,14 +167,30 @@ object DiscordHermesFunctionCatalog {
             "the client."),
         entry(26497, "Returns false from the analytics experiment flag, so the 500 ms " +
             "telemetry-ring export loop can never start."),
+        entry(32480, "Does nothing, so the coachmark binding BadgesCoachmarkBindings never mounts."),
+        entry(32481, "Does nothing, so the coachmark binding BadgesCoachmarkBindings never mounts."),
+        entry(32482, "Returns null where BadgesCoachmarkRiveInner used to draw, so that surface never appears."),
+        entry(32483, "Returns null where BadgesCoachmarkRiveInner used to draw, so that surface never appears."),
+        entry(32484, "Returns null where BadgesCoachmarkRiveWithBoundary used to draw, so that surface never appears."),
+        entry(32485, "Returns null where BadgesCoachmarkRiveWithBoundary used to draw, so that surface never appears."),
         entry(32928, "Answers false, so whatever ageEligibleForPremiumUpsell gates stays off."),
         entry(33733, "Silences the emitter behind the forum and clickstream trackers, " +
             "so those impressions are never sent."),
+        entry(34446, "Caps the camera capture at 640×360 at 24 frames per second, about four times " +
+            "fewer pixels than 720p."),
+        entry(34451, "Builds the encoder ladder from a 640×360 pixel budget, so the encoder's " +
+            "largest rung matches the camera instead of asking it to upscale."),
         entry(36002, "Stops the monitoring agent's counter, which about twenty-five " +
             "modules call as they do their work."),
         entry(36003, "Stops the monitoring agent's distribution sample."),
         entry(36004, "Stops the monitoring agent flushing what it accumulated to the " +
             "two-minute /metrics/v2 upload."),
+        entry(37159, "Returns null where StageBoostingActionSheet used to draw, so that surface " +
+            "never appears."),
+        entry(37174, "Returns null where PremiumGuildSubscribeModal used to draw, so that surface " +
+            "never appears."),
+        entry(37175, "Returns null where PremiumGuildSubscribeModal used to draw, so that surface " +
+            "never appears."),
         entry(40558, "Does nothing, so the action hideInlineGuildCapUpsell used to perform no longer happens."),
         entry(40655, "Returns false from the storefront capability check, which hides the " +
             "guild sidebar's game-shop row and blocks the redirect into it."),
@@ -193,6 +210,26 @@ object DiscordHermesFunctionCatalog {
         entry(40955, "Returns false from the Guild Shop preview visibility hook, " +
             "the second of the module's two visibility gates, so the preview surface stays " +
             "hidden. Its callers test for exactly false."),
+        entry(41795, "Returns null where GuildBoostingSubscribeButton used to draw, so that surface " +
+            "never appears."),
+        entry(41796, "Returns null where GuildBoostingSubscribeButton used to draw, so that surface " +
+            "never appears."),
+        entry(41853, "Returns null where PremiumModal used to draw, so that surface never appears."),
+        entry(41854, "Returns null where PremiumModal used to draw, so that surface never appears."),
+        entry(41939, "Does nothing, so the action openPremiumPlanSelectionActionSheet used to " +
+            "perform no longer happens."),
+        entry(41941, "Returns null where PremiumPlanSelectionActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(41949, "Returns null where PremiumPlanSelectionActionSheetCTA used to draw, so that " +
+            "surface never appears."),
+        entry(41950, "Returns null where PremiumPlanSelectionActionSheetCTA used to draw, so that " +
+            "surface never appears."),
+        entry(41951, "Returns null where PremiumPlanSelectionActionSheetWithOrderCTX used to draw, " +
+            "so that surface never appears."),
+        entry(41998, "Returns null where PremiumPlanActionSheetHeader used to draw, so that surface " +
+            "never appears."),
+        entry(41999, "Returns null where PremiumPlanActionSheetHeader used to draw, so that surface " +
+            "never appears."),
         entry(42008, "Answers false, so whatever useShouldShowPremiumTrialUserSettingsAvatarBadge gates stays off."),
         entry(42009, "Answers false, so whatever useShouldShowPremiumTrialUserSettingsAvatarBadge gates stays off."),
         entry(42212, "Stops the network-statistics sampler restarting its " +
@@ -315,6 +352,12 @@ object DiscordHermesFunctionCatalog {
         entry(51404, "Returns null where PremiumUpsellHero used to draw, so that surface never appears."),
         entry(51405, "Returns null where PremiumUpsellActionSheet used to draw, so that surface never appears."),
         entry(51406, "Returns null where PremiumUpsellActionSheet used to draw, so that surface never appears."),
+        entry(51455, "Returns null where ScheduledMessageNitroUpsellBar used to draw, so that surface never appears."),
+        entry(51456, "Returns null where ScheduledMessageNitroUpsellBar used to draw, so that surface never appears."),
+        entry(51896, "Returns null where SuperReactionCoachmarkActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(51897, "Returns null where SuperReactionCoachmarkActionSheet used to draw, so that " +
+            "surface never appears."),
         entry(51898, "No-ops the modal opener every premium upsell modal is " +
             "launched through, across its sixteen call sites."),
         entry(51973, "Returns null where PremiumUpsellTooltipActionSheet used to draw, so that surface never appears."),
@@ -390,6 +433,24 @@ object DiscordHermesFunctionCatalog {
         entry(54394, "Does nothing, so the action openFavoritesGuildLimitUpsell used to perform no longer happens."),
         entry(54395, "Returns null where FavoritesGuildUpsellSheet used to draw, so that surface never appears."),
         entry(54396, "Returns null where FavoritesGuildUpsellSheet used to draw, so that surface never appears."),
+        entry(54407, "Returns null where PromoSheet used to draw, so that surface never appears."),
+        entry(54408, "Returns null where PromoSheet used to draw, so that surface never appears."),
+        entry(55054, "Returns null where OrbsBadgeCoachmarkImg used to draw, so that surface never " +
+            "appears."),
+        entry(55055, "Returns null where OrbsBadgeCoachmarkImg used to draw, so that surface never " +
+            "appears."),
+        entry(55058, "Does nothing and returns undefined, so OrbsBadgeCoachmark no longer raises " +
+            "its prompt."),
+        entry(55061, "Does nothing and returns undefined, so TieredTenureBadgeCoachmark no longer " +
+            "raises its prompt."),
+        entry(55062, "Does nothing and returns undefined, so TieredTenureBadgeCoachmark no longer " +
+            "raises its prompt."),
+        entry(55119, "Returns null where BadgeDetailsSheetContent used to draw, so that surface never appears."),
+        entry(55120, "Returns null where BadgeDetailsSheetContent used to draw, so that surface never appears."),
+        entry(55121, "Returns null where BadgeDetailsPage used to draw, so that surface never appears."),
+        entry(55122, "Returns null where BadgeDetailsPage used to draw, so that surface never appears."),
+        entry(55123, "Returns null where BadgeDetailsSheet used to draw, so that surface never appears."),
+        entry(55124, "Returns null where BadgeDetailsSheet used to draw, so that surface never appears."),
         entry(56370, "Does nothing, so the action openGroupDMNitroCapLimitSheet used to perform no longer happens."),
         entry(56371, "Returns null where GroupDMNitroCapLimitSheet used to draw, so that surface never appears."),
         entry(56372, "Returns null where GroupDMNitroCapLimitSheet used to draw, so that surface never appears."),
@@ -425,10 +486,18 @@ object DiscordHermesFunctionCatalog {
             "message box."),
         entry(62381, "Removes the gift button in the chat input bar, which sat next to the " +
             "message box."),
+        entry(62383, "Returns null where PremiumAnimatedGiftButton used to draw, so that surface " +
+            "never appears."),
+        entry(62384, "Returns null where PremiumAnimatedGiftButton used to draw, so that surface " +
+            "never appears."),
         entry(63103, "Returns null where EmojiPremiumUpsell used to draw, so that surface never appears."),
         entry(63104, "Returns null where EmojiPremiumUpsell used to draw, so that surface never appears."),
         entry(63117, "Returns null where ChannelAutocompleteEmojiUpsell used to draw, so that surface never appears."),
         entry(63118, "Returns null where ChannelAutocompleteEmojiUpsell used to draw, so that surface never appears."),
+        entry(63804, "Returns null where GuildPowerupsBoostButton used to draw, so that surface " +
+            "never appears."),
+        entry(63805, "Returns null where GuildPowerupsBoostButton used to draw, so that surface " +
+            "never appears."),
         entry(64027, "Does nothing, so the action dismissUpsellCTA used to perform no longer happens."),
         entry(64367, "Returns null where GuildDirectoryNicknameUpsell used to draw, so that surface never appears."),
         entry(64368, "Returns null where GuildDirectoryNicknameUpsell used to draw, so that surface never appears."),
@@ -448,6 +517,8 @@ object DiscordHermesFunctionCatalog {
         entry(65091, "Returns null where SocialLayerStorefrontWishlistItemCard used to draw, so that surface never appears."),
         entry(65408, "Returns null where GroupDMNitroCapCoachmark used to draw, so that surface never appears."),
         entry(65409, "Returns null where GroupDMNitroCapCoachmark used to draw, so that surface never appears."),
+        entry(65459, "Returns null where NitroLimitUpsellBar used to draw, so that surface never appears."),
+        entry(65460, "Returns null where NitroLimitUpsellBar used to draw, so that surface never appears."),
         entry(65472, "Does nothing, so the action openScheduledMessagesLimitUpsell used to perform no longer happens."),
         entry(65769, "Removes the modal that awards orbs for a completed quest."),
         entry(65770, "Removes the modal that awards orbs for a completed quest."),
@@ -485,6 +556,8 @@ object DiscordHermesFunctionCatalog {
             "streaming and game-diversity tier badges. The app selects that variant only when " +
             "the React Compiler experiment is enabled, and this build leaves the experiment off " +
             "by default, so the stub changes nothing for a stock client."),
+        entry(66289, "Returns null and never raises its coachmark, so BadgeDirectoryNuxCoachmark shows nothing."),
+        entry(66290, "Returns null and never raises its coachmark, so BadgeDirectoryNuxCoachmark shows nothing."),
         entry(66459, "Forces the wishlist tab index to -1, so the profile's segmented " +
             "control has no Wishlist tab to select."),
         entry(66502, "Returns null from the wishlist grid a profile renders, so the " +
@@ -499,6 +572,8 @@ object DiscordHermesFunctionCatalog {
         entry(66519, "Removes the add-to-wishlist button in the grid layout."),
         entry(66520, "Removes the add-to-wishlist button in the grid layout."),
         entry(66524, "Removes the add-to-wishlist button on item cards."),
+        entry(66599, "Returns null where FractionalNitroPreview used to draw, so that surface never appears."),
+        entry(66600, "Returns null where FractionalNitroPreview used to draw, so that surface never appears."),
         entry(66617, "Returns null where ExpressiveNitroUpsell used to draw, so that surface never appears."),
         entry(66618, "Removes the orb price tag shown on items that can be bought with " +
             "orbs."),
@@ -520,8 +595,28 @@ object DiscordHermesFunctionCatalog {
         entry(66695, "Returns null where UnlockWithNitroButton used to draw, so that surface never appears."),
         entry(67033, "Returns null where NitroOrbsDeliveredModal used to draw, so that surface never appears."),
         entry(67034, "Returns null where NitroOrbsDeliveredModal used to draw, so that surface never appears."),
+        entry(67056, "Returns null where PremiumPlanWhatYouLoseActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(67057, "Returns null where PremiumPlanWhatYouLoseActionSheet used to draw, so that " +
+            "surface never appears."),
         entry(67106, "Returns null where NitroHomeHeader used to draw, so that surface never appears."),
         entry(67107, "Returns null where NitroHomeHeader used to draw, so that surface never appears."),
+        entry(67112, "Returns null where PremiumNitroHome used to draw, so that surface never " +
+            "appears."),
+        entry(67113, "Returns null where PremiumNitroHome used to draw, so that surface never " +
+            "appears."),
+        entry(67218, "Returns null where PremiumMarketingPage used to draw, so that surface never " +
+            "appears."),
+        entry(67219, "Returns null where PremiumMarketingPage used to draw, so that surface never " +
+            "appears."),
+        entry(67311, "Returns null where PremiumMarketingFloatingSubscribeButton used to draw, so " +
+            "that surface never appears."),
+        entry(67312, "Returns null where PremiumMarketingFloatingSubscribeButton used to draw, so " +
+            "that surface never appears."),
+        entry(67356, "Returns null where PremiumGroupEducationActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(67357, "Returns null where PremiumGroupEducationActionSheet used to draw, so that " +
+            "surface never appears."),
         entry(67361, "Returns null where NitroCreditEducationActionSheet used to draw, so that surface never appears."),
         entry(67362, "Returns null where NitroCreditEducationActionSheet used to draw, so that surface never appears."),
         entry(67370, "Returns null where GuildBoostingUpsell used to draw, so that surface never appears."),
@@ -534,6 +629,12 @@ object DiscordHermesFunctionCatalog {
         entry(67394, "Returns null where BoostPurchaseNitroBanner used to draw, so that surface never appears."),
         entry(67427, "Returns null where PremiumPlanSelectYearlyUpsellModal used to draw, so that surface never appears."),
         entry(67428, "Returns null where PremiumPlanSelectYearlyUpsellModal used to draw, so that surface never appears."),
+        entry(67435, "Returns null where OutboundPromotionCard used to draw, so that surface never " +
+            "appears."),
+        entry(67438, "Returns null where OutboundPromotionClaimAlert used to draw, so that surface " +
+            "never appears."),
+        entry(67439, "Returns null where OutboundPromotionClaimAlert used to draw, so that surface " +
+            "never appears."),
         entry(67455, "Removes the gift purchase button, so a gift cannot be bought from " +
             "the UI."),
         entry(67456, "Removes the gift purchase button, so a gift cannot be bought from " +
@@ -554,6 +655,10 @@ object DiscordHermesFunctionCatalog {
         entry(70836, "Stubs the Edit User Profile entry in settings."),
         entry(70847, "Returns null where UserProfileUpsellButton used to draw, so that surface never appears."),
         entry(70848, "Returns null where UserProfileUpsellButton used to draw, so that surface never appears."),
+        entry(70922, "Does nothing, so openCustomizeBadgesSheet never opens the customization sheet."),
+        entry(70923, "Returns null where BadgeVisibilityMenu used to draw, so that surface never appears."),
+        entry(70924, "Returns null where BadgeVisibilityMenu used to draw, so that surface never appears."),
+        entry(70931, "Returns null where CustomizeBadgesSheet used to draw, so that surface never appears."),
         entry(70933, "Returns null where UserProfileUpsellCard used to draw, so that surface never appears."),
         entry(70934, "Returns null where UserProfileUpsellCard used to draw, so that surface never appears."),
         entry(71058, "Returns null where UserProfilePremiumTryItOutUpsell used to draw, so that surface never appears."),
@@ -606,6 +711,8 @@ object DiscordHermesFunctionCatalog {
             "predicate."),
         entry(73188, "Returns false from the Restore Subscription row's visibility " +
             "predicate."),
+        entry(73346, "Returns null where SettingsAppearanceChannelListPreviewNitroUpsellComponent used to draw, so that surface never appears."),
+        entry(73347, "Returns null where SettingsAppearanceChannelListPreviewNitroUpsellComponent used to draw, so that surface never appears."),
         entry(73348, "Returns null where SettingsAppearanceChannelListPreviewNitroUpsell used to draw, so that surface never appears."),
         entry(73349, "Returns null where SettingsAppearanceChannelListPreviewNitroUpsell used to draw, so that surface never appears."),
         entry(73663, "Returns null where VideoUploadQualityNitroUpsell used to draw, so that surface never appears."),
@@ -615,6 +722,10 @@ object DiscordHermesFunctionCatalog {
         entry(74349, "Does nothing, so the action closePasskeyUpsellPromoSheet used to perform no longer happens."),
         entry(74350, "Returns null where PasswordlessUpsellPromoSheet used to draw, so that surface never appears."),
         entry(74351, "Returns null where PasswordlessUpsellPromoSheet used to draw, so that surface never appears."),
+        entry(74388, "Returns null where PremiumTrialOfferActionSheetContent used to draw, so that " +
+            "surface never appears."),
+        entry(74389, "Returns null where PremiumTrialOfferActionSheetContent used to draw, so that " +
+            "surface never appears."),
         entry(74414, "Removes the You-tab orb balance widget's menu, one of the screens the " +
             "orb gate sits in front of."),
         entry(74419, "Removes the wrapper component that builds the orb balance widget."),
@@ -656,6 +767,14 @@ object DiscordHermesFunctionCatalog {
             "guild tag chip is drawn in a voice channel."),
         entry(75927, "Returns null from the voice guild tag component, so no " +
             "guild tag chip is drawn in a voice channel."),
+        entry(76063, "Does nothing and returns undefined, so BoostProgressBarCoachmark no longer " +
+            "raises its prompt."),
+        entry(76064, "Does nothing and returns undefined, so BoostProgressBarCoachmark no longer " +
+            "raises its prompt."),
+        entry(76067, "Does nothing and returns undefined, so GuildPowerupsBoostToUnlockCoachmark no " +
+            "longer raises its prompt."),
+        entry(76068, "Does nothing and returns undefined, so GuildPowerupsBoostToUnlockCoachmark no " +
+            "longer raises its prompt."),
         entry(76312, "Returns null where GuildRoleSubscriptionsUpsellActionSheet used to draw, so that surface never appears."),
         entry(76313, "Returns null where GuildRoleSubscriptionsUpsellActionSheet used to draw, so that surface never appears."),
         entry(76314, "Returns null where IAPUpsellActionSheet used to draw, so that surface never appears."),
@@ -673,6 +792,8 @@ object DiscordHermesFunctionCatalog {
         entry(76387, "Returns null where OneColumnGuildUpsellList used to draw, so that surface never appears."),
         entry(76388, "Returns null where OneColumnGuildUpsellList used to draw, so that surface never appears."),
         entry(76389, "Returns null where GameCommunityMultiGuildUpsellCard used to draw, so that surface never appears."),
+        entry(77958, "Returns null where GroupDMNitroUpsellBanner used to draw, so that surface never appears."),
+        entry(77959, "Returns null where GroupDMNitroUpsellBanner used to draw, so that surface never appears."),
         entry(77960, "Returns null where GroupDMNitroCapBanner used to draw, so that surface never appears."),
         entry(77961, "Returns null where GroupDMNitroCapBanner used to draw, so that surface never appears."),
         entry(78118, "Stops the AutoAnalytics navigator hook that emitted an event " +
@@ -683,10 +804,44 @@ object DiscordHermesFunctionCatalog {
             "the You screen content component builds, so it builds Main and Activity only, with " +
             "no Board and no Wishlist tab. The app runs that copy when the React Compiler " +
             "experiment is on; leaving it unpatched lets both tabs appear there too."),
+        entry(78279, "Returns null and never raises its coachmark, so BadgeCustomizationProfileCoachmark shows nothing."),
+        entry(78280, "Returns null and never raises its coachmark, so BadgeCustomizationProfileCoachmark shows nothing."),
         entry(78283, "Answers false, so whatever useShouldShowExpiringTrialOfferCard gates stays off."),
         entry(78284, "Answers false, so whatever useShouldShowExpiringTrialOfferCard gates stays off."),
         entry(78286, "Returns null where YouExpiringTrialOfferCard used to draw, so that surface never appears."),
         entry(78287, "Returns null where YouExpiringTrialOfferCard used to draw, so that surface never appears."),
+        entry(78768, "Returns null where AppIconsCoachmarkActionSheet used to draw, so that surface " +
+            "never appears."),
+        entry(78769, "Returns null where AppIconsCoachmarkActionSheet used to draw, so that surface " +
+            "never appears."),
+        entry(78770, "Returns null where GiftingPromotionCoachmarkActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(78771, "Returns null where GiftingPromotionCoachmarkActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(78789, "Returns null where PremiumMarketingMomentActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(78790, "Returns null where PremiumMarketingMomentActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(78792, "Returns null where PremiumDiscountOfferActionSheetContent used to draw, so " +
+            "that surface never appears."),
+        entry(78793, "Returns null where PremiumDiscountOfferActionSheetContent used to draw, so " +
+            "that surface never appears."),
+        entry(78799, "Returns null where HasBadgeCoachmark used to draw, so that surface never " +
+            "appears."),
+        entry(78800, "Returns null where HasBadgeCoachmark used to draw, so that surface never " +
+            "appears."),
+        entry(78801, "Returns null where NewBadgeCoachmark used to draw, so that surface never " +
+            "appears."),
+        entry(78802, "Returns null where NewBadgeCoachmark used to draw, so that surface never " +
+            "appears."),
+        entry(78803, "Returns null where GiftingBadgesCoachmarkActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(78804, "Returns null where GiftingBadgesCoachmarkActionSheet used to draw, so that " +
+            "surface never appears."),
+        entry(78833, "Returns null where CollectiblesMobileAnnouncementActionSheet used to draw, so " +
+            "that surface never appears."),
+        entry(78834, "Returns null where CollectiblesMobileAnnouncementActionSheet used to draw, so " +
+            "that surface never appears."),
         entry(78837, "Returns null where NitroFileUploadAnnouncementPromoSheet used to draw, so that surface never appears."),
         entry(78838, "Returns null where NitroFileUploadAnnouncementPromoSheet used to draw, so that surface never appears."),
         entry(78841, "Returns null where NitroFileUploadUpsellPromoSheet used to draw, so that surface never appears."),
@@ -714,6 +869,10 @@ object DiscordHermesFunctionCatalog {
         entry(80166, "Returns null where DmSettingsUpsellActionSheet used to draw, so that surface never appears."),
         entry(81067, "Returns null where GuildSettingsServerTagUpsellCard used to draw, so that surface never appears."),
         entry(81068, "Returns null where GuildSettingsServerTagUpsellCard used to draw, so that surface never appears."),
+        entry(81760, "Returns null where GuildPremiumRoleSubscribeButton used to draw, so that " +
+            "surface never appears."),
+        entry(81761, "Returns null where GuildPremiumRoleSubscribeButton used to draw, so that " +
+            "surface never appears."),
         entry(82134, "Stops the app-state update handler listed with the " +
             "message-cache recorders, so it no longer runs on every app state change."),
         entry(82174, "Stops the patched global WebSocket being installed, " +
@@ -767,6 +926,8 @@ object DiscordHermesFunctionCatalog {
             "Activity only, with no Board and no Wishlist tab. It edits the " +
             "isReactCompilerEnabled() == false variant of the profile content component."),
         entry(125330, "Does nothing, so the action navigateToNitroPage used to perform no longer happens."),
+        entry(125335, "Returns null where renderNitroUpsellText used to draw, so that surface never " +
+            "appears."),
         entry(131612, "Rebuilds the profile section tab list so it builds Main and " +
             "Activity only, with no Board and no Wishlist tab. The tab is one element of a list, " +
             "not a function that can return false, so the body is edited rather than stubbed."),
@@ -864,7 +1025,9 @@ object DiscordHermesFunctionCatalog {
             group = GIFTS_GROUP,
             label = "Gift buttons",
             description = "Removes the gift button from the chat bar and the button that buys a gift.",
-            functionIds = listOf(62377, 62378, 62380, 62381, 66645, 66646, 67455, 67456)
+            functionIds = listOf(
+                62377, 62378, 62380, 62381, 62383, 62384, 66645, 66646, 67455, 67456
+            )
         ),
         Feature(
             slug = "billing_rows",
@@ -1112,46 +1275,52 @@ object DiscordHermesFunctionCatalog {
             slug = "nitro_upsells",
             group = NITRO_UPSELL_GROUP,
             label = "Nitro upsells",
-            description =             "Every Nitro upsell surface: the banners, promo sheets, action sheets, cards and the lock " +
-            "toasts the app raises when something needs Nitro.",
+            description = "Every Nitro upsell surface: the banners, promo sheets, action sheets, cards and the lock " +
+                "toasts the app raises when something needs Nitro.",
             functionIds = listOf(
-                23808, 46252, 46253, 56370, 56371, 56372, 56374, 59727, 59728, 59729, 62030, 65408,
-                65409, 66617, 66622, 66623, 66629, 66630, 66686, 66687, 66688, 66689, 66694, 66695,
-                67033, 67034, 67106, 67107, 67361, 67362, 67393, 67394, 71063, 71064, 71065, 71066,
-                73348, 73349, 73663, 73664, 74915, 77960, 77961, 78837, 78838, 78841, 78842, 125330
+                23808, 46252, 46253, 51455, 51456, 51896, 51897, 56370, 56371, 56372, 56374, 59727,
+                59728, 59729, 62030, 65408, 65409, 65459, 65460, 66599, 66600, 66617, 66622, 66623,
+                66629, 66630, 66686, 66687, 66688, 66689, 66694, 66695, 67033, 67034, 67106, 67107,
+                67112, 67113, 67218, 67219, 67311, 67312, 67361, 67362, 67393, 67394, 71063, 71064,
+                71065, 71066, 73346, 73347, 73348, 73349, 73663, 73664, 74388, 74389, 74915, 77958,
+                77959, 77960, 77961, 78768, 78769, 78770, 78771, 78789, 78790, 78837, 78838, 78841,
+                78842, 125330, 125335
             )
         ),
         Feature(
             slug = "premium_upsells",
             group = UPSELL_GROUP,
             label = "Other upsell prompts",
-            description =             "The remaining upsell sheets, cards, alerts and the buttons that open them.",
+            description = "The remaining upsell sheets, cards, alerts and the buttons that open them.",
             functionIds = listOf(
-                32928, 51395, 51397, 51403, 51404, 51405, 51406, 51973, 51974, 52112, 52113, 52114,
-                52115, 52118, 52119, 52122, 52123, 52124, 52125, 52199, 52200, 52201, 52202, 56379,
-                56380, 56381, 64027, 65472, 67381, 67382, 67388, 67389, 67427, 67428, 68748, 68749,
-                71100, 71101, 71749, 71750, 72086, 72087, 72106, 72107, 72110, 72111, 72112, 72113,
-                74347, 74348, 74349, 74350, 74351, 75245, 75246, 76314, 76315, 76316, 76317, 76318,
-                76319, 79190, 79191, 80164, 80165, 80166
+                32928, 41853, 41854, 41939, 41941, 41949, 41950, 41951, 41998, 41999, 51395, 51397,
+                51403, 51404, 51405, 51406, 51973, 51974, 52112, 52113, 52114, 52115, 52118, 52119,
+                52122, 52123, 52124, 52125, 52199, 52200, 52201, 52202, 54407, 54408, 56379, 56380,
+                56381, 64027, 65472, 67056, 67057, 67356, 67357, 67381, 67382, 67388, 67389, 67427,
+                67428, 67435, 67438, 67439, 68748, 68749, 71100, 71101, 71749, 71750, 72086, 72087,
+                72106, 72107, 72110, 72111, 72112, 72113, 74347, 74348, 74349, 74350, 74351, 75245,
+                75246, 76314, 76315, 76316, 76317, 76318, 76319, 78792, 78793, 78833, 78834, 79190,
+                79191, 80164, 80165, 80166
             )
         ),
         Feature(
             slug = "guild_upsells",
             group = UPSELL_GROUP,
             label = "Guild and boost upsells",
-            description =             "The guild boosting, server tag and role-subscription upsells.",
+            description = "The guild boosting, server tag and role-subscription upsells.",
             functionIds = listOf(
-                40558, 52110, 52111, 52120, 52121, 54394, 54395, 54396, 64367, 64368, 64369, 64370,
-                65828, 65829, 67370, 67371, 76312, 76313, 76320, 76321, 76325, 76326, 76373, 76374,
-                76387, 76388, 76389, 81067, 81068
+                37159, 37174, 37175, 40558, 41795, 41796, 52110, 52111, 52120, 52121, 54394, 54395,
+                54396, 63804, 63805, 64367, 64368, 64369, 64370, 65828, 65829, 67370, 67371, 76063,
+                76064, 76067, 76068, 76312, 76313, 76320, 76321, 76325, 76326, 76373, 76374, 76387,
+                76388, 76389, 81067, 81068, 81760, 81761
             )
         ),
         Feature(
             slug = "storefront_screens",
             group = STOREFRONT_GROUP,
             label = "Storefront screens",
-            description =             "The storefront itself: the product page, the gift and purchase flows, the wishlist cards and " +
-            "the store item card.",
+            description = "The storefront itself: the product page, the gift and purchase flows, the wishlist cards and " +
+                "the store item card.",
             functionIds = listOf(
                 40682, 50060, 50061, 53980, 53981, 53982, 53983, 53984, 54021, 54022, 54023, 54024,
                 54080, 54081, 54087, 54088, 65015, 65016, 65017, 65018, 65090, 65091
@@ -1161,15 +1330,15 @@ object DiscordHermesFunctionCatalog {
             slug = "trials",
             group = TRIAL_GROUP,
             label = "Free trials",
-            description =             "The trial offers: the card that counts down an expiring trial, the hooks that decide whether " +
-            "to show it, and the reverse-trial prompts.",
+            description = "The trial offers: the card that counts down an expiring trial, the hooks that decide whether " +
+                "to show it, and the reverse-trial prompts.",
             functionIds = listOf(42008, 42009, 78283, 78284, 78286, 78287)
         ),
         Feature(
             slug = "emoji_upsells",
             group = UPSELL_GROUP,
             label = "Emoji and sticker upsells",
-            description =             "The upsells inside the emoji and sticker pickers.",
+            description = "The upsells inside the emoji and sticker pickers.",
             functionIds = listOf(
                 52095, 52096, 52097, 52106, 52107, 52108, 52109, 52116, 52117, 52167, 52168, 52170,
                 52171, 53038, 53039, 53054, 53055, 63103, 63104, 63117, 63118
@@ -1179,18 +1348,41 @@ object DiscordHermesFunctionCatalog {
             slug = "leaderboards",
             group = LEADERBOARD_GROUP,
             label = "Leaderboard badges",
-            description =             "The badge a leaderboard winner carries on their profile.",
+            description = "The badge a leaderboard winner carries on their profile.",
             functionIds = listOf(54248, 54249)
         ),
         Feature(
             slug = "profile_upsells",
             group = UPSELL_GROUP,
             label = "Profile upsells",
-            description =             "The upsells drawn on a profile and beside the activity card.",
+            description = "The upsells drawn on a profile and beside the activity card.",
             functionIds = listOf(
                 70847, 70848, 70933, 70934, 71058, 71059, 71067, 71068, 71089, 71090, 71743, 71744,
                 74872, 74873
             )
+        ),
+        Feature(
+            slug = "badge_customization",
+            group = PROFILE_GROUP,
+            label = "Badge customization",
+            description = "The badge prompts and popups: the coachmark that offers to customize " +
+                "badges, the customization sheet, the badge-directory coachmark and its animation, " +
+                "the visibility menu and the badge details sheet.",
+            functionIds = listOf(
+                32480, 32481, 32482, 32483, 32484, 32485, 55054, 55055, 55058, 55061, 55062, 55119,
+                55120, 55121, 55122, 55123, 55124, 66289, 66290, 70922, 70923, 70924, 70931, 78279,
+                78280, 78799, 78800, 78801, 78802, 78803, 78804
+            )
+        ),
+        Feature(
+            slug = "lower_camera_resolution",
+            group = VIDEO_GROUP,
+            label = "Lower video call resolution",
+            description = "Sends 640×360 at 24 frames per second instead of 720p at 30, about " +
+                "four times fewer pixels. The camera capture and the encoder's resolution " +
+                "budget are lowered together, so the encoder asks for no more than the camera " +
+                "sends. Screen sharing keeps its own 720p path.",
+            functionIds = listOf(34446, 34451)
         ),
     )
 

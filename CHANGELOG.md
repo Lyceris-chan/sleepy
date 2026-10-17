@@ -5,6 +5,35 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Badge customization can be removed.** A new switch under **Declutter → Profile** hides the
+  prompts and popups around badges: the coachmark that offers to customize them, its Rive
+  animation, the customization sheet, the badge-directory coachmark, the visibility menu, the
+  badge details sheet, and the remaining badge coachmarks — the one shown when a profile already
+  has a badge, the new-badge coachmark, and the orbs, tenure and gifting badge coachmarks.
+- **The remaining Nitro and promotion popups can be removed.** The Nitro upsell switch now also
+  hides the Nitro home and marketing pages, the marketing-moment sheet, the app-icon and
+  super-reaction coachmarks, the gifting-promotion coachmark, and the text renderer behind the
+  upsell copy. The premium switch adds the plan-selection, what-you-lose, discount-offer and
+  trial-offer sheets, the premium-group education sheet, the outbound promotion card and claim
+  alert, the collectibles announcement sheet, and the generic promo sheet. The guild switch adds
+  the boost and premium-role subscribe buttons and their coachmarks.
+- **Video calls can request a lower resolution.** A new **Lower video call resolution** switch
+  sends 640×360 at 24 frames per second instead of 1280×720 at 30 — roughly four times fewer
+  pixels, and most of a video call's power, heat and data cost. Unlike the reference patch, which
+  lowers only the camera and crashes the camera because the encoder still expects 720p, this
+  lowers the encoder's resolution budget with the capture, so the pair stays matched. Screen
+  sharing keeps its own 720p path.
+
+### Changed
+
+- **The JavaScript table is 517 entries in 49 features**, up from 420 in 47. Every added entry is
+  a constant-shaped stub whose replacement bytes name nothing bundle-specific, or one of the two
+  video-quality edits; the bundle test applies all 517 and reads every patched function back.
+
 ## [3.8.1] - 2026-10-17
 
 ### Fixed
