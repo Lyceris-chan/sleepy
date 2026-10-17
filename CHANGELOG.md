@@ -5,6 +5,18 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Joining a call no longer crashes the app.** The two bytecode edits behind **Lower video call
+  cost** were assembled from text whose jump labels are numeric byte offsets. Replacing a
+  4-byte multiply with a 6-byte constant moved every instruction after it by two bytes but left
+  the labels at their old offsets, so `getVideoQuality` jumped into the middle of an instruction
+  and Hermes crashed on its JavaScript thread a few seconds into every call. The labels now name
+  the offsets the assembler actually places them at, and the sibling `MediaSinkWantsLadder` edit
+  reaches its invalid-argument `throw` again instead of returning early.
+
 ## [3.9.0] - 2026-10-17
 
 ### Added
