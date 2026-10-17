@@ -5,7 +5,7 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.8.1] - 2026-10-17
 
 ### Fixed
 
@@ -32,7 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The launcher icon declares a monochrome layer** for themed icons, and the
   `mipmap-anydpi-v26` folder merged into `mipmap-anydpi` now that the minimum API makes the
   qualifier redundant.
-
+- **The comments and KDoc now follow the Kotlin style guide.** The file headers had grown into
+  essays—117 lines on the patch table, 63 on the resource merger, 55 on the function table—so
+  each is now a short summary plus the constraints that prevent a regression, with the history
+  left to this file. File headers fell from 729 lines to about 120 and comments from 7,843 lines
+  to 7,143, and every executable line and every comment line fits 100 columns; the remaining
+  long lines are string literals—smali replacement bodies and user-facing descriptions—which
+  must stay byte-exact.
 
 ## [3.8.0] - 2026-10-16
 
