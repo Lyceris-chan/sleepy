@@ -5,6 +5,30 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.2] - 2026-10-18
+
+### Fixed
+
+- **A camera that fails to start can no longer end the call.** The media engine runs its camera
+  and connection work as coroutines on a scope that had a supervisor job but no exception
+  handler. The supervisor kept one failed operation from cancelling the scope, but it did not
+  stop the exception itself: without a handler in the context, `handleCoroutineException` falls
+  through to the thread's uncaught-exception handler, which kills the process. That is the shape
+  of a call that ends the moment the camera is turned on, and it depends on why the camera failed
+  — another app holding it, a Camera2 error, a bad stream connection — which is why it was
+  intermittent.
+
+  The scope now carries the app's own `CoroutineExceptionHandler` (`tr/b`, Android's
+  `AndroidExceptionPreHandler`) alongside the supervisor job, so a throw in any of the media
+  engine's coroutine bodies is handled instead of reaching the process kill. The handler also
+  writes the exception to logcat under the `MediaEngineCB` tag before Android's pre-handler sees
+  it, so a contained camera failure leaves a trace. On API 26 and 27 that pre-handler also logs
+  the stack; on 28 and later the message above is the record.
+
+  This contains every media coroutine body, not only the four on the camera path: the same throw
+  from a connection, audio-device or stream coroutine would also have ended the process. The
+  native patch set grows from 109 edits to 110.
+
 ## [3.9.1] - 2026-10-17
 
 ### Fixed

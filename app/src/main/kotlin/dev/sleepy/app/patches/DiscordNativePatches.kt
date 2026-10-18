@@ -1327,9 +1327,10 @@ object DiscordNativePatches {
         label = "Fix the media engine and voice calls",
         description = "Stops the video renderer from blocking the UI thread while it creates a " +
             "graphics context, surfaces media callback failures in logcat instead of dropping " +
-            "them, builds the media engine's coroutine scope on a supervisor job so one failure " +
-            "cannot disable every later media call, and registers a repeated connection id " +
-            "rather than throwing on it.",
+            "them, builds the media engine's coroutine scope on a supervisor job and the app's " +
+            "coroutine exception handler so one failure can neither disable every later media " +
+            "call nor reach the process kill, and registers a repeated connection id rather " +
+            "than throwing on it.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Stopping video tiles from freezing the interface",
@@ -1434,7 +1435,11 @@ object DiscordNativePatches {
             ),
             SmaliPatch(
                 title = "Keeping the media engine alive after one failure",
-                explanation = "Builds the media engine's coroutine scope on a supervisor job, so one failed operation no longer cancels the scope and turns every later media call into a no-op.",
+                explanation = "Builds the media engine's coroutine scope on a supervisor job " +
+                    "and attaches the app's coroutine exception handler to it. The supervisor " +
+                    "keeps a failed operation from cancelling the scope; the handler keeps the " +
+                    "same failure from reaching the thread's uncaught-exception handler, which " +
+                    "is what ends the call when a camera cannot start.",
                 smaliPath = "com/discord/media/engine/MediaEngineModule.smali",
                 anchor = """    invoke-direct {v2, v1}, Lsr/r0;-><init>(Ljava/util/concurrent/Executor;)V
 """,
@@ -1452,6 +1457,43 @@ object DiscordNativePatches {
 
     move-result-object v2
 
+    # Patch: a supervisor job keeps the scope alive, but it does not stop
+    # the exception from reaching the thread's uncaught-exception handler.
+    # Add the app's own CoroutineExceptionHandler (tr/b) to the context so
+    # a camera that cannot start is handled instead of killing the process.
+    new-instance v1, Ltr/b;
+
+    invoke-direct {v1}, Ltr/b;-><init>()V
+
+    invoke-static {v1, v2}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
+
+    move-result-object v2
+
+"""
+            ),
+            SmaliPatch(
+                title = "Logging uncaught coroutine exceptions",
+                explanation = "Writes an uncaught coroutine exception to logcat under the " +
+                    "MediaEngineCB tag before the app's handler runs, so a camera failure that " +
+                    "is now contained leaves a trace instead of disappearing.",
+                smaliPath = "tr/b.smali",
+                anchor = """.method public final N(Ljava/lang/Throwable;Lkotlin/coroutines/CoroutineContext;)V
+    .registers 5
+""",
+                replacement = """.method public final N(Ljava/lang/Throwable;Lkotlin/coroutines/CoroutineContext;)V
+    .registers 8
+
+    # Patch: this handler is now in MediaEngineModule's scope, where it turns
+    # an uncaught coroutine exception (a camera that could not start, a
+    # duplicate connection, a camera another app holds) into a handled
+    # failure instead of a process kill. Log it first so it stays visible.
+    sget-object v0, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
+
+    const-string v1, "MediaEngineCB"
+
+    const-string v2, "uncaught coroutine exception; media engine kept running"
+
+    invoke-virtual {v0, v1, v2, p1}, Lcom/discord/logging/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
 """
             ),
             SmaliPatch(

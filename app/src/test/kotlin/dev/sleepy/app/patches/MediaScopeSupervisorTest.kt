@@ -25,8 +25,16 @@ import org.junit.Test
  * context, and `CoroutineScope(context)` installs a plain `Job`. A plain job cancels itself and
  * every child the first time one child throws, and the whole media ReactMethod surface launches
  * on that scope - so a camera that fails to start, or a duplicate connection id, turns every
- * later media call into a no-op and the call ends. The edit adds a `SupervisorJob` to the
- * context, so a child's failure stops at that child.
+ * later media call into a no-op. The edit adds a `SupervisorJob` to the context, so a child's
+ * failure stops at that child.
+ *
+ * A supervisor job alone does not keep the call alive. The throw still reaches
+ * `handleCoroutineException`, which looks for a `CoroutineExceptionHandler` in the context; with
+ * none, it falls through to the thread's uncaught-exception handler, and Android kills the
+ * process. The same edit therefore attaches the app's own implementation (`tr/b`, the
+ * `AndroidExceptionPreHandler` the ServiceLoader already names) to the context, and the second
+ * edit makes that handler write the exception to logcat under `MediaEngineCB` before the Android
+ * pre-handler runs. A failed camera now leaves the call and the rest of the media engine intact.
  *
  * The recorded change set shipped this patch broken for a whole release without noticing: it
  * spelled four R8-obfuscated coroutine class names, a later build renamed the package, its anchor
@@ -58,10 +66,20 @@ class MediaScopeSupervisorTest {
         const val SUPERVISOR_JOB = "Lsr/m1"
         const val JOB_BASE = "Lsr/y0"
 
-        /** Every class the injection names, checked against the build before it is written. */
-        val REFERENCED = listOf("Lsr/r0;", "Lsr/x;", SUPERVISOR_JOB + ";", JOB_BASE + ";")
+        /**
+         * The app's own `CoroutineExceptionHandler`, attached after the supervisor so a throw
+         * is handled instead of reaching the thread's uncaught-exception handler.
+         */
+        const val EXCEPTION_HANDLER = "Ltr/b"
+        const val EXCEPTION_HANDLER_CLASS = "Ltr/b;"
+        const val EXCEPTION_HANDLER_PATH = "tr/b.smali"
 
-        /** The context merge that attaches the supervisor to the dispatcher. */
+        /** Every class the injection names, checked against the build before it is written. */
+        val REFERENCED = listOf(
+            "Lsr/r0;", "Lsr/x;", SUPERVISOR_JOB + ";", JOB_BASE + ";", EXCEPTION_HANDLER_CLASS
+        )
+
+        /** The context merge that attaches the supervisor and the handler to the dispatcher. */
         const val CONTEXT_PLUS = "Lkotlin/coroutines/e;->c("
     }
 
@@ -95,6 +113,10 @@ class MediaScopeSupervisorTest {
             "the stock scope must not already be supervised, or there is nothing to do",
             stock.contains(SUPERVISOR_JOB)
         )
+        assertFalse(
+            "the stock scope must not already carry the exception handler",
+            stock.contains(EXCEPTION_HANDLER)
+        )
 
         // What the injection will name has to be in the build. A name that resolves at assemble
         // time and not at class load is how the recorded change set's copy of this patch died.
@@ -122,26 +144,88 @@ class MediaScopeSupervisorTest {
         val after = MediaSmali(patched, MODULE_DESCRIPTOR).text(MODULE)
         assertTrue("the patched class has to disassemble", after.isNotEmpty())
         assertTrue("the dispatcher construction must survive", after.contains(DISPATCHER_CTOR))
-        assertTrue("the supervisor must be built", after.contains("new-instance v1, $SUPERVISOR_JOB;"))
+        assertTrue(
+            "the supervisor must be built",
+            after.contains("new-instance v1, $SUPERVISOR_JOB;")
+        )
         assertTrue(
             "it must be the job base's constructor that is called",
             after.contains("invoke-direct {v1}, $JOB_BASE;-><init>()V")
         )
-        assertTrue("it must be merged into the scope's context", after.contains(CONTEXT_PLUS))
+        assertTrue(
+            "the handler must be built",
+            after.contains("new-instance v1, $EXCEPTION_HANDLER;")
+        )
+        assertTrue(
+            "the handler's no-argument constructor must be called",
+            after.contains("invoke-direct {v1}, $EXCEPTION_HANDLER;-><init>()V")
+        )
+        assertEquals(
+            "both the supervisor and the handler must be merged into the context",
+            2,
+            occurrences(after, CONTEXT_PLUS)
+        )
 
-        // Order is the whole edit: a supervisor built after the scope is built does nothing.
+        // Order is the whole edit: a supervisor or handler built after the scope is built does
+        // nothing, and the handler has to be in the context `launch` reads.
         val dispatcherAt = after.indexOf(DISPATCHER_CTOR)
         val supervisorAt = after.indexOf("new-instance v1, $SUPERVISOR_JOB;")
-        val mergeAt = after.indexOf(CONTEXT_PLUS)
+        val firstMergeAt = after.indexOf(CONTEXT_PLUS)
+        val handlerAt = after.indexOf("new-instance v1, $EXCEPTION_HANDLER;")
+        val secondMergeAt = after.indexOf(CONTEXT_PLUS, firstMergeAt + CONTEXT_PLUS.length)
         val factoryAt = after.indexOf(SCOPE_FACTORY, dispatcherAt)
-        assertTrue("the scope factory call must still follow the construction", factoryAt > dispatcherAt)
+        assertTrue(
+            "the scope factory call must still follow the construction",
+            factoryAt > dispatcherAt
+        )
         assertTrue(
             "the supervisor must be built after the dispatcher and before the context it joins",
-            dispatcherAt < supervisorAt && supervisorAt < mergeAt
+            dispatcherAt < supervisorAt && supervisorAt < firstMergeAt
+        )
+        assertTrue(
+            "the handler must be built after the supervisor's merge and before its own",
+            firstMergeAt < handlerAt && handlerAt < secondMergeAt
         )
         assertTrue(
             "and the merged context must exist before the scope is built from it",
-            mergeAt < factoryAt
+            secondMergeAt < factoryAt
+        )
+
+        // The handler's N() logs before the Android pre-handler runs. Apply that edit to the DEX
+        // that holds tr/b and read it back, so a renamed method cannot silently drop the only
+        // trace a contained camera failure leaves.
+        val logPatch = DiscordNativePatches.MEDIA.smaliPatches
+            .single { it.smaliPath == EXCEPTION_HANDLER_PATH }
+        val logDexName = dexEntries.keys.firstOrNull { name ->
+            MediaSmali(dexEntries.getValue(name), EXCEPTION_HANDLER_CLASS)
+                .text(EXCEPTION_HANDLER_PATH)
+                .isNotEmpty()
+        }
+        assertTrue("$EXCEPTION_HANDLER_CLASS is not in this build", logDexName != null)
+        val logDex = dexEntries.getValue(logDexName!!)
+        val logStock = MediaSmali(logDex, EXCEPTION_HANDLER_CLASS).text(EXCEPTION_HANDLER_PATH)
+        assertEquals(
+            "the log anchor must occur exactly once in the stock build, or the engine's replace " +
+                "would edit more than this method:\n${logPatch.anchor}",
+            1,
+            occurrences(logStock, logPatch.anchor!!)
+        )
+        val (logPatched, logResults) = DexProcessor.patchDexSurgically(
+            dexBytes = logDex,
+            patches = listOf(logPatch)
+        )
+        assertEquals("one step for the log edit", 1, logResults.size)
+        assertEquals(
+            "the log edit did not land: ${logResults.single().detail}",
+            StepStatus.OK,
+            logResults.single().status
+        )
+        val logAfter = MediaSmali(logPatched, EXCEPTION_HANDLER_CLASS).text(EXCEPTION_HANDLER_PATH)
+        assertTrue("the patched handler has to disassemble", logAfter.isNotEmpty())
+        assertTrue("it must log under the media tag", logAfter.contains("\"MediaEngineCB\""))
+        assertTrue(
+            "it must still receive the throwable",
+            logAfter.contains("Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V")
         )
     }
 

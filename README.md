@@ -23,7 +23,7 @@ Each of the following changes has its own switch, so you can apply all of them, 
 - **Silences debug logging** and stops Discord capturing device logs in the background for crash reports.
 - **Removes the app-rating survey dialogs.**
 - **Stops background update downloads.** Discord keeps the version of its own code that shipped inside this APK instead of downloading a newer one that undoes the changes listed earlier.
-- **Makes calls and media more reliable.** Voice calls stay alive when you leave the app, the video player stops blocking the interface while it starts up, turning the camera on can no longer end the call, and media failures are reported instead of dropped without a report.
+- **Makes calls and media more reliable.** Voice calls stay alive when you leave the app, the video player stops blocking the interface while it starts up, a camera that fails to start is handled instead of ending the call or the app, and media failures are reported instead of dropped without a report.
 - **Uses less memory and fewer downloads.** The image cache is smaller, screen-by-screen performance tracking is off, and all of Discord's network clients share one disk cache instead of each keeping its own in the same folder.
 
 ### OctoGram
