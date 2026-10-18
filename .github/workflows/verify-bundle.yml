@@ -81,7 +81,7 @@ jobs:
       # margin - worth caching, and the key is the revision, so changing it rebuilds.
       - name: Restore the Hermes build
         id: hermes-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.HERMES_CACHE }}
           key: hermes-${{ runner.os }}-${{ env.HERMES_REPO }}-${{ env.HERMES_REV }}
