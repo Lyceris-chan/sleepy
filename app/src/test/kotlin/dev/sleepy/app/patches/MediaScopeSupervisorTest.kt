@@ -242,7 +242,7 @@ class MediaScopeSupervisorTest {
  * with. A class that does not resolve is an empty string, which fails the assertions above rather
  * than throwing here.
  */
-private class MediaSmali(dexBytes: ByteArray, vararg descriptors: String) {
+internal class MediaSmali(dexBytes: ByteArray, vararg descriptors: String) {
 
     private companion object {
         /** The API level the pipeline disassembles its DEX files at. */

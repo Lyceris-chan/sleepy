@@ -142,7 +142,7 @@ class DiscordPayloadIntegrationTest {
             "every native patch must target a class present in this build, missing: $notApplicable",
             notApplicable.isEmpty()
         )
-        assertEquals("the native set is 110 edits", 110, patchesToApply.size)
+        assertEquals("the native set is 112 edits", 112, patchesToApply.size)
         println(
             "Resolved ${patchesToApply.size} Discord native patches across " +
                 "${patchesToApply.groupBy { it.dexName }.size} DEX files"

@@ -1327,10 +1327,11 @@ object DiscordNativePatches {
         label = "Fix the media engine and voice calls",
         description = "Stops the video renderer from blocking the UI thread while it creates a " +
             "graphics context, surfaces media callback failures in logcat instead of dropping " +
-            "them, builds the media engine's coroutine scope on a supervisor job and the app's " +
+            "them, builds both media coroutine scopes on a supervisor job and the app's " +
             "coroutine exception handler so one failure can neither disable every later media " +
-            "call nor reach the process kill, and registers a repeated connection id rather " +
-            "than throwing on it.",
+            "call nor reach the process kill, registers a repeated connection id rather " +
+            "than throwing on it, and disposes every connection on reset instead of letting " +
+            "the map's iterator throw partway through teardown.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Stopping video tiles from freezing the interface",
@@ -1472,6 +1473,46 @@ object DiscordNativePatches {
 """
             ),
             SmaliPatch(
+                title = "Keeping the broadcast thumbnail scope alive after one failure",
+                explanation = "Builds the media engine's own coroutine scope on a supervisor " +
+                    "job and the app's exception handler. That scope has a single launch site, " +
+                    "the screen-share thumbnail encoder, and it was built on a plain Job with " +
+                    "no handler - the same shape that let a failed camera end the process.",
+                smaliPath = "com/discord/media/engine/MediaEngine.smali",
+                anchor = """    invoke-static {p2, p1}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
+
+    move-result-object p1
+""",
+                replacement = """    invoke-static {p2, p1}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
+
+    move-result-object p1
+
+    # Patch: this constructor merges only the dispatcher and a CoroutineName,
+    # so CoroutineScope() installs a plain Job and there is no exception
+    # handler in the context. The scope's one launch site encodes a
+    # screen-share thumbnail: Bitmap.compress and the React callback can both
+    # throw, and an uncaught throw there reaches the thread's uncaught-
+    # exception handler and kills the process. A supervisor keeps the scope
+    # usable; the handler contains the throw. p2 is the dispatcher parameter,
+    # whose last use is the merge above, so it is free as scratch.
+    new-instance p2, Lsr/m1;
+
+    invoke-direct {p2}, Lsr/y0;-><init>()V
+
+    invoke-static {p2, p1}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
+
+    move-result-object p1
+
+    new-instance p2, Ltr/b;
+
+    invoke-direct {p2}, Ltr/b;-><init>()V
+
+    invoke-static {p2, p1}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
+
+    move-result-object p1
+"""
+            ),
+            SmaliPatch(
                 title = "Logging uncaught coroutine exceptions",
                 explanation = "Writes an uncaught coroutine exception to logcat under the " +
                     "MediaEngineCB tag before the app's handler runs, so a camera failure that " +
@@ -1483,10 +1524,11 @@ object DiscordNativePatches {
                 replacement = """.method public final N(Ljava/lang/Throwable;Lkotlin/coroutines/CoroutineContext;)V
     .registers 8
 
-    # Patch: this handler is now in MediaEngineModule's scope, where it turns
+    # Patch: this handler is now in both media engine scopes, where it turns
     # an uncaught coroutine exception (a camera that could not start, a
-    # duplicate connection, a camera another app holds) into a handled
-    # failure instead of a process kill. Log it first so it stays visible.
+    # duplicate connection, a camera another app holds, a thumbnail that
+    # cannot be encoded) into a handled failure instead of a process kill.
+    # Log it first so it stays visible.
     sget-object v0, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
 
     const-string v1, "MediaEngineCB"
@@ -1557,6 +1599,75 @@ object DiscordNativePatches {
 
     :registered
     return-void
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Disposing every media connection on reset",
+                explanation = "Takes the connection keys before removing them. The stock loop " +
+                    "removes from the map it is iterating, so two live connections make it " +
+                    "throw ConcurrentModificationException and abandon the rest of reset() - " +
+                    "leaving the remaining connections and the native engine undisposed.",
+                smaliPath = "com/discord/media/engine/MediaEngineNativeConnections.smali",
+                methodSignature = ".method public final removeAndDisposeAll()V",
+                replacementBody = """.method public final removeAndDisposeAll()V
+    .registers 5
+
+    # Patch: the stock body iterates connections.keySet() and calls
+    # removeAndDispose(id), which removes from that same map. With two live
+    # connections the iterator's next() sees the changed modCount and throws
+    # ConcurrentModificationException. reset() then abandons teardown before
+    # nativeEngine.dispose(), so the remaining connections and the native
+    # engine leak. Snapshot the keys, then remove each one.
+    iget-object v0, p0, Lcom/discord/media/engine/MediaEngineNativeConnections;->connections:Ljava/util/Map;
+
+    invoke-interface {v0}, Ljava/util/Map;->keySet()Ljava/util/Set;
+
+    move-result-object v0
+
+    invoke-interface {v0}, Ljava/util/Collection;->toArray()[Ljava/lang/Object;
+
+    move-result-object v0
+
+    array-length v1, v0
+
+    const/4 v2, 0x0
+
+    :goto_patch
+    if-ge v2, v1, :cond_patch
+
+    aget-object v3, v0, v2
+
+    check-cast v3, Ljava/lang/Number;
+
+    invoke-virtual {v3}, Ljava/lang/Number;->intValue()I
+
+    move-result v3
+
+    invoke-virtual {p0, v3}, Lcom/discord/media/engine/MediaEngineNativeConnections;->removeAndDispose(I)V
+
+    add-int/lit8 v2, v2, 0x1
+
+    goto :goto_patch
+
+    :cond_patch
+    iget-object v0, p0, Lcom/discord/media/engine/MediaEngineNativeConnections;->connections:Ljava/util/Map;
+
+    invoke-interface {v0}, Ljava/util/Map;->isEmpty()Z
+
+    move-result v0
+
+    if-eqz v0, :cond_throw
+
+    return-void
+
+    :cond_throw
+    new-instance v0, Ljava/lang/IllegalStateException;
+
+    const-string v1, "Check failed."
+
+    invoke-direct {v0, v1}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
+    throw v0
 .end method"""
             )
         )

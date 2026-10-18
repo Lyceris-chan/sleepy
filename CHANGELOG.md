@@ -5,6 +5,38 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.3] - 2026-10-18
+
+### Fixed
+
+- **A failed screen-share thumbnail can no longer end the app.** `MediaEngine` builds a second
+  coroutine scope, separate from `MediaEngineModule`'s, and its context held only a dispatcher and
+  a `CoroutineName`. `CoroutineScope(context)` therefore installed a plain `Job` and there was no
+  exception handler. The scope has one launch site, the screen-share thumbnail encoder: a
+  `Bitmap.compress` failure or a throw from the React callback would reach the thread's
+  uncaught-exception handler and kill the process, exactly as a failed camera did on the module
+  scope. Both media scopes now carry a supervisor job and the app's own coroutine exception
+  handler.
+
+- **Tearing the media engine down no longer trips over its own connection map.**
+  `MediaEngineNativeConnections.removeAndDisposeAll()` iterated `connections.keySet()` and
+  removed each entry from that same map inside the loop. With two live connections — voice plus
+  a stream, for example — the iterator's next step throws `ConcurrentModificationException`.
+  `MediaEngine.reset()` calls this before `nativeEngine.dispose()`, so the throw abandoned the
+  rest of teardown and leaked both the remaining connections and the native engine. The keys
+  are now copied before they are removed, so every connection is disposed and reset completes.
+
+  The native patch set grows from 110 edits to 112.
+
+- **The process-usage poll no longer wakes the app every second.** `ProcessUtils` starts a
+  one-second `setInterval` when its module is imported and never clears it, and every tick made
+  three React Native calls. The resource sampler behind two of those values is already stopped
+  by the native patch set, and the poll callback is already stubbed by **Performance metrics**,
+  so the timer was waking the JavaScript thread once a second for a callback that returned
+  immediately. Its interval is now one hour (3,600,000 ms). The edit changes only the
+  instruction's 32-bit immediate, so no instruction moves and no jump label needs remapping.
+  The Hermes patch set grows from 518 functions to 519.
+
 ## [3.9.2] - 2026-10-18
 
 ### Fixed

@@ -80,6 +80,10 @@ object DiscordHermesFunctionCatalog {
 
     /** Every patched function, in the order the patch table applies them. */
     val ENTRIES: List<Entry> = listOf(
+        entry(1379, "Slows the process-usage poll from once a second to once an hour. " +
+            "The same feature stubs the poll callback, so the timer only wakes the " +
+            "JavaScript thread; at one second it did that 86,400 times a day for values " +
+            "the app no longer collects."),
         entry(8346, "Clamps the entry count of the message-markup cache. It was built with no " +
             "limit and with its expiry clock refreshed on every read, so it grew for as long as " +
             "the app ran, on the path that draws every message."),
@@ -1196,10 +1200,11 @@ object DiscordHermesFunctionCatalog {
             slug = "performance_metrics",
             group = PERFORMANCE_GROUP,
             label = "Performance metrics",
-            description = "Stops the app sampling its own performance and uploading the result, " +
-                "including the once-a-second process sampler.",
+            description = "Stops the app sampling its own performance and uploading the result. " +
+                "The once-a-second process sampler is stubbed and its timer slowed to once " +
+                "an hour, so it no longer wakes the JavaScript thread every second.",
             functionIds = listOf(
-                20923, 20925, 36002, 36003, 36004, 86445, 112777, 112888, 112891, 112892, 112913,
+                1379, 20923, 20925, 36002, 36003, 36004, 86445, 112777, 112888, 112891, 112892, 112913,
                 112914
             )
         ),

@@ -85,9 +85,13 @@ class MediaConnectionRegisterTest {
         val dex = dexEntries.getValue(dexName!!)
 
         val patches: List<SmaliPatch> = DiscordNativePatches.MEDIA.smaliPatches
-            .filter { it.smaliPath == PATH && it.methodSignature != null }
-        assertEquals("this class carries one method replacement", 1, patches.size)
+            .filter {
+                it.smaliPath == PATH &&
+                    it.title == "Registering a media connection instead of refusing to"
+            }
+        assertEquals("this class carries one register replacement", 1, patches.size)
         val patch = patches.single()
+        assertEquals("the patch must replace the register method", SIGNATURE, patch.methodSignature)
 
         val stock = MediaConnectionsSmali(dex, DESCRIPTOR).text(PATH)
         assertTrue("the fixture must contain the class under test", stock.isNotEmpty())

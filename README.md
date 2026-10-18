@@ -56,7 +56,7 @@ The patch screen is organised by what you want, not by how the app is built. Eve
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-One switch often stands for several changes: the 518 JavaScript changes are grouped into the 49 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
+One switch often stands for several changes: the 519 JavaScript changes are grouped into the 49 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
 
 ## Install and use sleepy
 
@@ -98,7 +98,7 @@ Where the source provides a SHA-256 hash, sleepy checks the download against it 
 
 ## How the changes are checked
 
-The Discord JavaScript changes are a fixed table of 518 byte ranges, each written for one function of one exact bundle and each declaring the size of the body it replaces. A table written for one release and used on another would write plausible-looking bytes into unrelated functions, so the patcher refuses an entry whose declared size does not match and reports that step as skipped instead. On the build the table names, nothing may be skipped: `HermesBundleApplicationTest` runs the whole table and requires every entry to land, and a real Hermes disassembler then reads all 518 patched functions back, which is what catches a replacement that occupies the right number of bytes but is not valid bytecode.
+The Discord JavaScript changes are a fixed table of 519 byte ranges, each written for one function of one exact bundle and each declaring the size of the body it replaces. A table written for one release and used on another would write plausible-looking bytes into unrelated functions, so the patcher refuses an entry whose declared size does not match and reports that step as skipped instead. On the build the table names, nothing may be skipped: `HermesBundleApplicationTest` runs the whole table and requires every entry to land, and a real Hermes disassembler then reads all 519 patched functions back, which is what catches a replacement that occupies the right number of bytes but is not valid bytecode.
 
 The 349.5 table was checked further: it was derived from a pair of builds, one of them patched and verified by hand, so sleepy's output could be compared against that build one byte at a time, and the handful of functions that differed were named. There is no such recorded build for 351.2.5, so that comparison is gone, and this release does not claim it.
 
