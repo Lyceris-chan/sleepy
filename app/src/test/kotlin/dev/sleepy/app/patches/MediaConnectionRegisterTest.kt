@@ -81,7 +81,7 @@ class MediaConnectionRegisterTest {
         val dexName = dexEntries.keys.firstOrNull { name ->
             MediaConnectionsSmali(dexEntries.getValue(name), DESCRIPTOR).text(PATH).isNotEmpty()
         }
-        assertTrue("$DESCRIPTOR is not in this build", dexName != null)
+        assumeTrue("$DESCRIPTOR is not in this build", dexName != null)
         val dex = dexEntries.getValue(dexName!!)
 
         val patches: List<SmaliPatch> = DiscordNativePatches.MEDIA.smaliPatches

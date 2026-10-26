@@ -13,10 +13,10 @@ import org.junit.Test
 /**
  * The typing hook's stub returns a value of the shape its caller reads.
  *
- * 62137 is the uncompiled variant of `useTypingUserIdsForDisplay`, in
+ * 63686 is the uncompiled variant of `useTypingUserIdsForDisplay`, in
  * `modules/chat/native/TypingIndicator.tsx`, and the React Compiler experiment defaults off, so
  * it is the variant the app runs. What the recorded change set did with the id it held in an
- * earlier release was to stub it to `undefined`, and the caller dereferences the return: 62113
+ * earlier release was to stub it to `undefined`, and the caller dereferences the return: 63662
  * passes it to `hasTypingIndicatorContent`, which reads `.length`, and that read throws a
  * TypeError on `undefined`. The stub here builds an empty array instead - the hook's own shape
  * with no typing users - so the read finds 0.
@@ -127,7 +127,7 @@ class DiscordHermesStubValueTest {
          * The uncompiled variant of `useTypingUserIdsForDisplay`, in
          * `modules/chat/native/TypingIndicator.tsx`.
          */
-        const val TYPING_HOOK = 62137
+        const val TYPING_HOOK = 63686
 
         /**
          * Its caller, the chat input, which reads `.length` off the return.
@@ -137,6 +137,6 @@ class DiscordHermesStubValueTest {
          * through, but it names 120 strings no other function in the bundle names, which is a
          * stronger match than a closure ordinal.
          */
-        const val TYPING_HOOK_CALLER = 62113
+        const val TYPING_HOOK_CALLER = 63662
     }
 }

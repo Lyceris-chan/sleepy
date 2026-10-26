@@ -5,6 +5,43 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.0] - 2026-10-26
+
+### Added
+
+- **Discord 353.2.0 support.** sleepy now patches Discord 353.2.0 (version code 353200,
+  published as `353.0 - Alpha`). The JavaScript table is 519 entries in 49 features: 484
+  constant-shaped stubs carry unchanged, 17 promise-shaped stubs were re-assembled against the
+  new bundle's string table, and 18 body edits were re-derived against the new bodies. Every
+  entry declares the size of the body it replaces, and a real Hermes disassembler must read all
+  519 patched functions back before the release is published.
+- **Target-based re-pointing.** The port identifies functions by the name the bundle gives
+  them, their parameter count and the strings they reference—the identity model Reseam's patch
+  bundle uses—instead of carrying numeric ids across releases. Discord ships many components as
+  a React Compiler pair, so the pairs are matched together and both copies are stubbed when a
+  feature hides a component.
+
+### Changed
+
+- **The Discord source moves to tracker build 353200.** Its base APK and four splits have new
+  SHA-256 values and sizes, and the source is published as `353.0 - Alpha` (version code
+  353200).
+- **Native edits are re-pointed to the classes 353.2.0 still has.** Discord obfuscated or
+  merged many of the classes the native edits were written against. Every native edit is
+  checked against the new DEX; 47 targets resolve exactly, and an edit whose class, method
+  signature or anchor is not present is reported as skipped with the reason in the step log
+  instead of being written on a guess. The JavaScript, manifest, resource and blocklist passes
+  are unchanged by this.
+- **The video-quality edits and the process-usage poll edit were re-derived against the new
+  bodies.** The camera's capture chains and encoder budget keep their original byte length, so
+  no jump label moves, and the poll's interval immediate is rewritten in place.
+
+### Fixed
+
+- **The promise stubs no longer carry string identifiers from the old bundle.** They read
+  `"Promise"` and `"resolve"` through the bundle's own string table, which is renumbered on
+  every release; all 17 were assembled against 353.2.0 and read back.
+
 ## [3.9.3] - 2026-10-18
 
 ### Fixed
@@ -662,7 +699,8 @@ No part of the app changed in this release. It carries three build changes, and 
 - JavaScript changes are checked against the app's code before they are written.
 - OctoGram changes that matched more than one place in the code are resolved, and each change applies only to the version it was made for.
 
-[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...HEAD
+[Unreleased]: https://github.com/Lyceris-chan/sleepy/compare/v3.10.0...HEAD
+[3.10.0]: https://github.com/Lyceris-chan/sleepy/compare/v3.9.3...v3.10.0
 [3.7.4]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.3...v3.7.4
 [3.7.3]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.2...v3.7.3
 [3.7.2]: https://github.com/Lyceris-chan/sleepy/compare/v3.7.1...v3.7.2

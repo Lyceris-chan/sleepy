@@ -14,7 +14,7 @@ import org.junit.Test
 /**
  * The archive rebuilt from the real Discord base and its splits verifies as an APK.
  *
- * The merge and repack are the last steps before signing, and they run over the shipped 351.2.5
+ * The merge and repack are the last steps before signing, and they run over the shipped 353.2.0
  * build: the result has to carry the density split's resources, align every stored entry the way
  * the platform's loader requires, and pass an independent alignment check.
  */

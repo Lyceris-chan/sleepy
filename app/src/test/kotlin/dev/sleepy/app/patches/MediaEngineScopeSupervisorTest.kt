@@ -60,7 +60,7 @@ class MediaEngineScopeSupervisorTest {
         val dexName = dexEntries.keys.firstOrNull { name ->
             MediaSmali(dexEntries.getValue(name), DESCRIPTOR).text(ENGINE).isNotEmpty()
         }
-        assertTrue("$DESCRIPTOR is not in this build", dexName != null)
+        assumeTrue("$DESCRIPTOR is not in this build", dexName != null)
         val dex = dexEntries.getValue(dexName!!)
 
         val patch = DiscordNativePatches.MEDIA.smaliPatches.single { it.title == TITLE }

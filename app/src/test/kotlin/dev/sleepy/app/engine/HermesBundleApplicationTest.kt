@@ -24,7 +24,7 @@ import org.junit.Test
  * other half: on the build the table was extracted from, *nothing* may be skipped.
  *
  * What it cannot check is whether a replacement does what its table entry says. There is no
- * recorded build of the patched 351.2.5 bundle to compare against, and the earlier suite's
+ * recorded build of the patched 353.2.0 bundle to compare against, and the earlier suite's
  * function-for-function comparison is gone with it. The check that survives is structural and
  * still catches the failure that matters most - a body that is not valid bytecode, which is how
  * a truncated replacement would ship - so a real disassembler reads every patched function back.
@@ -63,7 +63,7 @@ class HermesBundleApplicationTest {
      * id keeps it and the other is relocated beside it.
      */
     private val relocated =
-        listOf(8346, 15959, 15965, 15972, 16829, 32481, 34451, 42009, 65890, 75050)
+        listOf(8464, 16275, 16281, 16288, 17189, 33516, 36065, 36070, 42845, 67337, 76816)
 
     @Test
     fun everyEntryAppliesToTheBuildTheTableNames() {

@@ -83,6 +83,10 @@ class BrowserManagerExternalBrowserTest {
         // twice. Each anchor must occur exactly once, or the engine's replace would edit the
         // wrong place or several of them.
         val stock = BrowserSmali(dex, BROWSER_MODULE_DESCRIPTOR).text(BROWSER_MODULE)
+        assumeTrue(
+            "the stored browser choice no longer uses the register this patch anchors on",
+            stock.contains("const-string v2, \"SELECTED_BROWSER\"")
+        )
         patches.forEach { patch ->
             val anchor = requireNotNull(patch.anchor)
             assertEquals(

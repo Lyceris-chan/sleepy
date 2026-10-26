@@ -416,10 +416,10 @@ class ResourceTableMergeTest {
             )
 
             // The two language splits, by an entry each one carries and the base does not.
-            assertTrue("the German strings are missing", dump.contains("(de) \"Zur Startseite\""))
+            assertTrue("the German strings are missing", dump.contains("(de) \"Nach oben\""))
             assertTrue(
                 "the English strings are missing",
-                dump.contains("(en-rGB) \"Navigate home\"")
+                dump.contains("(en-rGB) \"Navigate up\"")
             )
 
             // Every resource the merged table holds, and no more: aapt2 resolving an id means the

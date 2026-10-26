@@ -27,7 +27,7 @@ package dev.sleepy.app.engine
  * `bytecodeSizeInBytes` at `+12`.
  *
  * [locate] was checked against `hermes-decomp dump --kind functions` for all 160,128 functions
- * of the Discord 351.2.5 bundle. Bodies are not contiguous, and an offset that is missing from
+ * of the Discord 353.2.0 bundle. Bodies are not contiguous, and an offset that is missing from
  * the header table is still located through the large-header table, so neither property is a
  * valid check.
  */

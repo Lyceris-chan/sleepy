@@ -27,13 +27,13 @@ object ComparisonApks {
     private fun external(relative: String, default: String): File =
         if (fixturesRoot != null) File(fixturesRoot, relative) else File(default)
 
-    /** The directory the Discord 351.2.5 base split and its splits were extracted into. */
+    /** The directory the Discord 353.2.0 base split and its splits were extracted into. */
     val discordExtracted: File = external(
         "discord/extracted",
-        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha351205/apk/extracted"
+        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha353200/apk/extracted"
     )
 
-    /** The Discord 351.2.5 base split. */
+    /** The Discord 353.2.0 base split. */
     val discordBaseApk: File = File(discordExtracted, "base.apk")
 
     /**

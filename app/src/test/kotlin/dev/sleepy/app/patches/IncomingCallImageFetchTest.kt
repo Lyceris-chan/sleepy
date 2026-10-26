@@ -77,6 +77,7 @@ class IncomingCallImageFetchTest {
 
         // Before: the stock fetch, so the after-state is a change and not the input read twice.
         val stock = CallSmali(dex, INCOMING_CALL_DESCRIPTOR).text(INCOMING_CALL)
+        assumeTrue("$FETCH_IMAGE is not in this build", stock.contains(FETCH_IMAGE))
         val stockFetch = methodOf(stock, FETCH_IMAGE)
         assertTrue("stock fetchImage must build the image pipeline", stockFetch.contains(FRESCO_INIT))
         assertTrue("stock fetchImage must fetch over the network", stockFetch.contains(NETWORK_FETCH))

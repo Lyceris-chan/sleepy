@@ -79,7 +79,7 @@ The same applies to updates: the patched app does not receive official updates f
 
 If you would rather keep both, turn on **Clone app** before patching. Clone app gives the patched APK a package name of its own, so the official app and the patched one can live side by side. The cloned app keeps the code that shipped inside the APK, because sleepy stops it downloading a newer copy of its own code.
 
-Patching Discord is memory-heavy: the base APK, its 74 MB of ARM64 libraries and the rebuilt APK come to more than a phone holds at once. sleepy moves them through storage a piece at a time rather than keeping them in memory, so the peak memory is a single buffer, not the whole archive—but it takes a long time, so close other apps before you start.
+Patching Discord is memory-heavy: the base APK, its 80 MB of ARM64 libraries and the rebuilt APK come to more than a phone holds at once. sleepy moves them through storage a piece at a time rather than keeping them in memory, so the peak memory is a single buffer, not the whole archive—but it takes a long time, so close other apps before you start.
 
 ## Supported builds
 
@@ -87,7 +87,7 @@ sleepy patches one exact build of each app. The following table lists the builds
 
 | App | Version | Version code | Downloaded from |
 | :--- | :--- | :--- | :--- |
-| Discord | 351.5 Alpha | 351205 | [Vendetta tracker](https://tracker.vendetta.rocks/tracker/download/351205/base), plus its ARM64, density and language splits |
+| Discord | 353.0 Alpha | 353200 | [Vendetta tracker](https://tracker.vendetta.rocks/tracker/download/353200/base), plus its ARM64, density and language splits |
 | OctoGram | 3.6.1 Beta 2 | 38275 | [OctoGram releases on GitHub](https://github.com/OctoGramApp/OctoGram/releases/download/v3.6.0_3827/OctoGram_arm64.apk) |
 
 The Discord source is a base APK plus four separate files: the ARM64 native libraries, the images for one screen density, and the German and English strings. sleepy downloads all five and merges them into one APK, so the patched build runs on ARM64 phones and carries the images and the strings the splits hold. The resource table is rebuilt around them at patch time: every split ships a partial table with entries for only its own files, and the base's table has no entries for the others. The merged files then resolve instead of remaining in the archive unreferenced.
@@ -100,13 +100,15 @@ Where the source provides a SHA-256 hash, sleepy checks the download against it 
 
 The Discord JavaScript changes are a fixed table of 519 byte ranges, each written for one function of one exact bundle and each declaring the size of the body it replaces. A table written for one release and used on another would write plausible-looking bytes into unrelated functions, so the patcher refuses an entry whose declared size does not match and reports that step as skipped instead. On the build the table names, nothing may be skipped: `HermesBundleApplicationTest` runs the whole table and requires every entry to land, and a real Hermes disassembler then reads all 519 patched functions back, which is what catches a replacement that occupies the right number of bytes but is not valid bytecode.
 
-The 349.5 table was checked further: it was derived from a pair of builds, one of them patched and verified by hand, so sleepy's output could be compared against that build one byte at a time, and the handful of functions that differed were named. There is no such recorded build for 351.2.5, so that comparison is gone, and this release does not claim it.
+The 353.2.0 port re-pointed the table by function name, arity and the strings each function references—the same identity model Reseam's patch bundle uses—and then re-derived the 17 promise stubs and 18 body edits against the new bundle. The size declaration and the disassembler readback remain the checks that decide whether an entry is written.
+
+The 349.5 table was checked further: it was derived from a pair of builds, one of them patched and verified by hand, so sleepy's output could be compared against that build one byte at a time, and the handful of functions that differed were named. There is no such recorded build for 353.2.0, so that comparison is gone, and this release does not claim it.
 
 Some entries deliberately do more than stub a function out, and the tests name them. Four rewrite the React Compiler copies of the profile and You-screen content components—Discord ships each of those screens twice and picks between them with an experiment—so the tabs stay removed whichever copy the experiment picks. Two answer no from both branches of the Shop This Look experiment gate, which takes the menu row, the coachmark and the sheet together. And the typing indicator's stub returns an empty array instead of `undefined`, because its only caller reads `.length` off the return and that read throws on `undefined`.
 
 Three things here are sleepy's own. The network blocklist is worked out from the APK you selected instead of being written down as fixed names the next release can invalidate. The permissions an app asks for are listed with a switch each, so what it can ask for is your decision rather than a fixed set. And a media connection registered twice is added rather than refused, so turning a camera on cannot fail with an exception the app's JavaScript is never told about.
 
-The native manifest, resource and smali changes are checked against the same build, each edit applied to the real DEX and read back, and the tests that do it are listed under [Build sleepy from source](#build-sleepy-from-source).
+The manifest and resource changes are checked against the same build, each edit applied to the real APK and read back. Native smali edits are checked the same way where the class and method still exist; 353.2.0 moved or merged many of them, so a native edit that cannot find its target is reported as skipped rather than written on a guess. The tests that do it are listed under [Build sleepy from source](#build-sleepy-from-source).
 
 What is not covered yet is under [Known limitations](#known-limitations), per app.
 
@@ -116,7 +118,8 @@ The builds this version supports have the limitations listed in the following se
 
 **Discord**
 
-- JavaScript changes are written for one exact Discord release, 351.2.5. A different release's code is not patched, because the identifiers these changes use are numbered per release and point at unrelated code in another build.
+- JavaScript changes are written for one exact Discord release, 353.2.0. A different release's code is not patched, because the identifiers these changes use are numbered per release and point at unrelated code in another build.
+- Discord 353.2.0 obfuscated or merged many of the native classes the native edits were written against. A native edit whose class, method signature or anchor is not found in this build is reported as skipped with that reason; it is never written on a guess. The JavaScript, manifest, resource and blocklist passes are unaffected, and the step log names every skipped native edit.
 - The blocklist is built from the APK you selected rather than shipped as fixed text, because five of the names it needs are renamed by the app's own obfuscation on every release: the okhttp3 Response constructor, the Protocol enum and that enum's HTTP/1.1 field, and the two Interceptor chain accessors the generated interceptor calls. A build where these cannot be found is skipped, with the reason shown, instead of being patched with names from another release.
 - Every manifest edit the patch set makes is applied. The split declarations, the native library setting, any permission you switch off, the six declarations sleepy removes on its own, the crash reporter's two providers, the three Play split metadata entries, the AppsFlyer link query and the three Google Analytics components are all edited into the compiled manifest. The RPC service is closed to other apps on every build, because it is exported with no permission on it and no check on its caller. The Analytics components are marked `android:enabled="false"` rather than deleted, which leaves their classes in the app's code where the platform will not start a component declared that way.
 - New entries cannot be added to the app's resource table, only carried across from a split. Some video player image aliases would have to be added rather than carried, so they are not. Discord's own APK ships without them and runs, so this matches what Discord itself ships.

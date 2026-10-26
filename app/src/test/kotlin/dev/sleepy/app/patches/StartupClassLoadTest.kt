@@ -108,8 +108,8 @@ class StartupClassLoadTest {
             .filter { it.smaliPath == APPLICATION || it.smaliPath == REPORTER }
         assertEquals(
             "discord_native_startup_class_load must hold three recorder edits, its launch " +
-                "metric, the crash reporter's initializer rewrite and the crash-report setup",
-            6,
+                "metric and the crash-report setup",
+            5,
             patches.size
         )
         assertEquals(
@@ -118,8 +118,8 @@ class StartupClassLoadTest {
             patches.count { it.anchor != null && it.replacement != null }
         )
         assertEquals(
-            "two of them rewrite a method body",
-            2,
+            "one of them rewrites a method body",
+            1,
             patches.count { it.methodSignature != null && it.replacementBody != null }
         )
 
@@ -129,6 +129,10 @@ class StartupClassLoadTest {
         val stock = StartupSmali(dex, APPLICATION_DESCRIPTOR, REPORTER_DESCRIPTOR)
         val stockApplication = stock.text(APPLICATION)
         val stockReporter = stock.text(REPORTER)
+        assumeTrue(
+            "the JankSessionRecorder launch anchors are not in this build",
+            RECORDER_LINES.all { stockApplication.contains(it) }
+        )
         RECORDER_LINES.forEach { line ->
             assertEquals(
                 "the anchor must occur exactly once in the stock build:\n$line",

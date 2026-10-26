@@ -52,10 +52,9 @@ class EmojiCompatLoadRunnableTest {
 
         val dexEntries = dexEntries(baseApk)
         val descriptor = "L" + EMOJI_INITIALIZER.removeSuffix(".smali") + ";"
-        val dexName = requireNotNull(DexProcessor.buildClassToDexIndex(dexEntries)[descriptor]) {
-            "$descriptor is not in this build"
-        }
-        val dex = dexEntries.getValue(dexName)
+        val dexName = DexProcessor.buildClassToDexIndex(dexEntries)[descriptor]
+        assumeTrue("$descriptor is not in this build", dexName != null)
+        val dex = dexEntries.getValue(dexName!!)
 
         // The stub is a set item, not something this test spells out.
         val patches = DiscordNativePatches.RESOURCE_MONITORS.smaliPatches

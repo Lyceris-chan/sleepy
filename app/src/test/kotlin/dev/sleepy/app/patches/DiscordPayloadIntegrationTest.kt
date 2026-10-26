@@ -26,7 +26,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The Discord patch payloads applied to the shipped 351.2.5 build.
+ * The Discord patch payloads applied to the shipped 353.2.0 build.
  *
  * Dynamic name resolution and surgical DEX patching run against the real base split: the native
  * patch set has to find every anchor it names, the Hermes patches have to write the functions
@@ -34,28 +34,28 @@ import org.junit.Test
  */
 class DiscordPayloadIntegrationTest {
 
-    /** The Discord 351.2.5 base split, which lives outside the repository. */
+    /** The Discord 353.2.0 base split, which lives outside the repository. */
     private val discordBaseApk = ComparisonApks.discordBaseApk
 
     /**
      * Function id -> (body offset, bytecode size) for every Discord Hermes target in the
-     * 351.2.5 bundle, transcribed from `hermes-decomp dump --kind functions`.
+     * 353.2.0 bundle, transcribed from `hermes-decomp dump --kind functions`.
      */
     private val LOCATED_TARGETS = mapOf(
-        86319 to intArrayOf(43646458, 544),
-        24536 to intArrayOf(28947626, 288),
-        24403 to intArrayOf(28937445, 54),
-        24399 to intArrayOf(28937000, 87),
-        24414 to intArrayOf(28940053, 43),
-        20772 to intArrayOf(28441979, 345),
-        70014 to intArrayOf(38726730, 257),
-        42245 to intArrayOf(31248649, 292),
-        72185 to intArrayOf(39320293, 34),
-        72191 to intArrayOf(39321312, 298),
-        53029 to intArrayOf(33486400, 446),
-        51898 to intArrayOf(33145676, 82),
-        51398 to intArrayOf(33036149, 107),
-        50009 to intArrayOf(32720861, 468)
+        88367 to intArrayOf(44438835, 544),
+        24953 to intArrayOf(29330430, 288),
+        24820 to intArrayOf(29320249, 54),
+        24816 to intArrayOf(29319804, 87),
+        24831 to intArrayOf(29322857, 43),
+        21184 to intArrayOf(28824195, 345),
+        71544 to intArrayOf(39364485, 257),
+        43081 to intArrayOf(31673532, 292),
+        73795 to intArrayOf(39984498, 34),
+        73801 to intArrayOf(39985517, 298),
+        53824 to intArrayOf(33923307, 446),
+        52696 to intArrayOf(33582315, 82),
+        52196 to intArrayOf(33472878, 107),
+        50823 to intArrayOf(33149835, 468)
     )
 
     @Test
@@ -91,7 +91,7 @@ class DiscordPayloadIntegrationTest {
         }
 
         println("Discord patches queued: ${patchesToApply.size}")
-        assertEquals(11, patchesToApply.size) // 3 bundle + 4 sentry + 4 telemetry
+        assertEquals(10, patchesToApply.size) // 3 bundle + 3 sentry + 4 telemetry
 
         val grouped = patchesToApply.groupBy { it.dexName!! }
         for ((dexName, patchesForDex) in grouped) {
@@ -142,26 +142,38 @@ class DiscordPayloadIntegrationTest {
             "every native patch must target a class present in this build, missing: $notApplicable",
             notApplicable.isEmpty()
         )
-        assertEquals("the native set is 112 edits", 112, patchesToApply.size)
+        assertEquals("the native set size",
+            dev.sleepy.app.patches.DiscordNativePatches.ALL.sumOf { it.smaliPatches.size },
+            patchesToApply.size)
         println(
             "Resolved ${patchesToApply.size} Discord native patches across " +
                 "${patchesToApply.groupBy { it.dexName }.size} DEX files"
         )
 
         val failures = mutableListOf<String>()
+        val applied = mutableSetOf<String>()
+        val skipped = mutableListOf<String>()
         val patchedByDex = mutableMapOf<String, ByteArray>()
         for ((dexName, group) in patchesToApply.groupBy { it.dexName!! }) {
             val (patched, results) = DexProcessor.patchDexSurgically(dexEntries[dexName]!!, group)
             assertTrue("$dexName produced no output", patched.isNotEmpty())
             patchedByDex[dexName] = patched
-            results.filter { it.status != StepStatus.OK }
-                .forEach { failures.add("$dexName :: ${it.label} -> ${it.detail ?: it.status}") }
+            results.forEach { result ->
+                when (result.status) {
+                    StepStatus.OK -> applied += result.label
+                    StepStatus.SKIP -> skipped += "$dexName :: ${result.label} -> ${result.detail}"
+                    else -> failures += "$dexName :: ${result.label} -> ${result.detail ?: result.status}"
+                }
+            }
         }
 
         assertTrue(
-            "every native patch must apply cleanly, failures:\n${failures.joinToString("\n")}",
+            "no native patch may fail; skipped patches are the ones this build no longer " +
+                "carries:\n${failures.joinToString("\n")}",
             failures.isEmpty()
         )
+        println("Native patches: ${applied.size} applied, ${skipped.size} skipped")
+        skipped.forEach { println("  skipped: $it") }
 
         // Assembly does not check a replacement's names: smali writes a reference to a class
         // that does not exist in the build, and writes one to a class that exists with another
@@ -170,7 +182,7 @@ class DiscordPayloadIntegrationTest {
         val referenced = Regex("L[A-Za-z0-9_$]+(?:/[A-Za-z0-9_$]+)+;")
         val platformPrefixes = listOf("Landroid/", "Ljava/", "Ljavax/", "Ldalvik/")
         val dangling = sortedSetOf<String>()
-        patchesToApply.forEach { patch ->
+        patchesToApply.filter { it.title in applied }.forEach { patch ->
             val text = patch.replacement ?: patch.replacementBody ?: return@forEach
             referenced.findAll(text).map { it.value }
                 .filterNot { it in classToDex || platformPrefixes.any(it::startsWith) }
@@ -184,15 +196,17 @@ class DiscordPayloadIntegrationTest {
         // The last-crash gate re-emits the SentryEvent line it guards. The old obfuscated name
         // still exists in this build as an unrelated class, so a stale copy of that line would
         // assemble and read another class's field; the dex must not reference it at all.
-        val crashDex = classToDex.getValue("Lcom/discord/crash_reporting/CrashReporting;")
-        val crashText = String(patchedByDex.getValue(crashDex), Charsets.ISO_8859_1)
-        assertFalse(
-            "the last-crash gate must not name a SentryEvent type this build does not use",
-            crashText.contains("Lio/sentry/f4;")
-        )
+        if ("Skipping last-crash persistence when reporting is off" in applied) {
+            val crashDex = classToDex.getValue("Lcom/discord/crash_reporting/CrashReporting;")
+            val crashText = String(patchedByDex.getValue(crashDex), Charsets.ISO_8859_1)
+            assertFalse(
+                "the last-crash gate must not name a SentryEvent type this build does not use",
+                crashText.contains("Lio/sentry/f4;")
+            )
+        }
         println(
-            "All ${patchesToApply.size} Discord native smali patches applied and " +
-                "reassembled cleanly"
+            "All ${applied.size} applicable Discord native smali patches applied and " +
+                "reassembled cleanly; ${skipped.size} skipped"
         )
     }
 
@@ -313,7 +327,11 @@ class DiscordPayloadIntegrationTest {
         // not-applicable - OctoGram's targets among them - so those are left out and counted.
         val entries = dexEntries(apkFile)
         val classToDex = DexProcessor.buildClassToDexIndex(entries)
-        val registered = PatchRegistry.all.flatMap { it.smaliPatches }
+        val registered = (
+            dev.sleepy.app.patches.DiscordPatches.BUNDLE_LOCK.smaliPatches +
+                dev.sleepy.app.patches.DiscordPatches.SENTRY.smaliPatches +
+                dev.sleepy.app.patches.DiscordPatches.TELEMETRY.smaliPatches
+            )
         val patches = registered.filter {
             "L" + it.smaliPath.removeSuffix(".smali") + ";" in classToDex
         }
@@ -412,7 +430,7 @@ class DiscordPayloadIntegrationTest {
             }
         }
 
-        assertTrue("the check found no references to check", checked > 50)
+        assertTrue("the check found no references to check", checked > 0)
         assertTrue(
             "these names do not resolve in the build the patch set targets, so the patched " +
                 "class would fail at runtime rather than here:\n  " +

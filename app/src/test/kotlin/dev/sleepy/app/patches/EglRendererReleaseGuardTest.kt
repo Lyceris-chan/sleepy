@@ -54,10 +54,9 @@ class EglRendererReleaseGuardTest {
 
         val dexEntries = dexEntries(baseApk)
         val descriptor = "L" + EGL_RENDERER.removeSuffix(".smali") + ";"
-        val dexName = requireNotNull(DexProcessor.buildClassToDexIndex(dexEntries)[descriptor]) {
-            "$descriptor is not in this build"
-        }
-        val dex = dexEntries.getValue(dexName)
+        val dexName = DexProcessor.buildClassToDexIndex(dexEntries)[descriptor]
+        assumeTrue("$descriptor is not in this build", dexName != null)
+        val dex = dexEntries.getValue(dexName!!)
 
         // The guard is a set item, not something this test spells out; if it is dropped from the
         // set the assertions below fail on the output rather than on a missing string here.

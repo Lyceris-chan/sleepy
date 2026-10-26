@@ -10,9 +10,10 @@
       "Every way the premium screen can open is blocked, across three switches switched on by default: the navigation router and the main window's override, the eight sheet presentations, and the rows that lead there. Two premium surfaces still render because they show real account state rather than an advert: the premium feature cells and the usage-limit screen. A premium subscriber loses the screen where they manage their subscription.",
       "Signed with sleepy's own key, so it installs as a different app identity and will not receive official updates."
     ],
-    "discord_351205": [
-      "The JavaScript patches are written for Discord 351.2.5 and refuse any other bundle. Hermes numbers functions per bundle, so an id from one release names an unrelated function in another; every entry therefore declares the size of the body it replaces, and the patcher skips an entry whose declaration does not match rather than writing bytes into a function it was not built for. Of the 518 entries, 484 are constant-shaped stubs whose bytes name nothing bundle-specific and carry unchanged, 17 are promise-shaped stubs that are re-assembled against this bundle because they name the strings “Promise” and “resolve” through the bundle’s own string identifiers, and 17 are edits of an original body, re-derived against the body this build has. The entries added beyond the recorded change set are the declutter features and the two video-quality edits, each named by a feature switch.",
-      "What the previous release’s set could claim and this one cannot: that set was extracted from a build that had been patched and verified by hand, and every function of the patched bundle was compared against that build’s shipped bundle byte for byte. There is no recorded patched build for any release since, so that comparison has no counterpart here and is gone. What replaces it is narrower and is stated plainly: every entry must apply with nothing skipped to the build it names, and a real Hermes disassembler must read every one of the 212 patched functions back. That catches a body which occupies the right number of bytes but is not valid bytecode, which is the failure that matters most and the one an earlier table was found to carry. It does not catch a body that assembles cleanly and does something other than what its entry says.",
+    "discord_353200": [
+      "The JavaScript patches are written for Discord 353.2.0 and refuse any other bundle. Hermes numbers functions per bundle, so an id from one release names an unrelated function in another; every entry therefore declares the size of the body it replaces, and the patcher skips an entry whose declaration does not match rather than writing bytes into a function it was not built for. Of the 519 entries, 484 are constant-shaped stubs whose bytes name nothing bundle-specific and carry unchanged, 17 are promise-shaped stubs that are re-assembled against this bundle because they name the strings “Promise” and “resolve” through the bundle’s own string identifiers, and 18 are edits of an original body, re-derived against the body this build has. The entries added beyond the recorded change set are the declutter features, the video-quality edits and the process-poll interval edit, each named by a feature switch.",
+      "Discord 353.2.0 obfuscated or merged many of the native classes the native edits were written against. A native edit whose class, method signature or anchor is not present in this build is reported as skipped with that reason; it is never written on a guess. The JavaScript, manifest, resource and blocklist passes are unaffected. The step log names every skipped native edit.",
+      "What the previous release’s set could claim and this one cannot: that set was extracted from a build that had been patched and verified by hand, and every function of the patched bundle was compared against that build’s shipped bundle byte for byte. There is no recorded patched build for any release since, so that comparison has no counterpart here and is gone. What replaces it is narrower and is stated plainly: every entry must apply with nothing skipped to the build it names, and a real Hermes disassembler must read every one of the 519 patched functions back. That catches a body which occupies the right number of bytes but is not valid bytecode, which is the failure that matters most and the one an earlier table was found to carry. It does not catch a body that assembles cleanly and does something other than what its entry says.",
       "The edits that make a tab’s guard always fire name a register that must still hold a constant at that point in this build. Which register that is does not survive a release, so it was chosen again from this body: the register is only used when the instruction that last wrote it before the guard is a constant load and nothing writes it in between. The same treatment was given to the guard that hides the friends’ Spotify listened-session rows.",
       "The functions the patch set stubs keep the exception-handler table of the much larger body they had before, and those entries name ranges that end past where the new, shorter body does. The bytes are copied through from the unpatched bundle unchanged, so they are inherited rather than introduced here. A stub calls nothing and cannot throw, except at the padding that follows it, which no entry covers, so the entries are believed unreachable—but that is a reading of the bytecode and not something observed on a running app, and it is recorded here rather than left out.",
       "The network blocklist is generated against the selected APK rather than shipped as fixed text. Three of the names a fixed list would need are renamed by R8 on every release—the okhttp3.Response constructor, the Protocol enum and that enum’s HTTP/1.1 field—and so are the two okhttp3.Interceptor$Chain accessors the generated interceptor calls, so this build reads all five out of the target’s DEX instead. The method it produces reproduces the compared build’s byte for byte; a build where they cannot be resolved is skipped with the reason stated rather than patched with another release’s names.",
@@ -25,15 +26,15 @@
   },
   "sources": [
     {
-      "id": "discord_351205",
-      "display_name": "Discord Alpha 351.2.5",
+      "id": "discord_353200",
+      "display_name": "Discord Alpha 353.0",
       "package_name": "com.discord",
-      "version_name": "351.5 Alpha",
-      "version_code": 351205,
-      "url": "https://tracker.vendetta.rocks/tracker/download/351205/base",
+      "version_name": "353.0 - Alpha",
+      "version_code": 353200,
+      "url": "https://tracker.vendetta.rocks/tracker/download/353200/base",
       "apk_type": "split_base",
-      "sha256_expected": "da74fc6d72b2f50acb1bf9f5b0152336c1a78eee659e73c16e6d8e4a51be65a9",
-      "description": "Discord Alpha from Vendetta tracker. Automatically merges ARM64 native shared libraries and the density and language splits' resources into a universal APK and rebuilds the resource table around them, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, locks the patched JS bundle, and removes the game-activity presence.",
+      "sha256_expected": "ca4077eb32e5df95b0c642f3172173815161ba102ff3d0302433b459f204e819",
+      "description": "Discord Alpha 353.0 from Vendetta tracker. Automatically merges ARM64 native shared libraries and the density and language splits' resources into a universal APK and rebuilds the resource table around them, neutralizes Sentry native/Java crash reporters, disables AppsFlyer telemetry, nulls the in-bundle JS Sentry DSN, locks the patched JS bundle, and removes the game-activity presence.",
       "changelog_url": "https://discord.com/blog",
       "patch_ids": [
         "discord_ota_bundle",
@@ -65,24 +66,24 @@
       ],
       "splits": [
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.arm64_v8a",
-          "sha256_expected": "1af4e2ea7aef356316fd4b65e0cf81acc596023d88ac3ec2336088e08898e16a",
-          "size_bytes": 73580307
+          "url": "https://tracker.vendetta.rocks/tracker/download/353200/config.arm64_v8a",
+          "sha256_expected": "c60dc4aaea1ef7d08697ab2dd1efdb5378d2815e299b2e27b8c0715a0fc8a78a",
+          "size_bytes": 80281435
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.hdpi",
-          "sha256_expected": "2f6ec3a983ad43a7812ad6beba2206346feb400abbd6bb668b20228178bd0a8d",
-          "size_bytes": 6806559
+          "url": "https://tracker.vendetta.rocks/tracker/download/353200/config.hdpi",
+          "sha256_expected": "a0079fc95f654744016e342396aca2052f501907e783f8f3a0ec5131df629cc2",
+          "size_bytes": 6772279
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.de",
-          "sha256_expected": "505a40b9787ac918d4f9084c5f1b8401683bf8dbe14c7efa0df57e02f51aa19c",
-          "size_bytes": 37273
+          "url": "https://tracker.vendetta.rocks/tracker/download/353200/config.de",
+          "sha256_expected": "55265ab95360eaa11e2609d762770570a1015bf40de4383712ec86f51220fa98",
+          "size_bytes": 24985
         },
         {
-          "url": "https://tracker.vendetta.rocks/tracker/download/351205/config.en",
-          "sha256_expected": "41d4c10352493ef9c147070a21b50a53d737903780813a914c4cd7d851b631ac",
-          "size_bytes": 70041
+          "url": "https://tracker.vendetta.rocks/tracker/download/353200/config.en",
+          "sha256_expected": "488c54b9ce19a50c9da5fa966a7375ef1b4784eebe650aebc09cfe313318c708",
+          "size_bytes": 41369
         }
       ]
     },

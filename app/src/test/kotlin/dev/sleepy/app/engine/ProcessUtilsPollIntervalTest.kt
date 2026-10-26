@@ -41,7 +41,7 @@ class ProcessUtilsPollIntervalTest {
         const val PATCHED_INTERVAL_MS = 3_600_000
 
         /** The callback the timer invokes; the same feature stubs its body. */
-        const val CALLBACK_ID = 86445
+        const val CALLBACK_ID = 88493
         const val FEATURE_SLUG = "performance_metrics"
     }
 

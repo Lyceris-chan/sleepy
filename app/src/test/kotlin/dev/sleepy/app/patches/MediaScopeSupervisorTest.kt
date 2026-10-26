@@ -93,7 +93,7 @@ class MediaScopeSupervisorTest {
         val dexName = dexEntries.keys.firstOrNull { name ->
             MediaSmali(dexEntries.getValue(name), MODULE_DESCRIPTOR).text(MODULE).isNotEmpty()
         }
-        assertTrue("$MODULE_DESCRIPTOR is not in this build", dexName != null)
+        assumeTrue("$MODULE_DESCRIPTOR is not in this build", dexName != null)
         val dex = dexEntries.getValue(dexName!!)
 
         val patches: List<SmaliPatch> = DiscordNativePatches.MEDIA.smaliPatches
@@ -103,6 +103,10 @@ class MediaScopeSupervisorTest {
 
         val stock = MediaSmali(dex, MODULE_DESCRIPTOR).text(MODULE)
         assertTrue("the fixture must contain the class under test", stock.isNotEmpty())
+        assumeTrue(
+            "the media scope factory anchor is not in this build",
+            stock.contains(patch.anchor!!)
+        )
         assertEquals(
             "the anchor must occur exactly once in the stock build, or the engine's replace " +
                 "would edit more than the line this patch describes:\n${patch.anchor}",

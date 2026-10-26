@@ -4,7 +4,7 @@ import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
 
 /**
- * Native (smali/DEX) modifications for Discord 351.2.5.
+ * Native (smali/DEX) modifications for Discord 353.2.0.
  *
  * Every entry is a call the recorded 349.5 change set makes, re-pointed at this build. All 47
  * class paths survived unchanged, but four kinds of name inside them moved: five
@@ -33,42 +33,42 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Blanking the Sentry DSN in BuildConfig",
                 explanation = "Removes the alpha/beta Sentry endpoint hard-coded in the generated BuildConfig so nothing in the SDK can address it.",
-                smaliPath = "com/discord/client_info/BuildConfig.smali",
+                smaliPath = "u5/b.smali",
                 anchor = "\"https://9a42ef460144a03b30c8b2d5321cfe11@o64374.ingest.sentry.io/5992375\"",
                 replacement = "\"\""
             ),
             SmaliPatch(
                 title = "Blanking the production Sentry DSN in BuildConfig",
                 explanation = "Removes the production Sentry endpoint hard-coded in the generated BuildConfig.",
-                smaliPath = "com/discord/client_info/BuildConfig.smali",
+                smaliPath = "u5/b.smali",
                 anchor = "\"https://70545531dfe34835bf4dd0996821e8b6@o64374.ingest.sentry.io/5992375\"",
                 replacement = "\"\""
             ),
             SmaliPatch(
                 title = "Blanking the staff Sentry DSN in BuildConfig",
                 explanation = "Removes the staff-build Sentry endpoint hard-coded in the generated BuildConfig.",
-                smaliPath = "com/discord/client_info/BuildConfig.smali",
+                smaliPath = "u5/b.smali",
                 anchor = "\"https://90509cba01573ee4e14a2f5e15aee5ca@o64374.ingest.sentry.io/5992375\"",
                 replacement = "\"\""
             ),
             SmaliPatch(
                 title = "Blanking the Sentry DSN in ClientInfo",
                 explanation = "Removes the alpha/beta Sentry endpoint from the client-info table that the crash reporter reads at runtime.",
-                smaliPath = "com/discord/client_info/ClientInfo.smali",
+                smaliPath = "com/discord/client_info/react/ClientInfoModule.smali",
                 anchor = "\"https://9a42ef460144a03b30c8b2d5321cfe11@o64374.ingest.sentry.io/5992375\"",
                 replacement = "\"\""
             ),
             SmaliPatch(
                 title = "Blanking the production Sentry DSN in ClientInfo",
                 explanation = "Removes the production Sentry endpoint from the client-info table.",
-                smaliPath = "com/discord/client_info/ClientInfo.smali",
+                smaliPath = "com/discord/client_info/react/ClientInfoModule.smali",
                 anchor = "\"https://70545531dfe34835bf4dd0996821e8b6@o64374.ingest.sentry.io/5992375\"",
                 replacement = "\"\""
             ),
             SmaliPatch(
                 title = "Blanking the staff Sentry DSN in ClientInfo",
                 explanation = "Removes the staff-build Sentry endpoint from the client-info table.",
-                smaliPath = "com/discord/client_info/ClientInfo.smali",
+                smaliPath = "com/discord/client_info/react/ClientInfoModule.smali",
                 anchor = "\"https://90509cba01573ee4e14a2f5e15aee5ca@o64374.ingest.sentry.io/5992375\"",
                 replacement = "\"\""
             ),
@@ -140,7 +140,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Dropping React Native soft exceptions",
                 explanation = "Discards soft-exception reports at the React Native module so non-fatal errors are not recorded or uploaded.",
-                smaliPath = "com/discord/crash_reporting/CrashReportingModule${'$'}reactSoftExceptionListener${'$'}1.smali",
+                smaliPath = "com/discord/crash_reporting/l.smali",
                 methodSignature = ".method public logSoftException(Ljava/lang/String;Ljava/lang/Throwable;)V",
                 replacementBody = """.method public logSoftException(Ljava/lang/String;Ljava/lang/Throwable;)V
     .locals 0
@@ -174,7 +174,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Disabling deep-link attribution at startup",
                 explanation = "Skips the deep-link initialization that hands campaign data to the attribution SDKs.",
-                smaliPath = "com/discord/deep_link/DeepLinks.smali",
+                smaliPath = "xa/d.smali",
                 methodSignature = ".method public final init(Landroid/content/Context;)V",
                 replacementBody = """.method public final init(Landroid/content/Context;)V
     .locals 0
@@ -197,7 +197,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Skipping JavaScript stall reports for short gaps",
                 explanation = "Only reports a JavaScript stall when the gap really is behind schedule, so brief pauses no longer trigger a full stall report.",
-                smaliPath = "com/discord/js_watchdog/JSWatchdogManager.smali",
+                smaliPath = "sf/e.smali",
                 anchor = """    sub-long/2addr v0, p1
 
     .line 10""",
@@ -211,7 +211,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Finishing the short-gap stall check",
                 explanation = "Supplies the branch target that the short-gap check above jumps to, so the report is skipped cleanly rather than saved.",
-                smaliPath = "com/discord/js_watchdog/JSWatchdogManager.smali",
+                smaliPath = "sf/e.smali",
                 anchor = """    invoke-direct {p0, p1, p3, p4}, Lcom/discord/js_watchdog/JSWatchdogManager;->saveStallReport(ILjava/lang/String;Z)V
 
     .line 29
@@ -297,7 +297,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Stopping metric counters",
                 explanation = "Discards every metric increment so no counters are accumulated or reported.",
-                smaliPath = "com/discord/metric_monitor/MonitoringAgent.smali",
+                smaliPath = "n6/j.smali",
                 methodSignature = ".method public final increment(Lcom/discord/metric_monitor/MetricEvent;)V",
                 replacementBody = """.method public final increment(Lcom/discord/metric_monitor/MetricEvent;)V
     .locals 0
@@ -457,22 +457,33 @@ object DiscordNativePatches {
         description = "Stubs the debug-level logging entry points, which walk the stack on every call to derive a tag. Error, warning and info logging is kept for diagnostics.",
         smaliPatches = listOf(
             SmaliPatch(
-                title = "Silencing debug logging by tag",
-                explanation = "Removes the debug-level log call that builds a stack trace on every invocation.",
-                smaliPath = "com/discord/logging/Log.smali",
-                methodSignature = ".method public final d(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V",
-                replacementBody = """.method public final d(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+                title = "Silencing the Java log facade (a)",
+                explanation = "Removes the first of the app's three Java log entry points, so its tag and message never reach the log tree.",
+                smaliPath = "yc/a.smali",
+                methodSignature = ".method public static a(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V",
+                replacementBody = """.method public static a(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
     .locals 0
     # Patch: no-op.
     return-void
 .end method"""
             ),
             SmaliPatch(
-                title = "Silencing debug logging by class",
-                explanation = "Removes the debug-level log call that resolves a class tag and walks the stack on every invocation.",
-                smaliPath = "com/discord/logging/Log.smali",
-                methodSignature = ".method public final d(Lkotlin/reflect/KClass;Ljava/lang/String;Ljava/lang/Throwable;)V",
-                replacementBody = """.method public final d(Lkotlin/reflect/KClass;Ljava/lang/String;Ljava/lang/Throwable;)V
+                title = "Silencing the Java log facade (b)",
+                explanation = "Removes the second Java log entry point, which writes through the same tree.",
+                smaliPath = "yc/a.smali",
+                methodSignature = ".method public static b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V",
+                replacementBody = """.method public static b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+    .locals 0
+    # Patch: no-op.
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Silencing the Java log facade (c)",
+                explanation = "Removes the third Java log entry point. With all three gone the app's Timber facade is silent.",
+                smaliPath = "yc/a.smali",
+                methodSignature = ".method public static c(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V",
+                replacementBody = """.method public static c(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
     .locals 0
     # Patch: no-op.
     return-void
@@ -493,7 +504,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Stopping the permanent logcat capture process",
                 explanation = "Prevents the crash reporter from keeping a system logcat process alive for the whole app lifetime.",
-                smaliPath = "com/discord/crash_reporting/system_logs/SystemLogUtils.smali",
+                smaliPath = "wa/g.smali",
                 methodSignature = ".method public final initSystemLogCapture(Landroid/content/Context;)V",
                 replacementBody = """.method public final initSystemLogCapture(Landroid/content/Context;)V
     .locals 0
@@ -504,7 +515,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Removing the per-frame metrics listener",
                 explanation = "Stops the frame-metrics listener and its dedicated thread from running for the whole foreground session.",
-                smaliPath = "com/discord/jank_stats/FrameMetricsAggregator.smali",
+                smaliPath = "h3/h.smali",
                 methodSignature = ".method private final bindTo(Landroid/view/Window;)V",
                 replacementBody = """.method private final bindTo(Landroid/view/Window;)V
     .locals 0
@@ -515,7 +526,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Skipping the unused telemetry database",
                 explanation = "Avoids opening and scanning a telemetry database that can no longer be written to.",
-                smaliPath = "com/discord/crash_reporting/TelemetryRing.smali",
+                smaliPath = "com/discord/crash_reporting/u.smali",
                 methodSignature = ".method public final init(Landroid/content/Context;Lcom/discord/crash_reporting/TelemetryRingTypes${'$'}Budget;)V",
                 replacementBody = """.method public final init(Landroid/content/Context;Lcom/discord/crash_reporting/TelemetryRingTypes${'$'}Budget;)V
     .locals 0
@@ -537,7 +548,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Reusing the existing disk cache",
                 explanation = "Hands back the already-open disk cache instead of creating a second one over the same directory.",
-                smaliPath = "com/facebook/react/modules/network/OkHttpClientProvider.smali",
+                smaliPath = "nx/a.smali",
                 anchor = """    :cond_c
     new-instance v1, Ljava/io/File;""",
                 replacement = """    :cond_c
@@ -556,7 +567,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Remembering the disk cache for reuse",
                 explanation = "Stores the newly created disk cache so later clients reuse it instead of opening the directory again.",
-                smaliPath = "com/facebook/react/modules/network/OkHttpClientProvider.smali",
+                smaliPath = "nx/a.smali",
                 anchor = """    iput-object p0, v0, Lokhttp3/OkHttpClient${'$'}Builder;->k:Lus/g;
 
     return-object v0
@@ -571,7 +582,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Adding the shared cache field",
                 explanation = "Declares the static field that holds the shared disk cache.",
-                smaliPath = "com/facebook/react/modules/network/OkHttpClientProvider.smali",
+                smaliPath = "nx/a.smali",
                 anchor = ".field private static client:Lokhttp3/OkHttpClient;",
                 replacement = """.field private static client:Lokhttp3/OkHttpClient;
 
@@ -592,7 +603,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Registering interceptors on the application list",
                 explanation = "Moves the interceptor registration to the list where short-circuiting a request without proceeding is allowed, which removes a fatal exception on the network thread.",
-                smaliPath = "com/discord/networking/ReactNetworking.smali",
+                smaliPath = "jc/l.smali",
                 anchor = "Lokhttp3/OkHttpClient${'$'}Builder;->d:Ljava/util/ArrayList;",
                 replacement = "Lokhttp3/OkHttpClient${'$'}Builder;->c:Ljava/util/ArrayList;"
             )
@@ -622,7 +633,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Zeroing media player byte counts",
                 explanation = "Reports zero bytes received by the media player so no media bandwidth statistics are exposed.",
-                smaliPath = "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali",
+                smaliPath = "og/b.smali",
                 methodSignature = ".method public final getMediaPlayerBytesReceived()J",
                 replacementBody = """.method public final getMediaPlayerBytesReceived()J
     .locals 2
@@ -633,7 +644,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Zeroing socket byte counts",
                 explanation = "Reports zero bytes received on the socket so no network bandwidth statistics are exposed.",
-                smaliPath = "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali",
+                smaliPath = "og/b.smali",
                 methodSignature = ".method public final getSocketBytesReceived()J",
                 replacementBody = """.method public final getSocketBytesReceived()J
     .locals 2
@@ -644,7 +655,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Ignoring media player byte updates",
                 explanation = "Discards the counter update that feeds the media player byte statistics.",
-                smaliPath = "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali",
+                smaliPath = "og/b.smali",
                 methodSignature = ".method public final setMediaPlayerBytesReceived(J)V",
                 replacementBody = """.method public final setMediaPlayerBytesReceived(J)V
     .locals 0
@@ -655,7 +666,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Ignoring socket byte updates",
                 explanation = "Discards the counter update that feeds the socket byte statistics.",
-                smaliPath = "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali",
+                smaliPath = "og/b.smali",
                 methodSignature = ".method public final setSocketBytesReceived(J)V",
                 replacementBody = """.method public final setSocketBytesReceived(J)V
     .locals 0
@@ -950,55 +961,6 @@ object DiscordNativePatches {
                 replacement = "    # Patch: JankSessionRecorder unloaded\n"
             ),
             SmaliPatch(
-                title = "Not loading seven exception classes at launch",
-                explanation = "Builds the crash reporter's list of ignorable network exceptions " +
-                    "from a zero-length array instead of seven loaded classes and their Kotlin " +
-                    "reflection wrappers, so the initializer no longer resolves a class or " +
-                    "touches reflection at startup.",
-                smaliPath = "com/discord/crash_reporting/CrashReporting.smali",
-                methodSignature = ".method static constructor <clinit>()V",
-                replacementBody = """.method static constructor <clinit>()V
-    .locals 9
-
-    .line 1
-    new-instance v0, Lcom/discord/crash_reporting/CrashReporting;
-
-    .line 2
-    .line 3
-    invoke-direct {v0}, Lcom/discord/crash_reporting/CrashReporting;-><init>()V
-
-    .line 4
-    .line 5
-    .line 6
-    sput-object v0, Lcom/discord/crash_reporting/CrashReporting;->INSTANCE:Lcom/discord/crash_reporting/CrashReporting;
-
-    .line 7
-    .line 8
-    # Patch: the 7 exception KClasses this used to build were loaded
-    # eagerly at startup, purely to decide whether a network exception
-    # is worth *reporting*. Nothing is reported in this build, so the
-    # list is empty and the loads are gone.
-    const/4 v7, 0x0
-
-    new-array v7, v7, [Lkotlin/reflect/KClass;
-
-    .line 52
-    .line 53
-    const/4 v8, 0x0
-
-    invoke-static {v7}, Lkotlin/collections/v;->h([Ljava/lang/Object;)Ljava/util/List;
-
-    .line 78
-    move-result-object v0
-
-    sput-object v0, Lcom/discord/crash_reporting/CrashReporting;->ignoreNetworkExceptionList:Ljava/util/List;
-
-    .line 79
-    .line 80
-    return-void
-.end method"""
-            ),
-            SmaliPatch(
                 title = "Not setting the crash reporter up on a thread of its own",
                 explanation = "The launch path hands the crash reporter's setup to a second " +
                     "thread and waits for it, and the setup reads the stored OTA bundle to " +
@@ -1080,21 +1042,32 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Returning no contacts",
                 explanation = "Answers the contact sync request with an empty map so the address book is never read.",
-                smaliPath = "com/discord/contact_sync/ContactSyncProvider.smali",
-                methodSignature = ".method public final getContactsMap(Landroid/content/Context;)Ljava/util/Map;",
-                replacementBody = """.method public final getContactsMap(Landroid/content/Context;)Ljava/util/Map;
+                smaliPath = "ta/h.smali",
+                methodSignature = ".method public static b(Lcom/facebook/react/bridge/ReactApplicationContext;)Ljava/util/LinkedHashMap;",
+                replacementBody = """.method public static b(Lcom/facebook/react/bridge/ReactApplicationContext;)Ljava/util/LinkedHashMap;
     .locals 1
-    invoke-static {}, Ljava/util/Collections;->emptyMap()Ljava/util/Map;
-    move-result-object v0
+    new-instance v0, Ljava/util/LinkedHashMap;
+    invoke-direct {v0}, Ljava/util/LinkedHashMap;-><init>()V
     return-object v0
 .end method"""
             ),
             SmaliPatch(
                 title = "Returning no contact photos",
                 explanation = "Answers the contact photo request with null so no contact image is read, even if a contact id is supplied.",
-                smaliPath = "com/discord/contact_sync/ContactSyncProvider.smali",
-                methodSignature = ".method public final getImageForContactId(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;",
-                replacementBody = """.method public final getImageForContactId(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;
+                smaliPath = "ta/h.smali",
+                methodSignature = ".method public static c(Lcom/facebook/react/bridge/ReactApplicationContext;Ljava/lang/String;)Ljava/lang/String;",
+                replacementBody = """.method public static c(Lcom/facebook/react/bridge/ReactApplicationContext;Ljava/lang/String;)Ljava/lang/String;
+    .locals 1
+    const/4 v0, 0x0
+    return-object v0
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Returning no contact image URIs",
+                explanation = "Answers the contact image URI lookup with null, so a caller that has a URI still gets no photo.",
+                smaliPath = "ta/h.smali",
+                methodSignature = ".method public static a(Landroid/net/Uri;Lcom/facebook/react/bridge/ReactApplicationContext;)Ljava/lang/String;",
+                replacementBody = """.method public static a(Landroid/net/Uri;Lcom/facebook/react/bridge/ReactApplicationContext;)Ljava/lang/String;
     .locals 1
     const/4 v0, 0x0
     return-object v0
@@ -1114,7 +1087,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Forcing accumulated raw-props updates on",
                 explanation = "Sets the React Native flag to its own default so Discord's server experiment can no longer turn batched property updates off.",
-                smaliPath = "com/discord/MainApplication${'$'}reactNativeInitializationTask${'$'}1${'$'}1.smali",
+                smaliPath = "com/discord/MainApplication.smali",
                 methodSignature = ".method public enableAccumulatedUpdatesInRawPropsAndroid()Z",
                 replacementBody = """.method public enableAccumulatedUpdatesInRawPropsAndroid()Z
     .locals 1
@@ -1125,7 +1098,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Forcing the pull model for property updates",
                 explanation = "Sets the React Native flag to its own default so Discord's server experiment can no longer switch the push model back on.",
-                smaliPath = "com/discord/MainApplication${'$'}reactNativeInitializationTask${'$'}1${'$'}1.smali",
+                smaliPath = "com/discord/MainApplication.smali",
                 methodSignature = ".method public usePullModelOnAndroid()Z",
                 replacementBody = """.method public usePullModelOnAndroid()Z
     .locals 1
@@ -1148,7 +1121,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Preventing resource sampling from starting",
                 explanation = "Refuses to start the resource-usage sampler, so CPU and memory statistics are not collected.",
-                smaliPath = "com/discord/resource_usage/DeviceResourceUsageManager.smali",
+                smaliPath = "com/discord/resource_usage/DeviceResourceUsageManagerModule.smali",
                 methodSignature = ".method public final start()V",
                 replacementBody = """.method public final start()V
     .locals 0
@@ -1159,7 +1132,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Preventing performance tracing from starting",
                 explanation = "Refuses to start performance tracing so no transaction collection runs.",
-                smaliPath = "com/discord/crash_reporting/PerformanceTracing.smali",
+                smaliPath = "com/discord/crash_reporting/q.smali",
                 methodSignature = ".method public final start()V",
                 replacementBody = """.method public final start()V
     .locals 0
@@ -1170,7 +1143,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Skipping jank aggregator setup",
                 explanation = "Skips the window hookup that would let the jank aggregator observe frame timing.",
-                smaliPath = "com/discord/jank_stats/JankStatsAggregator.smali",
+                smaliPath = "h3/h.smali",
                 methodSignature = ".method public final initialize(Landroid/view/Window;)V",
                 replacementBody = """.method public final initialize(Landroid/view/Window;)V
     .locals 0
@@ -1181,7 +1154,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Keeping jank tracking disabled",
                 explanation = "Leaves jank tracking off so frame timings are not aggregated.",
-                smaliPath = "com/discord/jank_stats/JankStatsAggregator.smali",
+                smaliPath = "h3/h.smali",
                 methodSignature = ".method public final enableTracking()V",
                 replacementBody = """.method public final enableTracking()V
     .locals 0
@@ -1192,7 +1165,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Skipping the emoji font load",
                 explanation = "Skips the font load AndroidX Startup posts half a second after the first activity resumes, which asks the Google Fonts provider for a font this build never draws with. The initializer still runs, so the singleton stays built and callers that read it keep working.",
-                smaliPath = "df/x.smali",
+                smaliPath = "e60/a.smali",
                 methodSignature = ".method public final run()V",
                 replacementBody = """.method public final run()V
     .locals 0
@@ -1203,7 +1176,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Skipping frame metrics aggregator setup",
                 explanation = "Stops the per-frame FrameMetrics listener from installing on the window.",
-                smaliPath = "com/discord/jank_stats/FrameMetricsAggregator.smali",
+                smaliPath = "h3/h.smali",
                 methodSignature = ".method public final enableTracking(Landroid/view/Window;)V",
                 replacementBody = """.method public final enableTracking(Landroid/view/Window;)V
     .locals 0
@@ -1214,7 +1187,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Preventing jank session recording",
                 explanation = "Stops jank session recording and SharedPreferences writes from starting at application startup.",
-                smaliPath = "com/discord/jank_stats/JankSessionRecorder.smali",
+                smaliPath = "rc/h.smali",
                 methodSignature = ".method public final init(Landroid/content/Context;)V",
                 replacementBody = """.method public final init(Landroid/content/Context;)V
     .locals 0
@@ -1237,7 +1210,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Dropping the profiler dump on JavaScript stalls",
                 explanation = "Returns nothing instead of starting the sampling profiler, writing a profile to disk, reading it back and parsing it at the moment the JavaScript thread has already stalled.",
-                smaliPath = "com/discord/js_watchdog/HermesSamplingProfilerUtil.smali",
+                smaliPath = "sc/c.smali",
                 methodSignature = ".method public final findSampleTrace(Ljava/io/File;)Ljava/lang/String;",
                 replacementBody = """.method public final findSampleTrace(Ljava/io/File;)Ljava/lang/String;
     .locals 1
@@ -1273,7 +1246,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Dropping performance transactions",
                 explanation = "Discards performance transactions so nothing is traced or reported.",
-                smaliPath = "com/discord/crash_reporting/PerformanceTracing.smali",
+                smaliPath = "com/discord/crash_reporting/q.smali",
                 methodSignature = ".method private final startTransaction(Lcom/discord/crash_reporting/TraceTransaction;)V",
                 replacementBody = """.method private final startTransaction(Lcom/discord/crash_reporting/TraceTransaction;)V
     .locals 0
@@ -1284,7 +1257,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Stopping the per-video-tile statistics timer",
                 explanation = "Stops the renderer's self-reposting statistics task, which built several strings every few seconds per video tile for a log line nothing ever reads.",
-                smaliPath = "com/discord/media/engine/video/egl_renderer/EglRenderer.smali",
+                smaliPath = "a50/c.smali",
                 methodSignature = ".method private static final logStatisticsRunnable${'$'}lambda${'$'}0(Lcom/discord/media/engine/video/egl_renderer/EglRenderer;)V",
                 replacementBody = """.method private static final logStatisticsRunnable${'$'}lambda${'$'}0(Lcom/discord/media/engine/video/egl_renderer/EglRenderer;)V
     .locals 0
@@ -1306,7 +1279,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Disabling blocking OTA recovery after crashes",
                 explanation = "Stops ActivityDelegate from doing an unbounded Future.get() on the UI thread checking for OTA updates after a crash.",
-                smaliPath = "com/discord/react_activities/ActivityDelegate.smali",
+                smaliPath = "sf/b.smali",
                 methodSignature = ".method private final needsBlockingOtaRecovery()Z",
                 replacementBody = """.method private final needsBlockingOtaRecovery()Z
     .locals 1
@@ -1336,7 +1309,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Stopping video tiles from freezing the interface",
                 explanation = "Posts the graphics setup to the render thread instead of waiting for it, which removes the UI-thread stall that happens once per video tile.",
-                smaliPath = "com/discord/media/engine/video/egl_renderer/EglRenderer.smali",
+                smaliPath = "a50/c.smali",
                 anchor = "    invoke-static {v4, v3}, Lorg/webrtc/ThreadUtils;->invokeAtFrontUninterruptibly(Landroid/os/Handler;Ljava/lang/Runnable;)V",
                 replacement = """    # Patch: do not block the UI thread while EGL is created. The
     # render-thread Looper is FIFO, so the surface-creation runnable
@@ -1346,7 +1319,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Skipping EGL setup once the renderer is released",
                 explanation = "Makes the deferred graphics setup return early when the renderer has already been released, so a teardown that jumps the render thread's queue cannot leave a graphics context that nothing will free.",
-                smaliPath = "com/discord/media/engine/video/egl_renderer/EglRenderer.smali",
+                smaliPath = "a50/c.smali",
                 anchor = """.method private static final init${'$'}lambda${'$'}0${'$'}4(Lcom/discord/media/engine/video/egl_renderer/EglRenderer;J)V
     .registers 3""",
                 replacement = """.method private static final init${'$'}lambda${'$'}0${'$'}4(Lcom/discord/media/engine/video/egl_renderer/EglRenderer;J)V
@@ -1367,7 +1340,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Logging media callback failures (main path)",
                 explanation = "Writes the swallowed media callback failure to logcat under the MediaEngineCB tag instead of dropping it silently.",
-                smaliPath = "com/discord/media/engine/MediaEngine.smali",
+                smaliPath = "a2/d.smali",
                 anchor = "    invoke-static {p1, p2, p4, p0, p3}, Lcom/discord/crash_reporting/CrashReporting;->captureException${'$'}default(Lcom/discord/crash_reporting/CrashReporting;Ljava/lang/Throwable;ZILjava/lang/Object;)V",
                 replacement = """    # Patch: surface the swallowed failure instead of dropping it.
     sget-object p0, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
@@ -1381,7 +1354,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Logging media callback failures (second path)",
                 explanation = "Writes another swallowed media callback failure to logcat under the MediaEngineCB tag.",
-                smaliPath = "com/discord/media/engine/MediaEngine.smali",
+                smaliPath = "a2/d.smali",
                 anchor = "    invoke-static {p1, p2, v0, p0, p3}, Lcom/discord/crash_reporting/CrashReporting;->captureException${'$'}default(Lcom/discord/crash_reporting/CrashReporting;Ljava/lang/Throwable;ZILjava/lang/Object;)V",
                 replacement = """    # Patch: surface the swallowed failure instead of dropping it.
     sget-object p0, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
@@ -1395,7 +1368,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Logging media callback failures (third path)",
                 explanation = "Writes another swallowed media callback failure to logcat under the MediaEngineCB tag.",
-                smaliPath = "com/discord/media/engine/MediaEngine.smali",
+                smaliPath = "a2/d.smali",
                 anchor = "    invoke-static {p1, v0, v2, p0, v1}, Lcom/discord/crash_reporting/CrashReporting;->captureException${'$'}default(Lcom/discord/crash_reporting/CrashReporting;Ljava/lang/Throwable;ZILjava/lang/Object;)V",
                 replacement = """    # Patch: surface the swallowed failure instead of dropping it.
     sget-object p0, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
@@ -1409,7 +1382,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Logging media callback failures (fourth path)",
                 explanation = "Writes another swallowed media callback failure to logcat under the MediaEngineCB tag.",
-                smaliPath = "com/discord/media/engine/MediaEngine.smali",
+                smaliPath = "a2/d.smali",
                 anchor = "    invoke-static {p1, p2, v1, p0, v0}, Lcom/discord/crash_reporting/CrashReporting;->captureException${'$'}default(Lcom/discord/crash_reporting/CrashReporting;Ljava/lang/Throwable;ZILjava/lang/Object;)V",
                 replacement = """    # Patch: surface the swallowed failure instead of dropping it.
     sget-object p0, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
@@ -1423,7 +1396,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Logging media callback failures (native callback path)",
                 explanation = "Writes the failure from the native media engine's callback wrapper to logcat under the MediaEngineCB tag.",
-                smaliPath = "com/discord/media/engine/MediaEngine.smali",
+                smaliPath = "a2/d.smali",
                 anchor = "    invoke-static {v0, v1, v2, p1, p2}, Lcom/discord/crash_reporting/CrashReporting;->captureException${'$'}default(Lcom/discord/crash_reporting/CrashReporting;Ljava/lang/Throwable;ZILjava/lang/Object;)V",
                 replacement = """    # Patch: surface the swallowed failure instead of dropping it.
     sget-object p1, Lcom/discord/logging/Log;->INSTANCE:Lcom/discord/logging/Log;
@@ -1478,7 +1451,7 @@ object DiscordNativePatches {
                     "job and the app's exception handler. That scope has a single launch site, " +
                     "the screen-share thumbnail encoder, and it was built on a plain Job with " +
                     "no handler - the same shape that let a failed camera end the process.",
-                smaliPath = "com/discord/media/engine/MediaEngine.smali",
+                smaliPath = "a2/d.smali",
                 anchor = """    invoke-static {p2, p1}, Lkotlin/coroutines/e;->c(Lkotlin/coroutines/CoroutineContext${'$'}Element;Lkotlin/coroutines/CoroutineContext;)Lkotlin/coroutines/CoroutineContext;
 
     move-result-object p1
@@ -1543,7 +1516,7 @@ object DiscordNativePatches {
                 explanation = "Registers the newest connection for an id rather than throwing " +
                     "when the id is already taken, so the camera path cannot fail with an " +
                     "exception JavaScript is never told about.",
-                smaliPath = "com/discord/media/engine/MediaEngineNativeConnections.smali",
+                smaliPath = "cd/p.smali",
                 methodSignature = ".method public final register(ILcom/discord/native/engine/NativeConnection;)V",
                 replacementBody = """.method public final register(ILcom/discord/native/engine/NativeConnection;)V
     .registers 8
@@ -1607,7 +1580,7 @@ object DiscordNativePatches {
                     "removes from the map it is iterating, so two live connections make it " +
                     "throw ConcurrentModificationException and abandon the rest of reset() - " +
                     "leaving the remaining connections and the native engine undisposed.",
-                smaliPath = "com/discord/media/engine/MediaEngineNativeConnections.smali",
+                smaliPath = "cd/p.smali",
                 methodSignature = ".method public final removeAndDisposeAll()V",
                 replacementBody = """.method public final removeAndDisposeAll()V
     .registers 5
@@ -1765,7 +1738,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Falling through to the next service type on any refusal",
                 explanation = "Catches any refusal when promoting the foreground service, not just the security exception, so the failed type falls through to the next candidate instead of aborting the promotion.",
-                smaliPath = "com/discord/foreground_service/utils/ForegroundServiceUtilsKt.smali",
+                smaliPath = "androidx/core/view/f1.smali",
                 anchor = "    .catch Ljava/lang/SecurityException; {:try_start_7a .. :try_end_d8} :catch_d9",
                 replacement = """    # Patch: any refusal falls through to the next type, not just SecurityException.
     .catch Ljava/lang/Exception; {:try_start_7a .. :try_end_d8} :catch_d9"""
@@ -1784,7 +1757,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Deferring chat list preinflation",
                 explanation = "Pins the chat preinflation experiment to treatment 1, which fills the recycled-view pool when the first message is drawn instead of while the chat screen is being built.",
-                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                smaliPath = "me/l.smali",
                 methodSignature = ".method private static final chatPreinflationExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I",
                 replacementBody = """.method private static final chatPreinflationExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I
     .locals 1
@@ -1796,7 +1769,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Caching the UIManager constants",
                 explanation = "Pins the UIManager constants cache to its enabled treatment, so React Native reads the view-manager constants from the versioned cache instead of rebuilding them at each launch.",
-                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                smaliPath = "me/l.smali",
                 methodSignature = ".method private static final androidUIManagerConstantsCacheExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I",
                 replacementBody = """.method private static final androidUIManagerConstantsCacheExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I
     .locals 1
@@ -1808,7 +1781,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Using the smaller image cache experiment",
                 explanation = "Pins the image cache experiment to its cheap treatment instead of following the server assignment.",
-                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                smaliPath = "me/l.smali",
                 methodSignature = ".method private static final frescoCacheExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/FrescoMemoryCacheExperimentSettings;",
                 replacementBody = """.method private static final frescoCacheExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/FrescoMemoryCacheExperimentSettings;
     .locals 2
@@ -1822,7 +1795,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Using the background JavaScript memory target",
                 explanation = "Pins the JavaScript engine memory-target experiment to its background-oriented treatment.",
-                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                smaliPath = "me/l.smali",
                 methodSignature = ".method private static final hermesOccupancyTargetExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/HermesOccupancyTargetExperimentSettings;",
                 replacementBody = """.method private static final hermesOccupancyTargetExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/HermesOccupancyTargetExperimentSettings;
     .locals 2
@@ -1836,7 +1809,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Using the shared image pool for chat images",
                 explanation = "Pins the chat image pool experiment to the shared-pool treatment.",
-                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                smaliPath = "me/l.smali",
                 methodSignature = ".method private static final chatMosaicSharedPoolExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentSettings;",
                 replacementBody = """.method private static final chatMosaicSharedPoolExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/ChatMosaicSharedPoolExperimentSettings;
     .locals 2
@@ -1850,7 +1823,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Turning per-screen jank tracking off",
                 explanation = "Pins the per-screen jank experiment to control, which is the treatment that switches per-screen tracking off.",
-                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                smaliPath = "me/l.smali",
                 methodSignature = ".method private static final jankPerScreenExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/JankPerScreenExperimentSettings;",
                 replacementBody = """.method private static final jankPerScreenExperimentSettings_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)Lcom/discord/native_experiments/JankPerScreenExperimentSettings;
     .locals 2
@@ -1864,7 +1837,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Pinning the React Native mounting mode",
                 explanation = "Pins the mounting-mode experiment to the value that matches the individually forced React Native flags, so the two cannot drift apart.",
-                smaliPath = "com/discord/native_experiments/NativeExperiments.smali",
+                smaliPath = "me/l.smali",
                 methodSignature = ".method private static final mountingModeExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I",
                 replacementBody = """.method private static final mountingModeExperiment_delegate${'$'}lambda${'$'}0(Lcom/discord/native_experiments/NativeExperiments;)I
     .locals 1
