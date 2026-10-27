@@ -5,6 +5,44 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Discord 353.2.0's native patch set now applies in full.** Every native edit that the
+  3.10.0 port reported as skipped has been re-derived against the build it targets, or removed
+  when the code it named no longer exists:
+  - The crash-reporting, breadcrumb, telemetry-ring, logcat-capture, frame-metrics and jank
+    edits now name the methods 353.2.0 actually carries.
+  - The AppsFlyer startup block, browser routing, foreground-service fallbacks, media renderer,
+    experiment lambdas and video-tile renderer were re-pointed at their 353 classes and members.
+  - The OkHttp cache edits share one cache through the builder R8 now emits.
+  - Edits whose targets 353.2.0 removed are gone: the account-level "interceptor list" move
+    (this build already registers on the application list), the incoming-call avatar fetch, the
+    media connection map edits, and the coroutine-scope edits.
+- **The network blocklist works on 353.2.0.** OkHttp is fully obfuscated in this build, so the
+  resolver now finds the Request, Response, Interceptor chain and Protocol enum by their shape
+  in the DEX instead of looking for `Lokhttp3/...` names. The generated interceptor assembles
+  against the real APK and is covered by the payload test.
+- **The remaining applicable Reseam patches are covered.**
+  - Discord: **Spoiler text and media** reveals spoilers, **Masked link warnings** opens masked
+    links without the destination warning, **Higher stream quality** and **Higher video upload
+    quality** answer true from the two entitlement predicates, and **Quests in the app** now
+    also hides the quest dock, its activity button, its rendered-height hooks and the eligibility
+    predicate. The Discord JavaScript table is now **545 entries in 61 features**.
+  - OctoGram: **Allow screenshots in secret viewers** clears FLAG_SECURE from the view-once
+    viewer, **Bypass integrity checks** makes the two SafetyNet verdicts report true, and
+    **Unlock premium features** makes the client-side premium predicate treat the signed-in
+    account as subscribed (server-checked features still need a real subscription). The OctoGram
+    catalog is now **20 sets, 23 items and 48 edits**.
+  - Reseam features that need a JavaScript runtime or added UI (draft preview, source cards,
+    colored names, clean links, deleted-message history, local read state, themes, freemoji,
+    sticker links, server details, moderator badges, developer menu, premium icons) remain out of
+    scope because sleepy replaces bytecode and does not embed a JavaScript runtime. Its
+    "instant chat jumps", download-boost, Play-Store-restriction, restricted-save and signature
+    spoof patches have no target in the 353.2.0 / OctoGram 3.6.1 builds or depend on Reseam's
+    runtime, and are documented as not applicable rather than written on a guess.
+
 ## [3.11.0] - 2026-10-27
 
 ### Added

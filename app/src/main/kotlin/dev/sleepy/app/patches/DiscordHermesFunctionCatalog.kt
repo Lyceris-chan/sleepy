@@ -950,6 +950,16 @@ object DiscordHermesFunctionCatalog {
             "from a blocked user is drawn expanded instead of behind the blocked-message notice."),
         entry(37655, "Answers false from shouldAnimateSticker, so sticker previews and chat images " +
             "stay still instead of animating."),
+        entry(48533, "Answers true from computeGlobalSpoilerDisplay, so spoiler text and " +
+            "media are drawn revealed. Ported from Reseam's Reveal spoilers patch."),
+        entry(48534, "Answers false from the spoiler-obscurity hook, so this copy of the " +
+            "chat row does not obscure a spoiler. Ported from Reseam's Reveal spoilers patch."),
+        entry(48535, "Answers false from the spoiler-obscurity hook, so this copy of the " +
+            "chat row does not obscure a spoiler. Ported from Reseam's Reveal spoilers patch."),
+        entry(48870, "Answers true from isLinkTrusted, so a masked link opens without the " +
+            "destination warning. Ported from Reseam's Skip masked link warnings patch."),
+        entry(53244, "Answers true from isLinkTrusted, so a masked link opens without the " +
+            "destination warning. Ported from Reseam's Skip masked link warnings patch."),
         entry(46632, "Rebuilds createMessageContent with reaction chips, reply previews, embed and " +
             "link cards and activity invites turned off, and with custom emoji and GIFs not " +
             "animating. The option reads at the top of the function are forced false in place; " +
@@ -972,6 +982,24 @@ object DiscordHermesFunctionCatalog {
             "reply does not ping the person it answers."),
         entry(53470, "Starts a shallow reply with mentions turned off and the mention toggle shown, " +
             "so the same rule applies to the short-lived reply state."),
+        entry(27721, "Answers true from canStreamQuality, so screen sharing can use the high and " +
+            "mid stream qualities Nitro otherwise gates."),
+        entry(27709, "Answers true from canUseHighVideoUploadQuality, so media prepares at the " +
+            "higher upload quality; upload limits are unchanged."),
+        entry(51460, "Answers false from getIsEligibleForQuests, so no surface treats this account " +
+            "as eligible to show quests."),
+        entry(74695, "Returns null where QuestDockWithVisibilityContext used to draw, so the " +
+            "mobile quest dock is never mounted."),
+        entry(74696, "Returns null where QuestDockWithVisibilityContext used to draw, so the " +
+            "mobile quest dock is never mounted."),
+        entry(80963, "Returns null where QuestActivityButton used to draw, so the quest button " +
+            "is not rendered."),
+        entry(74252, "Answers false from useIsMobileQuestDockRenderedBase, so the rendered-dock " +
+            "check never turns the quest dock on."),
+        entry(74253, "Answers false from useIsMobileQuestDockRenderedBase, so the rendered-dock " +
+            "check never turns the quest dock on."),
+        entry(74246, "Returns zero from useMobileQuestDockHeight, so the quest dock reserves no " +
+            "height and cannot appear."),
     )
 
     /**
@@ -1132,7 +1160,8 @@ object DiscordHermesFunctionCatalog {
             description = "Removes the Quests screen, its dock, its navigation button, its settings row " +
                 "and its toggles in Data & Privacy.",
             functionIds = listOf(
-                51199, 51569, 73795, 73800, 73801, 73828, 73829, 74250, 76804, 76816
+                51199, 51460, 51569, 73795, 73800, 73801, 73828, 73829, 74246, 74250,
+                74252, 74253, 74695, 74696, 76804, 76816, 80963
             )
         ),
         Feature(
@@ -1420,6 +1449,24 @@ object DiscordHermesFunctionCatalog {
             functionIds = listOf(36044, 36065, 36070)
         ),
         Feature(
+            slug = "better_stream_quality",
+            group = VIDEO_GROUP,
+            label = "Higher stream quality",
+            description = "Answers true from canStreamQuality, so screen sharing can use the " +
+                "high and mid stream qualities the app otherwise gates. Ported from Reseam's " +
+                "Better stream quality patch.",
+            functionIds = listOf(27721)
+        ),
+        Feature(
+            slug = "better_video_upload_quality",
+            group = VIDEO_GROUP,
+            label = "Higher video upload quality",
+            description = "Answers true from canUseHighVideoUploadQuality, so video is " +
+                "prepared at the higher upload quality. Upload size limits stay the same. " +
+                "Ported from Reseam's Better video quality patch.",
+            functionIds = listOf(27709)
+        ),
+        Feature(
             slug = "appearance_activity_cards",
             group = LOOK_GROUP,
             label = "Appearance activity cards",
@@ -1448,6 +1495,22 @@ object DiscordHermesFunctionCatalog {
             description = "Draws an already-received message from a blocked user expanded instead " +
                 "of collapsing it behind the blocked-message notice.",
             functionIds = listOf(32823)
+        ),
+        Feature(
+            slug = "reveal_spoilers",
+            group = CHAT_GROUP,
+            label = "Spoiler text and media",
+            description = "Shows spoiler text, images and embeds without the tap-to-reveal " +
+                "obscuring. Ported from Reseam's Reveal spoilers patch.",
+            functionIds = listOf(48533, 48534, 48535)
+        ),
+        Feature(
+            slug = "skip_masked_link_warnings",
+            group = CHAT_GROUP,
+            label = "Masked link warnings",
+            description = "Opens masked links without the destination warning. Ported from " +
+                "Reseam's Skip masked link warnings patch.",
+            functionIds = listOf(48870, 53244)
         ),
         Feature(
             slug = "typing_status_outgoing",

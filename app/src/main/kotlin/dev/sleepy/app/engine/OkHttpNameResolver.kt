@@ -5,39 +5,61 @@ import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.Opcodes
 import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile
 import com.android.tools.smali.dexlib2.iface.ClassDef
+import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import dev.sleepy.app.model.TargetApk
 
 /**
- * The obfuscated okhttp3 names that the generated blocklist interceptor has to write out.
+ * Every obfuscated OkHttp name the generated blocklist interceptor has to write out.
+ *
+ * R8 renames the whole OkHttp surface on each Discord release. The names are therefore read from
+ * the selected APK's own DEX and handed to the generator, never carried from a previous build.
+ *
+ * @property interceptorClass Smali path of the stock resource-usage interceptor, without `.smali`.
+ * @property interceptorSignature The `.method` header of its `intercept` method.
+ * @property requestClass The `okhttp3.Request` type, for example `ar/n`.
+ * @property requestUrlField The Request field holding the URL.
+ * @property requestUrlType The URL type the Request constructor takes.
+ * @property requestUrlFieldType The type the field is declared with; R8 merges it to
+ *   `Ljava/lang/Object;`, so the generated body reads it as that and casts to [requestUrlType].
+ * @property chainClass The `okhttp3.Interceptor$Chain` type.
+ * @property chainRequestField The Chain field holding the request it was handed.
+ * @property chainProceedMethod The Chain method taking a Request and returning a Response.
+ * @property chainIsInterface True when the Chain is an interface, so the call is `invoke-interface`.
+ * @property responseClass The `okhttp3.Response` type.
+ * @property responseConstructorDescriptor The Response constructor's parameter list and return
+ *   type, for example `(Lar/n;Lm50/d0;...)V`.
+ * @property protocolClass The `okhttp3.Protocol` enum.
+ * @property protocolHttp11Field The enum field holding `HTTP_1_1`.
  */
 data class OkHttpProtocolNames(
-    /**
-     * `okhttp3.Response.<init>`'s descriptor—parameter list *and* return type, for example
-     * `(...)V`.
-     */
+    val interceptorClass: String,
+    val interceptorSignature: String,
+    val requestClass: String,
+    val requestUrlField: String,
+    val requestUrlType: String,
+    val requestUrlFieldType: CharSequence,
+    val chainClass: String,
+    val chainRequestField: String,
+    val chainProceedMethod: String,
+    val chainIsInterface: Boolean,
+    val responseClass: String,
     val responseConstructorDescriptor: String,
-    /** The `okhttp3.Protocol` enum, without the `L`/`;` a descriptor carries—such as `ps/s`. */
     val protocolClass: String,
-    /** Field in [protocolClass] holding the `HTTP_1_1` constant—such as `i`. */
-    val protocolHttp11Field: String,
+    val protocolHttp11Field: String
+) {
+    /** The Response type as a descriptor, for example `Lm50/i0;`. */
+    val responseType: String get() = "L$responseClass;"
 
-    /**
-     * `okhttp3.Interceptor$Chain`'s no-argument method returning a `Request`—`i` on 349.5, `h`
-     * on 351.2.0.
-     *
-     * The interceptor reads the request it is given through this, and R8 renames it on every
-     * release just as it does the three names above. Hardcoding it costs an `NoSuchMethodError`
-     * on the OkHttp dispatcher thread the first time the app makes a request, which is not a
-     * failure this patch set can afford to have written down.
-     */
-    val chainRequestMethod: String,
+    /** The Chain type as a descriptor. */
+    val chainType: String get() = "L$chainClass;"
 
-    /** `okhttp3.Interceptor$Chain`'s method taking a `Request` and returning a `Response`. */
-    val chainProceedMethod: String
-)
+    /** The Request type as a descriptor. */
+    val requestType: String get() = "L$requestClass;"
+}
 
 /** Either the preceding names, or why they could not be read. */
 sealed interface OkHttpResolution {
@@ -49,35 +71,37 @@ sealed interface OkHttpResolution {
 }
 
 /**
- * Reads the okhttp3 names R8 renames on every release, from the target's DEX.
+ * Reads the obfuscated OkHttp names the blocklist interceptor needs from the target's DEX.
  *
- * The blocklist interceptor constructs an `okhttp3.Response` manually, so it has to name the
- * `Response.<init>` descriptor, the `Protocol` enum and that enum's `HTTP_1_1` field. On 346.2
- * they were `Lcs/t;`, `Lcs/q;` and `Lgc/k;`; on 347.5 two of the three had moved, which produced
- * a `NoClassDefFoundError: Lcs/t;` on every request until the recorded change set stopped writing
- * them down. This is that same lookup, reading the DEX rather than an apktool tree, because an
- * on-device patcher does not have the tree.
+ * The interceptor has to construct a `Response`, read the `Request` from the chain it is handed
+ * and call the chain's `proceed`. All of those types and members are renamed by R8. Rather than
+ * spelling any of them out, this walks the build's own class graph:
+ *
+ * 1. The `Protocol` enum is the class whose static initializer builds a constant from the
+ *    `"http/1.1"` string and stores it in a static field of its own type.
+ * 2. The `Response` class is the one with a constructor whose second parameter is that Protocol
+ *    type and whose first is the `Request` type.
+ * 3. The `Request` type's URL field is the first object field its five-parameter constructor
+ *    writes.
+ * 4. The `Chain` is the class with a Request field and a method from Request to Response.
+ * 5. The stock resource-usage interceptor is the class with a Chain-to-Response method whose body
+ *    calls a static helper with `(Chain, <stats>) -> Response`.
+ *
+ * 353.2.0 obfuscates OkHttp completely; there is no `Lokhttp3/...` descriptor to anchor on. This
+ * is the shape-based resolution that replaces the old hardcoded names.
  */
 object OkHttpNameResolver {
 
-    private const val RESPONSE_TYPE = "Lokhttp3/Response;"
-    private const val REQUEST_TYPE = "Lokhttp3/Request;"
-    private const val CONSTRUCTOR_NAME = "<init>"
-
-    /** The interface the interceptor is handed, whose two accessors are obfuscated too. */
-    private const val CHAIN_TYPE = "Lokhttp3/Interceptor\$Chain;"
-
-    /** The protocol string the `HTTP_1_1` enum constant is built from. */
     private const val PROTOCOL_STRING = "http/1.1"
-
-    /** The enum constant whose field the interceptor has to read. */
     private const val PROTOCOL_CONSTANT = "HTTP_1_1"
+    private const val CLOSEABLE = "Ljava/io/Closeable;"
+    private const val OBJECT_TYPE = "Ljava/lang/Object;"
 
     /**
      * Resolves [OkHttpProtocolNames] from [target], or explains why it cannot.
      *
      * @param apiLevel the opcode set to read the DEX with. Only affects how instructions are
-     *   decoded, which these three names do not depend on.
+     *   decoded, which the names this returns do not depend on.
      */
     fun resolve(target: TargetApk, apiLevel: Int = 28): OkHttpResolution = try {
         resolveOrThrow(target, apiLevel)
@@ -100,81 +124,139 @@ object OkHttpNameResolver {
             return dexFile.classes.firstOrNull { it.type == type }
         }
 
-        val response = classDefOf(RESPONSE_TYPE) ?: return OkHttpResolution.Unresolved(
-            "$RESPONSE_TYPE is not in this APK, so the request interceptor cannot be rebuilt."
-        )
-
-        val constructor = response.methods.firstOrNull {
-            it.name == CONSTRUCTOR_NAME && AccessFlags.PUBLIC.isSet(it.accessFlags)
-        } ?: return OkHttpResolution.Unresolved(
-            "$RESPONSE_TYPE has no public $CONSTRUCTOR_NAME, so its descriptor cannot be read."
-        )
-
-        // A descriptor is `(...)V`. The return type is part of it: dropping the trailing V
-        // produces a smali parse error much later, with no hint as to the cause.
-        val descriptor = buildString {
-            append('(')
-            constructor.parameterTypes.forEach { append(it) }
-            append(')')
-            append(constructor.returnType)
+        val classes = mutableListOf<ClassDef>()
+        for ((dexName, dexBytes) in target.dexEntries) {
+            val dexFile = loadedDexFiles.getOrPut(dexName) { DexBackedDexFile(opcodes, dexBytes) }
+            classes += dexFile.classes
         }
+        val byType = classes.associateBy { it.type }
 
-        // The two accessors the interceptor calls on the chain it is handed, found by what they
-        // take and return rather than by name.
-        val chain = classDefOf(CHAIN_TYPE) ?: return OkHttpResolution.Unresolved(
-            "$CHAIN_TYPE is not in this APK, so the request interceptor cannot be rebuilt."
-        )
-        val chainRequest = chain.methods.firstOrNull {
-            it.parameterTypes.isEmpty() && it.returnType == REQUEST_TYPE
-        } ?: return OkHttpResolution.Unresolved(
-            "$CHAIN_TYPE has no method taking nothing and returning $REQUEST_TYPE, so the " +
-                "request the interceptor reads cannot be named."
-        )
-        val chainProceed = chain.methods.firstOrNull {
-            it.parameterTypes.size == 1 &&
-                it.parameterTypes.first() == REQUEST_TYPE &&
-                it.returnType == RESPONSE_TYPE
-        } ?: return OkHttpResolution.Unresolved(
-            "$CHAIN_TYPE has no method taking $REQUEST_TYPE and returning $RESPONSE_TYPE, so " +
-                "the call the interceptor proceeds with cannot be named."
-        )
-
-        // Which obfuscated class the Protocol enum is moves per release, so it is recognized by
-        // what it does rather than by name. It is the only class the constructor takes that
-        // builds a constant out of the "http/1.1" string and assigns it to a static field of its
-        // own type.
-        for (parameter in constructor.parameterTypes) {
-            val type = parameter.toString()
-            if (!type.startsWith("L") || !type.endsWith(";")) continue
-            val candidate = classDefOf(type) ?: continue
-            val field = http11FieldOf(candidate) ?: continue
-            return OkHttpResolution.Resolved(
-                OkHttpProtocolNames(
-                    responseConstructorDescriptor = descriptor,
-                    protocolClass = type.substring(1, type.length - 1),
-                    protocolHttp11Field = field,
-                    chainRequestMethod = chainRequest.name,
-                    chainProceedMethod = chainProceed.name
-                )
+        // 1. Protocol: the enum that builds HTTP/1.1 from the string and stores it in itself.
+        val protocols = classes.mapNotNull { protocolClassOf(it) }
+        if (protocols.isEmpty()) {
+            return OkHttpResolution.Unresolved(
+                "No class builds an HTTP/1.1 constant from the \"$PROTOCOL_STRING\" string, so the " +
+                    "okhttp3 Protocol enum could not be identified."
             )
         }
 
-        return OkHttpResolution.Unresolved(
-            "None of the classes $RESPONSE_TYPE's constructor takes holds an HTTP/1.1 constant, " +
-                "so the Protocol enum could not be identified."
+        // 2. Response: a class whose constructor takes the Protocol as its second parameter and
+        // the Request as its first, and which implements Closeable.
+        var protocol: ProtocolCandidate? = null
+        var response: ResponseCandidate? = null
+        for (candidate in protocols) {
+            val found = classes.asSequence()
+                .filter { it.type != candidate.type }
+                .filter { AccessFlags.INTERFACE.isSet(it.accessFlags).not() }
+                .filter { isCloseable(it, byType) }
+                .mapNotNull { responseClassOf(it, candidate.type) }
+                .firstOrNull()
+            if (found != null) {
+                protocol = candidate
+                response = found
+                break
+            }
+        }
+        if (protocol == null || response == null) {
+            return OkHttpResolution.Unresolved(
+                "The HTTP/1.1 enum exists but no okhttp3 Response constructor takes it together " +
+                    "with a Request, so the Response shape could not be identified."
+            )
+        }
+
+        // 3. Request URL: the first object field the Request's five-parameter constructor writes.
+        val requestType = response.requestType
+        val request = byType[requestType] ?: return OkHttpResolution.Unresolved(
+            "$requestType is not in this APK, so the Request shape cannot be read."
         )
+        val requestCtor = request.methods.firstOrNull { method ->
+            method.parameterTypes.size == 5 &&
+                method.parameterTypes[1].toString() == "Ljava/lang/String;" &&
+                hasStringToString(byType[method.parameterTypes[0].toString()])
+        } ?: return OkHttpResolution.Unresolved(
+            "$requestType has no five-parameter constructor that stores a URL and a method name."
+        )
+        val urlType = requestCtor.parameterTypes[0].toString()
+        val urlField = firstObjectFieldWritten(requestCtor, request)
+            ?: return OkHttpResolution.Unresolved(
+                "$requestType's constructor does not write an object field, so its URL field " +
+                    "could not be named."
+            )
+
+        // 4. Chain: a class with a Request field and a Request -> Response method.
+        val chain = classes.asSequence()
+            .filter { it.type != response.responseType && it.type != requestType }
+            .mapNotNull { chainClassOf(it, requestType, response.responseType) }
+            .firstOrNull()
+            ?: return OkHttpResolution.Unresolved(
+                "No class carries a Request and a method from Request to Response, so the OkHttp " +
+                    "chain could not be identified."
+            )
+
+        // 5. Interceptor: a Chain -> Response method whose body calls (Chain, stats) -> Response.
+        val interceptor = classes.asSequence()
+            .filter { it.type != chain.type && it.type != response.responseType }
+            .mapNotNull { interceptorMethodOf(it, chain.type, response.responseType) }
+            .firstOrNull()
+            ?: return OkHttpResolution.Unresolved(
+                "No resource-usage interceptor takes the resolved chain and returns the resolved " +
+                    "Response, so there is nothing to rewrite."
+            )
+
+        return OkHttpResolution.Resolved(
+            OkHttpProtocolNames(
+                interceptorClass = interceptor.declaringClass.removePrefix("L").removeSuffix(";"),
+                interceptorSignature = interceptor.signature,
+                requestClass = requestType.removePrefix("L").removeSuffix(";"),
+                requestUrlField = urlField.name,
+                requestUrlType = urlType,
+                requestUrlFieldType = urlField.type,
+                chainClass = chain.type.removePrefix("L").removeSuffix(";"),
+                chainRequestField = chain.requestField,
+                chainProceedMethod = chain.proceedMethod,
+                chainIsInterface = AccessFlags.INTERFACE.isSet(chain.accessFlags),
+                responseClass = response.responseType.removePrefix("L").removeSuffix(";"),
+                responseConstructorDescriptor = response.constructorDescriptor,
+                protocolClass = protocol.type.removePrefix("L").removeSuffix(";"),
+                protocolHttp11Field = protocol.http11Field
+            )
+        )
+    }
+
+    private data class ProtocolCandidate(val type: String, val http11Field: String)
+
+    private data class ResponseCandidate(
+        val responseType: String,
+        val requestType: String,
+        val constructorDescriptor: String
+    )
+
+    private data class ChainCandidate(
+        val type: String,
+        val accessFlags: Int,
+        val requestField: String,
+        val proceedMethod: String
+    )
+
+    private data class InterceptorCandidate(
+        val declaringClass: String,
+        val signature: String
+    )
+
+    /** The HTTP/1.1 enum, when [classDef] is one. */
+    private fun protocolClassOf(classDef: ClassDef): ProtocolCandidate? {
+        val field = http11FieldOf(classDef) ?: return null
+        return ProtocolCandidate(classDef.type, field)
     }
 
     /**
      * Finds the field [classDef] assigns its `HTTP_1_1` constant to, or null when [classDef] is
      * not the enum that holds the protocols.
      *
-     * The class is accepted on the same two facts the recorded change set uses: its `<clinit>`
-     * builds a constant from the `"http/1.1"` string, and it assigns a static field of the
-     * class's own type. The field name then comes from the assignment that *follows* the
-     * `"HTTP_1_1"` marker, because the enum writes six fields of its own type and only that marker
-     * identifies which of them is HTTP/1.1—the marker is the constant's own name, and the enum
-     * constructor consumes it immediately before the field is stored.
+     * The class is accepted on two facts: its `<clinit>` builds a constant from the
+     * `"http/1.1"` string, and it assigns a static field of the class's own type *after* the
+     * `"HTTP_1_1"` marker. The enum writes six fields of its own type and only that marker
+     * identifies which one is HTTP/1.1.
      */
     private fun http11FieldOf(classDef: ClassDef): String? {
         val clinit = classDef.methods.firstOrNull { it.name == "<clinit>" } ?: return null
@@ -187,7 +269,6 @@ object OkHttpNameResolver {
         for (instruction in instructions) {
             val reference = (instruction as? ReferenceInstruction)?.reference ?: continue
             if (reference is StringReference) {
-                // Only const-string carries a string reference, so the opcode needs no checking.
                 when (reference.string) {
                     PROTOCOL_STRING -> buildsProtocol = true
                     PROTOCOL_CONSTANT -> http11ConstantSeen = true
@@ -202,5 +283,133 @@ object OkHttpNameResolver {
         }
 
         return if (buildsProtocol) http11Field else null
+    }
+
+    /** True when [classDef] implements Closeable directly or through an interface it lists. */
+    private fun isCloseable(classDef: ClassDef, byType: Map<String, ClassDef>): Boolean {
+        if (CLOSEABLE in classDef.interfaces) return true
+        val superclass = classDef.superclass ?: return false
+        val parent = byType[superclass] ?: return false
+        return CLOSEABLE in parent.interfaces
+    }
+
+    /** The Response shape, when [classDef]'s second constructor parameter is [protocolType]. */
+    private fun responseClassOf(classDef: ClassDef, protocolType: String): ResponseCandidate? {
+        val ctor = classDef.methods.firstOrNull { method ->
+            method.name == "<init>" &&
+                AccessFlags.PUBLIC.isSet(method.accessFlags) &&
+                method.parameterTypes.size >= 10 &&
+                method.parameterTypes.getOrNull(1)?.toString() == protocolType &&
+                method.parameterTypes.first().toString() != protocolType
+        } ?: return null
+        val params = ctor.parameterTypes.map { it.toString() }
+        // The okhttp3.Response constructor, in this order. A build that changes it needs a
+        // generator change, not a guessed register layout.
+        if (params.size != 13 || params[2] != "Ljava/lang/String;" || params[3] != "I" ||
+            params[10] != "J" || params[11] != "J"
+        ) return null
+        return ResponseCandidate(
+            responseType = classDef.type,
+            requestType = params[0],
+            constructorDescriptor = "(${params.joinToString("")})${ctor.returnType}"
+        )
+    }
+
+    /** True when [classDef] has an instance `toString()String`. */
+    private fun hasStringToString(classDef: ClassDef?): Boolean =
+        classDef?.methods?.any {
+            it.name == "toString" &&
+                it.parameterTypes.isEmpty() &&
+                it.returnType == "Ljava/lang/String;"
+        } == true
+
+    /** A field reference's name and declared type. */
+    private data class FieldShape(val name: String, val type: CharSequence)
+
+    /** The first object field [constructor] writes on [declaringClass]. */
+    private fun firstObjectFieldWritten(constructor: Method, declaringClass: ClassDef): FieldShape? {
+        val instructions = constructor.implementation?.instructions ?: return null
+        for (instruction in instructions) {
+            if (instruction.opcode != Opcode.IPUT_OBJECT) continue
+            val reference = (instruction as? ReferenceInstruction)?.reference as? FieldReference
+                ?: continue
+            if (reference.definingClass == declaringClass.type) {
+                return FieldShape(reference.name, reference.type)
+            }
+        }
+        return null
+    }
+
+    /** The Chain shape, when [classDef] carries [requestType] and proceeds to [responseType]. */
+    private fun chainClassOf(
+        classDef: ClassDef,
+        requestType: String,
+        responseType: String
+    ): ChainCandidate? {
+        val requestField = classDef.fields.firstOrNull { it.type == requestType } ?: return null
+        val proceed = classDef.methods.firstOrNull { method ->
+            method.name != "<init>" &&
+                !AccessFlags.STATIC.isSet(method.accessFlags) &&
+                method.parameterTypes.size == 1 &&
+                method.parameterTypes.first().toString() == requestType &&
+                method.returnType == responseType
+        } ?: return null
+        return ChainCandidate(
+            type = classDef.type,
+            accessFlags = classDef.accessFlags,
+            requestField = requestField.name,
+            proceedMethod = proceed.name
+        )
+    }
+
+    /**
+     * The stock interceptor, when [classDef] has a Chain -> Response method that delegates to a
+     * static `(Chain, stats) -> Response` helper. That helper is what records the byte counters;
+     * the other OkHttp interceptors either call `proceed` directly or do not take the chain.
+     */
+    private fun interceptorMethodOf(
+        classDef: ClassDef,
+        chainType: String,
+        responseType: String
+    ): InterceptorCandidate? {
+        for (method in classDef.methods) {
+            if (method.name == "<init>" || AccessFlags.STATIC.isSet(method.accessFlags)) continue
+            if (method.parameterTypes.size != 1) continue
+            if (method.parameterTypes.first().toString() != chainType) continue
+            if (method.returnType != responseType) continue
+
+            val instructions = method.implementation?.instructions ?: continue
+            val delegatesToStatsHelper = instructions.any { instruction ->
+                if (instruction.opcode != Opcode.INVOKE_STATIC &&
+                    instruction.opcode != Opcode.INVOKE_STATIC_RANGE
+                ) return@any false
+                val reference = (instruction as? ReferenceInstruction)?.reference
+                    as? MethodReference ?: return@any false
+                reference.parameterTypes.size == 2 &&
+                    reference.parameterTypes.first().toString() == chainType &&
+                    reference.returnType == responseType
+            }
+            if (!delegatesToStatsHelper) continue
+
+            return InterceptorCandidate(
+                declaringClass = classDef.type,
+                signature = methodSignatureOf(method)
+            )
+        }
+        return null
+    }
+
+    /** `.method <access> <name><descriptor>` for [method], matching its smali header. */
+    private fun methodSignatureOf(method: Method): String {
+        val access = buildList {
+            if (AccessFlags.PUBLIC.isSet(method.accessFlags)) add("public")
+            if (AccessFlags.PRIVATE.isSet(method.accessFlags)) add("private")
+            if (AccessFlags.PROTECTED.isSet(method.accessFlags)) add("protected")
+            if (AccessFlags.STATIC.isSet(method.accessFlags)) add("static")
+            if (AccessFlags.FINAL.isSet(method.accessFlags)) add("final")
+            if (AccessFlags.SYNCHRONIZED.isSet(method.accessFlags)) add("declared-synchronized")
+        }.joinToString(" ")
+        val descriptor = "(${method.parameterTypes.joinToString("")})${method.returnType}"
+        return ".method $access ${method.name}$descriptor".replace("  ", " ")
     }
 }

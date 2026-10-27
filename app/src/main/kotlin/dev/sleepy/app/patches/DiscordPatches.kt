@@ -59,8 +59,9 @@ object DiscordPatches {
     )
 
     /**
-     * The Sentry set: stubs the NDK loader, `CrashReporting.isDisabled()`, and the React Native
-     * SDK module, so crash dumps and error envelopes are not sent.
+     * The Sentry set: stubs the NDK loader and the React Native SDK module, so crash dumps and
+     * error envelopes are not sent. The Java-side entry points are covered by
+     * [DiscordNativePatches.CRASH_LOGCAT].
      */
     val SENTRY = PatchSet(
         id = "discord_sentry",

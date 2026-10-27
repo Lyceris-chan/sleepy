@@ -23,9 +23,9 @@ class OctoGramPatchContentTest {
 
     @Test
     fun everySetAndItemHasSomethingToSayForItself() {
-        assertEquals("the OctoGram catalog is seventeen sets", 17, sets.size)
-        assertEquals("twenty items over them", 20, entries.size)
-        assertEquals("and forty-four edits behind the items", 44, edits.size)
+        assertEquals("the OctoGram catalog is twenty sets", 20, sets.size)
+        assertEquals("twenty-three items over them", 23, entries.size)
+        assertEquals("and forty-eight edits behind the items", 48, edits.size)
 
         sets.forEach { set ->
             assertTrue("set ${set.id} has no label", set.label.isNotBlank())
@@ -255,9 +255,9 @@ class OctoGramPatchContentTest {
     fun nothingIsTaggedForABuildNoSourceOffers() {
         val tagged = edits.mapNotNull { (_, patch) -> patch.versionTag }
         assertEquals(
-            "forty edits name the build they were derived from; the four Firebase " +
+            "forty-four edits name the build they were derived from; the four Firebase " +
                 "registrars name none",
-            40,
+            44,
             tagged.size
         )
         assertEquals(

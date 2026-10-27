@@ -19,7 +19,7 @@ class PatchItemContentTest {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
             "the table is the fixed set of functions this release patches",
-            531,
+            545,
             patched.size
         )
         assertEquals(
@@ -121,7 +121,7 @@ class PatchItemContentTest {
     @Test
     fun everyItemHasAKeyThatDoesNotDependOnItsPosition() {
         val items = DiscordHermesFunctionCatalog.items()
-        assertEquals(57, items.size)
+        assertEquals(61, items.size)
         assertEquals(
             "two items that share a key are one item as far as a saved selection is concerned",
             items.size,

@@ -53,6 +53,9 @@ object OctoGramPatchItems {
     private const val PREMIUM_ROWS = "Premium rows in the profile's settings list"
     private const val LINKS = "How links open"
     private const val TYPING = "Typing status"
+    private const val SCREENSHOTS = "Screenshots in secret viewers"
+    private const val INTEGRITY = "Device integrity checks"
+    private const val PREMIUM_FEATURES = "Premium features"
 
     /** The identity of the one Firebase item every Firebase set has. */
     private const val REGISTRAR = "registrar"
@@ -285,6 +288,36 @@ object OctoGramPatchItems {
                     "built, so other people do not see a typing status from you. Messages, media " +
                     "and read receipts still arrive normally.",
                 patches = OctoGramPatches.TYPING_NOTIFICATIONS
+            )
+        ),
+        OctoGramPatches.ALLOW_SCREENSHOTS.id to listOf(
+            Entry(
+                identity = "secretViewerFlags",
+                label = "The secret viewer's FLAG_SECURE bit",
+                group = SCREENSHOTS,
+                description = "View-once and self-destruct media can be screenshotted or " +
+                    "screen-recorded; every other flag the viewer sets is kept.",
+                patches = OctoGramPatches.ALLOW_SCREENSHOT_FLAGS
+            )
+        ),
+        OctoGramPatches.BYPASS_INTEGRITY.id to listOf(
+            Entry(
+                identity = "safetyNetVerdicts",
+                label = "The SafetyNet verdicts",
+                group = INTEGRITY,
+                description = "The two verdicts the login path reads report true, so a rooted or " +
+                    "non-Google device is not blocked from signing in.",
+                patches = OctoGramPatches.INTEGRITY_VERDICTS
+            )
+        ),
+        OctoGramPatches.UNLOCK_PREMIUM.id to listOf(
+            Entry(
+                identity = "premiumFlag",
+                label = "The account's premium flag",
+                group = PREMIUM_FEATURES,
+                description = "Client-side premium checks treat the signed-in account as " +
+                    "subscribed. Server-checked features still need a real subscription.",
+                patches = OctoGramPatches.PREMIUM_STATE
             )
         )
     )

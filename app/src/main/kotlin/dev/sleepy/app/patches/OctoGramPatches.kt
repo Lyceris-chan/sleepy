@@ -945,6 +945,136 @@ object OctoGramPatches {
     )
 
     /**
+     * Clears FLAG_SECURE from the secret media viewer's window flags.
+     *
+     * 3.6.1: SecretMediaViewer.u0(...) writes the viewer's window flags as the literal
+     * 0x80012108. Clearing bit 0x2000 (FLAG_SECURE) leaves the rest of the viewer's flags
+     * intact, so view-once and self-destruct media can be shown in a screenshot or recording.
+     * Ported from Reseam's Allow screenshots patch.
+     */
+    internal val ALLOW_SCREENSHOT_FLAGS = listOf(
+        SmaliPatch(
+            title = "The secret viewer's FLAG_SECURE bit (3.6.1)",
+            explanation = "Writes the viewer's window flags without FLAG_SECURE, so view-once " +
+                "and self-destruct media can be captured; every other flag the viewer sets is kept.",
+            versionTag = "3.6.1",
+            smaliPath = "org/telegram/ui/SecretMediaViewer.smali",
+            anchor = "    const v2, -0x7ffedef8",
+            replacement = "    const v2, -0x7ffefef8"
+        )
+    )
+
+    /** The set that allows screenshots of view-once and self-destruct media. */
+    val ALLOW_SCREENSHOTS = octoGramSet(
+        id = "octogram_allow_screenshots",
+        label = "Allow screenshots in secret viewers",
+        description = "Strips FLAG_SECURE from the view-once and self-destruct media viewer, so " +
+            "its content can be screenshotted or screen-recorded. Nothing else about the viewer changes.",
+    )
+
+    /**
+     * Forces the two SafetyNet verdicts to true.
+     *
+     * 3.6.1: `k47.Y4(...)` reads `basicIntegrity` and `ctsProfileMatch` from the SafetyNet JSON
+     * and decides whether to resend the Firebase SMS when either is false. The two reads are
+     * replaced with constants, so the login path takes its verified branch even on a rooted or
+     * non-Google device. Ported from Reseam's Bypass integrity patch.
+     */
+    internal val INTEGRITY_VERDICTS = listOf(
+        SmaliPatch(
+            title = "The basicIntegrity verdict (3.6.1)",
+            explanation = "Replaces the JSON read with true, so basicIntegrity cannot fail the " +
+                "login path.",
+            versionTag = "3.6.1",
+            smaliPath = "k47.smali",
+            anchor = """    const-string p1, "basicIntegrity"
+
+    .line 69
+    .line 70
+    invoke-virtual {p5, p1}, Lorg/json/JSONObject;->optBoolean(Ljava/lang/String;)Z
+
+    .line 71
+    .line 72
+    .line 73
+    move-result p1""",
+            replacement = """    const-string p1, "basicIntegrity"
+
+    .line 69
+    .line 70
+    # Patch: treat the verdict as true.
+    const/4 p1, 0x1"""
+        ),
+        SmaliPatch(
+            title = "The ctsProfileMatch verdict (3.6.1)",
+            explanation = "Replaces the JSON read with true, so ctsProfileMatch cannot fail the " +
+                "login path.",
+            versionTag = "3.6.1",
+            smaliPath = "k47.smali",
+            anchor = """    const-string v2, "ctsProfileMatch"
+
+    .line 75
+    .line 76
+    invoke-virtual {p5, v2}, Lorg/json/JSONObject;->optBoolean(Ljava/lang/String;)Z
+
+    .line 77
+    .line 78
+    .line 79
+    move-result p5""",
+            replacement = """    const-string v2, "ctsProfileMatch"
+
+    .line 75
+    .line 76
+    # Patch: treat the verdict as true.
+    const/4 p5, 0x1"""
+        )
+    )
+
+    /** The set that lets login pass on rooted or non-Google devices. */
+    val BYPASS_INTEGRITY = octoGramSet(
+        id = "octogram_bypass_integrity",
+        label = "Bypass integrity checks",
+        description = "Makes the two SafetyNet verdicts the login path reads report true, so a " +
+            "rooted or non-Google device is not blocked from signing in. Ported from Reseam's " +
+            "Bypass integrity patch.",
+    )
+
+    /**
+     * Makes the current account report premium.
+     *
+     * 3.6.1: `cld.p()` returns the signed-in user's `premium` field; the class is the per-account
+     * configuration Telegram keeps, and this is the predicate its client-side premium checks call.
+     * Returning true unlocks the client-side premium surfaces. Server-checked features still
+     * require a real subscription, as Reseam's own summary says.
+     */
+    internal val PREMIUM_STATE = listOf(
+        SmaliPatch(
+            title = "The signed-in account's premium flag (3.6.1)",
+            explanation = "Returns true from the per-account premium predicate, so the app's " +
+                "client-side premium checks treat the account as subscribed. The server still " +
+                "decides everything it validates itself.",
+            versionTag = "3.6.1",
+            smaliPath = "cld.smali",
+            methodSignature = ".method public final p()Z",
+            replacementBody = """.method public final p()Z
+    .locals 1
+
+    const/4 v0, 0x1
+
+    return v0
+.end method"""
+        )
+    )
+
+    /** The set that makes the app treat the signed-in account as premium. */
+    val UNLOCK_PREMIUM = octoGramSet(
+        id = "octogram_unlock_premium",
+        label = "Unlock premium features",
+        description = "Makes the client-side premium checks treat the signed-in account as " +
+            "subscribed, so premium-only surfaces stop being gated. Server-checked features still " +
+            "need a real subscription. Ported from Reseam's Unlock Premium patch.",
+    )
+
+    /**
      * One OctoGram set: its own switch, and the edits [OctoGramPatchItems] offers as its items.
      *
      * The set declares no patches of its own. The engine applies a set's patches whether or not
@@ -979,7 +1109,10 @@ object OctoGramPatches {
         EXTERNAL_BROWSER,
         HIDE_BUSINESS,
         PREMIUM_SHEETS,
-        HIDE_TYPING
+        HIDE_TYPING,
+        ALLOW_SCREENSHOTS,
+        BYPASS_INTEGRITY,
+        UNLOCK_PREMIUM
     )
 
 }

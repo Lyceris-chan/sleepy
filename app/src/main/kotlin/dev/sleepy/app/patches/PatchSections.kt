@@ -65,7 +65,6 @@ object PatchSections {
         DiscordNativePatches.LOG_NOISE.id to BACKGROUND,
         DiscordNativePatches.AUDIT.id to BACKGROUND,
         DiscordNativePatches.OKHTTP_CACHE.id to FIXES,
-        DiscordNativePatches.INTERCEPTORS.id to FIXES,
         DiscordNativePatches.JS_POLLS.id to BACKGROUND,
         DiscordNativePatches.SYSTRACE.id to BACKGROUND,
         DiscordNativePatches.CRASH_LOGCAT.id to CRASHES,
@@ -78,7 +77,6 @@ object PatchSections {
         DiscordNativePatches.FOREGROUND_SERVICE.id to FIXES,
         DiscordNativePatches.EXPERIMENTS.id to FIXES,
         DiscordNativePatches.EXTERNAL_BROWSER.id to FIXES,
-        DiscordNativePatches.INCOMING_CALL.id to FIXES,
         DiscordBlocklistPatch.NETWORK_BLOCKLIST.id to NETWORK,
         OctoGramPatches.SPONSORED_MSGS.id to ADS,
         OctoGramPatches.PHOTO_VIEWER_ADS.id to ADS,
@@ -96,7 +94,10 @@ object PatchSections {
         OctoGramPatches.CRASH_REPORTER.id to CRASHES,
         OctoGramPatches.OTA_UPDATER.id to FIXES,
         OctoGramPatches.EXTERNAL_BROWSER.id to FIXES,
-        OctoGramPatches.HIDE_TYPING.id to TRACKING
+        OctoGramPatches.HIDE_TYPING.id to TRACKING,
+        OctoGramPatches.ALLOW_SCREENSHOTS.id to FIXES,
+        OctoGramPatches.BYPASS_INTEGRITY.id to FIXES,
+        OctoGramPatches.UNLOCK_PREMIUM.id to ADS
     )
 
     /**

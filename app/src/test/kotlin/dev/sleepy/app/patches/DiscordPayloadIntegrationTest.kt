@@ -174,6 +174,11 @@ class DiscordPayloadIntegrationTest {
         )
         println("Native patches: ${applied.size} applied, ${skipped.size} skipped")
         skipped.forEach { println("  skipped: $it") }
+        assertTrue(
+            "the 353.2.0 native set must apply every edit; these were skipped:\n" +
+                skipped.joinToString("\n"),
+            skipped.isEmpty()
+        )
 
         // Assembly does not check a replacement's names: smali writes a reference to a class
         // that does not exist in the build, and writes one to a class that exists with another
@@ -348,13 +353,8 @@ class DiscordPayloadIntegrationTest {
         val target = TargetApk(classToDexIndex = classToDex, dexEntries = entries)
         val generatedBodies = when (val resolution = OkHttpNameResolver.resolve(target)) {
             is OkHttpResolution.Resolved -> listOf(
-                "the generated blocklist interceptor" to DiscordBlocklistPatch.interceptorBody(
-                    ctorDescriptor = resolution.names.responseConstructorDescriptor,
-                    protocolClass = resolution.names.protocolClass,
-                    protocolField = resolution.names.protocolHttp11Field,
-                    chainRequestMethod = resolution.names.chainRequestMethod,
-                    chainProceedMethod = resolution.names.chainProceedMethod
-                )
+                "the generated blocklist interceptor" to
+                    DiscordBlocklistPatch.interceptorBody(resolution.names)
             )
 
             is OkHttpResolution.Unresolved -> {

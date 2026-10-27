@@ -1,6 +1,7 @@
 package dev.sleepy.app.patches
 
 import dev.sleepy.app.engine.OkHttpNameResolver
+import dev.sleepy.app.engine.OkHttpProtocolNames
 import dev.sleepy.app.engine.OkHttpResolution
 import dev.sleepy.app.model.BlocklistCoverage
 import dev.sleepy.app.model.BlocklistRow
@@ -18,27 +19,16 @@ import dev.sleepy.app.model.TargetWrittenGenerator
 /**
  * The network blocklist interceptor for Discord.
  *
- * One method, `DeviceResourceUsageRecorder$Companion.requestStatsInterceptor`, is shared by every
- * OkHttp client this set concerns. Its body is replaced with one that matches the request URL
- * against [DiscordBlocklistRules] and answers a match with a synthetic HTTP 204 — a dropped
- * response would make the client retry without a limit — so the request is never sent. It only
- * works where the interceptors are on OkHttp's application list, which
- * [DiscordNativePatches.INTERCEPTORS] arranges.
+ * One stock interceptor is shared by every OkHttp client this set concerns. Its body is replaced
+ * with one that matches the request URL against [DiscordBlocklistRules] and answers a match with
+ * a synthetic HTTP 204 — a dropped response would make the client retry without a limit — so the
+ * request is never sent. 353.2.0 already registers that interceptor on OkHttp's application
+ * list, where answering without calling `proceed` is legal.
  *
  * The body cannot be a constant: it constructs an `okhttp3.Response` by hand, so it is generated
- * against the selected APK's own method names ([OkHttpNameResolver]).
+ * against the selected APK's own class and member names ([OkHttpNameResolver]).
  */
 object DiscordBlocklistPatch {
-
-    /** The class whose stock interceptor this set rewrites. */
-    private const val RECORDER_CLASS =
-        "com/discord/resource_usage/DeviceResourceUsageRecorder${'$'}Companion.smali"
-
-    /** The one method, matched as the recorded change set matches it. */
-    private const val INTERCEPTOR_SIGNATURE =
-        ".method private final requestStatsInterceptor(Lokhttp3/Interceptor${'$'}Chain;" +
-            "Lcom/discord/resource_usage/DeviceResourceUsageRecorder${'$'}RequestStats;)" +
-            "Lokhttp3/Response;"
 
     /**
      * The blocklist set: rebuilds the shared OkHttp interceptor so requests matching a rule are
@@ -50,7 +40,7 @@ object DiscordBlocklistPatch {
         label = "Block tracking and advertising",
         description = "Rebuilds Discord's shared OkHttp interceptor so requests to tracking, advertising, survey and monetization endpoints are answered " +
             "with an empty HTTP 204 instead of being sent, covering ${DiscordBlocklistRules.HOST_RULES.size} host rules and " +
-            "${DiscordBlocklistRules.API_RULES.size} API path rules. The three obfuscated OkHttp names the method has to spell out are read from the " +
+            "${DiscordBlocklistRules.API_RULES.size} API path rules. The obfuscated OkHttp types and members the method has to spell out are read from the " +
             "target build, so a release where they cannot be resolved is skipped with a reason rather than patched with another release's names.",
         generator = BlocklistGenerator
     )
@@ -145,15 +135,11 @@ object DiscordBlocklistPatch {
                     title = "Rebuilding the request interceptor as a network blocklist",
                     explanation = "Replaces the stock resource-usage interceptor with one that matches the request URL against " +
                         "${hostRules.size} host and ${apiRules.size} API-path rules and answers a match with a synthetic empty " +
-                        "HTTP 204. The OkHttp constructor, Protocol enum and HTTP/1.1 field it has to name were read from this build.",
-                    smaliPath = RECORDER_CLASS,
-                    methodSignature = INTERCEPTOR_SIGNATURE,
+                        "HTTP 204. Every OkHttp type and member it names was read from this build.",
+                    smaliPath = "${resolution.names.interceptorClass}.smali",
+                    methodSignature = resolution.names.interceptorSignature,
                     replacementBody = interceptorBody(
-                        ctorDescriptor = resolution.names.responseConstructorDescriptor,
-                        protocolClass = resolution.names.protocolClass,
-                        protocolField = resolution.names.protocolHttp11Field,
-                        chainRequestMethod = resolution.names.chainRequestMethod,
-                        chainProceedMethod = resolution.names.chainProceedMethod,
+                        names = resolution.names,
                         hostRules = hostRules,
                         apiRules = apiRules
                     )
@@ -168,56 +154,51 @@ object DiscordBlocklistPatch {
     }
 
     /**
-     * Builds the replacement body for `requestStatsInterceptor`.
+     * Builds the replacement body for the stock interceptor.
      *
-     * The recorded change set gates two debug blocks on a `BLOCKLIST_LOG` environment variable;
-     * an on-device patcher has no such switch, so this emits the build's output without the
-     * logging. `:not_proxied` and `:skip_<n>` bracket each API rule, and every host rule branches
-     * to the shared `:block` after the early return, so the blocked path is built once.
+     * The body reads the request URL, walks the host and API-path rules, and answers a match with
+     * a synthetic HTTP 204. `:not_proxied` and `:skip_<n>` bracket each API rule, and every host
+     * rule branches to the shared `:block`, so the blocked response is constructed once.
      *
-     * @param ctorDescriptor The hand-built `Lokhttp3/Response;` constructor.
-     * @param protocolClass The Protocol enum, without `L`/`;`.
-     * @param protocolField The field holding the `HTTP_1_1` constant.
-     * @param chainRequestMethod The chain's no-argument `Request` accessor.
-     * @param chainProceedMethod The chain's `Request -> Response` method.
+     * Every type and member name comes from [names], which was read from the target APK. That is
+     * what makes this work on a build where R8 renamed the whole OkHttp surface.
+     *
+     * @param names The resolved OkHttp shape.
      * @param hostRules Host patterns to emit, in order. Defaults to the whole table.
      * @param apiRules API path patterns to emit; `:skip_<n>` labels are numbered within this list.
      */
     fun interceptorBody(
-        ctorDescriptor: String,
-        protocolClass: String,
-        protocolField: String,
-        chainRequestMethod: String,
-        chainProceedMethod: String,
+        names: OkHttpProtocolNames,
         hostRules: List<String> = DiscordBlocklistRules.HOST_RULES.map { it.pattern },
         apiRules: List<String> = DiscordBlocklistRules.API_RULES.map { it.pattern }
     ): String {
-        val protocol = "L$protocolClass;"
+        val request = names.requestType
+        val chain = names.chainType
+        val response = names.responseType
+        val protocol = "L${names.protocolClass};"
+        val chainCall = if (names.chainIsInterface) "invoke-interface" else "invoke-virtual"
         val lines = mutableListOf(
-            INTERCEPTOR_SIGNATURE,
+            names.interceptorSignature,
             "    .locals 24",
             "",
             "    move-object/from16 v3, p1",
             "",
-            "    invoke-interface {v3}, Lokhttp3/Interceptor${'$'}Chain;->$chainRequestMethod()Lokhttp3/Request;",
+            "    iget-object v0, v3, ${chain}->${names.chainRequestField}:$request",
+            ""
+        )
+        lines += listOf(
+            "    iget-object v1, v0, ${request}->${names.requestUrlField}:" +
+                names.requestUrlFieldType,
             "",
-            "    move-result-object v0",
-            "",
-            "    # Patch: match on the URL, NOT Request.toString(). OkHttp's",
-            "    # Request.toString() renders the method, the URL *and every header*",
-            "    # into a StringBuilder - and Discord's X-Super-Properties header",
-            "    # alone is a multi-KB base64 blob. Doing that on every request (all",
-            "    # four OkHttp clients, and the RN XHR client carries all JS traffic)",
-            "    # just to run 81 substring scans over the result was a large",
-            "    # allocation on the hottest shared path. Every rule below is a URL",
-            "    # or host substring, so the URL is all we need.",
-            "    iget-object v1, v0, Lokhttp3/Request;->a:Lokhttp3/HttpUrl;",
-            "",
-            "    invoke-virtual {v1}, Lokhttp3/HttpUrl;->toString()Ljava/lang/String;",
+            "    check-cast v1, ${names.requestUrlType}",
+            ""
+        )
+        lines += listOf(
+            "    invoke-virtual {v1}, ${names.requestUrlType}->toString()Ljava/lang/String;",
             "",
             "    move-result-object v1",
             "",
-            "    # Patch: blocklist - match request URL against tracking/monetisation entries.",
+            "    # Match the request URL against tracking and monetisation entries.",
             "",
             "    # v6 = is this a Discord API URL? Path rules only apply there.",
             "    const-string v2, \"/api/\"",
@@ -227,9 +208,7 @@ object DiscordBlocklistPatch {
             "    move-result v6",
             "",
             "    # The media proxy embeds the origin URL after /external/<hmac>/, so a",
-            "    # proxied image whose source contains \"/api/\" and a blocked word would",
-            "    # otherwise be 204'd and render broken. Never treat a proxied URL as an",
-            "    # API call.",
+            "    # proxied image whose source contains /api/ would otherwise be blocked.",
             "    const-string v2, \"/external/\"",
             "",
             "    invoke-virtual {v1, v2}, Ljava/lang/String;->contains(Ljava/lang/CharSequence;)Z",
@@ -276,7 +255,7 @@ object DiscordBlocklistPatch {
 
         lines += listOf(
             "    # Not blocked - proceed with the (possibly rewritten) request.",
-            "    invoke-interface {v3, v0}, Lokhttp3/Interceptor${'$'}Chain;->$chainProceedMethod(Lokhttp3/Request;)Lokhttp3/Response;",
+            "    $chainCall {v3, v0}, ${chain}->${names.chainProceedMethod}($request)$response",
             "",
             "    move-result-object v0",
             "",
@@ -284,11 +263,11 @@ object DiscordBlocklistPatch {
             "",
             "    # Shared block: synthetic HTTP 204 No Content.",
             "    :block",
-            "    new-instance v8, Lokhttp3/Response;",
+            "    new-instance v8, $response",
             "",
             "    move-object v9, v0",
             "",
-            "    sget-object v10, $protocol->$protocolField:$protocol",
+            "    sget-object v10, $protocol->${names.protocolHttp11Field}:$protocol",
             "",
             "    const-string v11, \"No Content\"",
             "",
@@ -296,21 +275,9 @@ object DiscordBlocklistPatch {
             "",
             "    const/4 v13, 0x0",
             "",
-            "    const/4 v6, 0x0",
+            "    const/4 v14, 0x0",
             "",
-            "    new-array v6, v6, [Ljava/lang/String;",
-            "",
-            "    new-instance v14, Lokhttp3/Headers;",
-            "",
-            "    invoke-direct {v14, v6}, Lokhttp3/Headers;-><init>([Ljava/lang/String;)V",
-            "",
-            "    const-string v6, \"\"",
-            "",
-            "    const/4 v5, 0x0",
-            "",
-            "    invoke-static {v6, v5}, Lokhttp3/ResponseBody;->create(Ljava/lang/String;Lokhttp3/MediaType;)Lokhttp3/ResponseBody;",
-            "",
-            "    move-result-object v15",
+            "    const/4 v15, 0x0",
             "",
             "    const/16 v16, 0x0",
             "",
@@ -324,7 +291,7 @@ object DiscordBlocklistPatch {
             "",
             "    const/16 v23, 0x0",
             "",
-            "    invoke-direct/range {v8 .. v23}, Lokhttp3/Response;-><init>$ctorDescriptor",
+            "    invoke-direct/range {v8 .. v23}, ${response}-><init>${names.responseConstructorDescriptor}",
             "",
             "    move-object v0, v8",
             "",

@@ -76,28 +76,27 @@ class DiscordBlocklistPatchTest {
             unresolved
         )
 
-        val generated = DiscordBlocklistPatch.interceptorBody(
-            ctorDescriptor = names.responseConstructorDescriptor,
-            protocolClass = names.protocolClass,
-            protocolField = names.protocolHttp11Field,
-            chainRequestMethod = names.chainRequestMethod,
-            chainProceedMethod = names.chainProceedMethod
-        )
-        // The chain accessors are the ones the runtime will look for, so the body has to call
-        // them by the names this build gives them rather than by any release's.
+        val generated = DiscordBlocklistPatch.interceptorBody(names)
+        // The chain member is the one the runtime will look for, so the body has to read the
+        // request and proceed through the names this build gives them.
         assertTrue(
-            "the generated body must read the request through ${names.chainRequestMethod}()",
-            generated.contains("Interceptor\$Chain;->${names.chainRequestMethod}()Lokhttp3/Request;")
-        )
-        assertTrue(
-            "the generated body must proceed through ${names.chainProceedMethod}(Request)",
+            "the generated body must read the request through ${names.chainRequestField}",
             generated.contains(
-                "Interceptor\$Chain;->${names.chainProceedMethod}(Lokhttp3/Request;)Lokhttp3/Response;"
+                "${names.chainType}->${names.chainRequestField}:${names.requestType}"
             )
         )
         assertTrue(
-            "the generated body must construct okhttp3.Response with the resolved descriptor",
-            generated.contains("Lokhttp3/Response;-><init>${names.responseConstructorDescriptor}")
+            "the generated body must proceed through ${names.chainProceedMethod}",
+            generated.contains(
+                "${names.chainType}->${names.chainProceedMethod}" +
+                    "(${names.requestType})${names.responseType}"
+            )
+        )
+        assertTrue(
+            "the generated body must construct the resolved Response with its descriptor",
+            generated.contains(
+                "${names.responseType}-><init>${names.responseConstructorDescriptor}"
+            )
         )
         val protocolReference =
             "L${names.protocolClass};->${names.protocolHttp11Field}:L${names.protocolClass};"
@@ -105,8 +104,13 @@ class DiscordBlocklistPatchTest {
             "the generated body must read the resolved protocol field as $protocolReference",
             generated.contains(protocolReference)
         )
+        assertTrue(
+            "the generated body must target the resolved interceptor",
+            generated.contains(names.interceptorSignature)
+        )
         println(
-            "Blocklist interceptor: names ${names.responseConstructorDescriptor}, " +
+            "Blocklist interceptor: ${names.interceptorClass}${names.interceptorSignature}, " +
+                "${names.responseConstructorDescriptor}, " +
                 "${names.protocolClass}->${names.protocolHttp11Field}, all present in this build"
         )
     }
