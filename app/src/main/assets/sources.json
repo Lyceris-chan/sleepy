@@ -50,6 +50,7 @@
         "discord_native_log_noise",
         "discord_native_audit",
         "discord_native_okhttp_cache",
+        "discord_native_interceptors",
         "discord_native_js_polls",
         "discord_native_systrace",
         "discord_native_crash_logcat",

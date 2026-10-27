@@ -65,6 +65,7 @@ object PatchSections {
         DiscordNativePatches.LOG_NOISE.id to BACKGROUND,
         DiscordNativePatches.AUDIT.id to BACKGROUND,
         DiscordNativePatches.OKHTTP_CACHE.id to FIXES,
+        DiscordNativePatches.INTERCEPTORS.id to FIXES,
         DiscordNativePatches.JS_POLLS.id to BACKGROUND,
         DiscordNativePatches.SYSTRACE.id to BACKGROUND,
         DiscordNativePatches.CRASH_LOGCAT.id to CRASHES,

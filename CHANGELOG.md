@@ -17,9 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The AppsFlyer startup block, browser routing, foreground-service fallbacks, media renderer,
     experiment lambdas and video-tile renderer were re-pointed at their 353 classes and members.
   - The OkHttp cache edits share one cache through the builder R8 now emits.
-  - Edits whose targets 353.2.0 removed are gone: the account-level "interceptor list" move
-    (this build already registers on the application list), the incoming-call avatar fetch, the
-    media connection map edits, and the coroutine-scope edits.
+  - Edits whose targets 353.2.0 removed are gone: the incoming-call avatar fetch, the media
+    connection map edits, and the coroutine-scope edits. The interceptor-list move was kept:
+    the resource-usage interceptor is still registered on OkHttp's network list in this build.
+- **The blocklist no longer throws on the network thread.** Two clients register the
+  resource-usage interceptor on OkHttp's network list, and the blocklist replaces that
+  interceptor with one that answers a blocked request without calling `proceed()`. OkHttp
+  rejects that from a network interceptor, so both registrations move to the application list,
+  where short-circuiting is legal.
+- **The Sentry set closes the native path too.** libdiscore's native reporter install and the
+  native crash handler are no-ops now, so blanking the Java DSNs is not bypassed by a crash
+  reporter that runs below them.
 - **The network blocklist works on 353.2.0.** OkHttp is fully obfuscated in this build, so the
   resolver now finds the Request, Response, Interceptor chain and Protocol enum by their shape
   in the DEX instead of looking for `Lokhttp3/...` names. The generated interceptor assembles

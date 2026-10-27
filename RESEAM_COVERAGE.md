@@ -16,7 +16,7 @@ listed as not applicable instead of being written from another release's names.
 | Better stream quality | **Higher stream quality** (JavaScript stub `canStreamQuality`). |
 | Better video quality | **Higher video upload quality** (JavaScript stub `canUseHighVideoUploadQuality`). |
 | Block analytics | **Analytics events** (`handleTrack`, id 71544). |
-| Block crash reports | Crash-reporting native sets no-op the Java entry points, breadcrumbs and native report paths. |
+| Block crash reports | Crash-reporting native sets no-op the Java entry points, breadcrumbs and native report paths, including libdiscore's native Sentry reporter and crash handler. |
 | Chat animation switch | **Message cards and animation** — the combined switch forces `animateEmoji`/`gifAutoPlay` false. |
 | Clean outgoing links | Not applicable — needs the JavaScript link-rewriting extension. |
 | Colored names | Not applicable — needs the JavaScript name-rendering extension. |
@@ -93,7 +93,7 @@ listed as not applicable instead of being written from another release's names.
 
 ## Verification
 
-- Discord native set: **91 applied, 0 skipped** on the real 353.2.0 APK.
+- Discord native set: **95 applied, 0 skipped** on the real 353.2.0 APK.
 - Discord JavaScript table: **545 entries**, all read back by real Hermes with **0 rejected**.
 - OctoGram: **20 sets, 23 items, 48 edits**, all applied and reassembled by the payload test.
 - Full unit suite: 274 tests, 0 failures (17 fixture-dependent tests skip when a split or fixture

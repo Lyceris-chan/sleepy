@@ -22,13 +22,14 @@ import dev.sleepy.app.model.SmaliPatch
 object DiscordNativePatches {
 
     /**
-     * Blanks the hard-coded Sentry DSNs and stubs the breadcrumb facade, so crash and
-     * breadcrumb reporting has no destination.
+     * Blanks the hard-coded Sentry DSNs, stubs the breadcrumb facade and stops libdiscore from
+     * installing its own native Sentry reporter and crash handler, so crash and breadcrumb
+     * reporting has no destination.
      */
     val SENTRY = PatchSet(
         id = "discord_native_sentry",
         label = "Blank the crash reporter's keys",
-        description = "Empties the three hard-coded Sentry DSN constants in every class that carries them, stubs the app's breadcrumb builder and the SDK breadcrumb facade, drops soft exceptions, and removes the WebRTC report path, so crash and breadcrumb reporting has no destination even on code paths that bypass the app-level switch.",
+        description = "Empties the three hard-coded Sentry DSN constants in every class that carries them, stubs the app's breadcrumb builder and the SDK breadcrumb facade, stops libdiscore installing its native Sentry reporter and crash handler, and drops soft exceptions, so crash and breadcrumb reporting has no destination even on code paths that bypass the app-level switch.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Blanking the Sentry DSN in BuildConfig",
@@ -100,6 +101,28 @@ object DiscordNativePatches {
                 smaliPath = "io/sentry/d4.smali",
                 methodSignature = ".method public static a(Lio/sentry/e;)V",
                 replacementBody = """.method public static a(Lio/sentry/e;)V
+    .locals 0
+    # Patch: no-op.
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Stopping libdiscore's native Sentry reporter",
+                explanation = "Replaces the libdiscore module's reporter-install call with a no-op, so the native library never attaches its own Sentry reporter behind the blanked Java DSNs.",
+                smaliPath = "com/discord/libdiscore/LibdiscoreModuleClass${'$'}LibdiscoreModule.smali",
+                methodSignature = ".method public final c()V",
+                replacementBody = """.method public final c()V
+    .locals 0
+    # Patch: no-op.
+    return-void
+.end method"""
+            ),
+            SmaliPatch(
+                title = "Not installing libdiscore's native crash handler",
+                explanation = "Returns from the companion's initNative call without invoking the JNI method, so libdiscore installs neither its native crash handler nor the breadcrumb collection behind it.",
+                smaliPath = "com/discord/crash_reporting/NativeCrashReporting${'$'}Companion.smali",
+                methodSignature = ".method public final initNative(Z)V",
+                replacementBody = """.method public final initNative(Z)V
     .locals 0
     # Patch: no-op.
     return-void
@@ -528,10 +551,37 @@ object DiscordNativePatches {
     )
 
     /**
+     * Moves the resource-usage interceptor Discord installs on OkHttp's network list onto the
+     * application list, where returning a response without calling proceed is legal.
+     */
+    val INTERCEPTORS = PatchSet(
+        id = "discord_native_interceptors",
+        label = "Stop the blocklist crashing the app",
+        description = "Moves the resource-usage interceptor from OkHttp's network list to the application list on both clients that register it. A network interceptor must call proceed() exactly once, so the network blocklist's synthetic 204 would otherwise throw on the network thread and kill the app.",
+        smaliPatches = listOf(
+            SmaliPatch(
+                title = "Registering the main client's interceptor on the application list",
+                explanation = "Moves the request-stat interceptor from the network list to the application list, where the blocklist may answer a request without proceeding.",
+                smaliPath = "jc/l.smali",
+                anchor = "    iget-object v5, v2, Lm50/b0;->d:Ljava/util/ArrayList;",
+                replacement = "    iget-object v5, v2, Lm50/b0;->c:Ljava/util/ArrayList;"
+            ),
+            SmaliPatch(
+                title = "Registering the second client's interceptor on the application list",
+                explanation = "The same move for the second client that installs the same resource-usage interceptor, so a blocked request through it also short-circuits legally.",
+                smaliPath = "j60/e.smali",
+                anchor = "    iget-object p1, p1, Lm50/b0;->d:Ljava/util/ArrayList;",
+                replacement = "    iget-object p1, p1, Lm50/b0;->c:Ljava/util/ArrayList;"
+            )
+        )
+    )
+
+    /**
      * Cuts off the JavaScript resource-usage polls and the native counters behind them.
      *
-     * 353.2.0 already registers the resource-usage interceptor on OkHttp's application list, so
-     * the old "move it off the network list" edit has no target and no work left to do.
+     * The resource-usage interceptor these counters belong to is registered on OkHttp's network
+     * list in this build; [INTERCEPTORS] moves it to the application list so the blocklist can
+     * answer a request without proceeding.
      */
     val JS_POLLS = PatchSet(
         id = "discord_native_js_polls",
@@ -1415,6 +1465,7 @@ object DiscordNativePatches {
         LOG_NOISE,
         AUDIT,
         OKHTTP_CACHE,
+        INTERCEPTORS,
         JS_POLLS,
         SYSTRACE,
         CRASH_LOGCAT,
