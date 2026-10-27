@@ -93,7 +93,7 @@ listed as not applicable instead of being written from another release's names.
 
 ## Verification
 
-- Discord native set: **95 applied, 0 skipped** on the real 353.2.0 APK.
+- Discord native set: **96 applied, 0 skipped** on the real 353.2.0 APK.
 - Discord JavaScript table: **545 entries**, all read back by real Hermes with **0 rejected**.
 - OctoGram: **20 sets, 23 items, 48 edits**, all applied and reassembled by the payload test.
 - Full unit suite: 274 tests, 0 failures (17 fixture-dependent tests skip when a split or fixture

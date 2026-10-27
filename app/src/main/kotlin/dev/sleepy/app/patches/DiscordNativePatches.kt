@@ -1306,12 +1306,24 @@ object DiscordNativePatches {
     val EXPERIMENTS = PatchSet(
         id = "discord_native_experiments",
         label = "Force cheaper performance settings",
-        description = "Pins Discord's server-driven performance experiments to the cheapest " +
-            "treatment: the smaller Fresco cache, the Hermes memory target, the shared " +
-            "ChatMosaic pool, per-screen jank tracking switched off, the React Native mounting " +
-            "mode the individual flag patches assume, the versioned UIManager constants cache, " +
-            "and chat preinflation deferred to the first drawn message.",
+        description = "Pins Discord's server-driven performance experiments to the cheaper " +
+            "treatment: React Native's accumulated raw-props updates, the smaller Fresco cache, " +
+            "the Hermes memory target, the shared ChatMosaic pool, per-screen jank tracking " +
+            "switched off, the React Native mounting mode the individual flag patches assume, the " +
+            "versioned UIManager constants cache, and chat preinflation deferred to the first " +
+            "drawn message.",
         smaliPatches = listOf(
+            SmaliPatch(
+                title = "Enabling accumulated raw-props updates",
+                explanation = "Pins the RMLE experiment to treatment 2, the level that enables React Native's accumulated raw-props updates without the pull-model change in treatment 3. The app's feature-flag bridge reads a value of 2 or more as enabled.",
+                smaliPath = "me/j.smali",
+                anchor = "    const-string v1, \"2026-01-android-rmle\"",
+                replacement = """    const/4 v0, 0x2
+
+    goto/16 :goto_19
+
+    const-string v1, "2026-01-android-rmle""""
+            ),
             SmaliPatch(
                 title = "Deferring chat list preinflation",
                 explanation = "Pins the chat preinflation experiment to treatment 1, which fills the recycled-view pool when the first message is drawn instead of while the chat screen is being built.",

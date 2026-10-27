@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Sentry set closes the native path too.** libdiscore's native reporter install and the
   native crash handler are no-ops now, so blanking the Java DSNs is not bypassed by a crash
   reporter that runs below them.
+- **React Native's accumulated raw-props updates are on.** The RMLE experiment is pinned to
+  treatment 2, which enables the accumulated raw-props update path without treatment 3's
+  pull-model change. The privacy set already forces the Java-side cache to the same value, so
+  the native provider and the Java cache now agree on it.
 - **The network blocklist works on 353.2.0.** OkHttp is fully obfuscated in this build, so the
   resolver now finds the Request, Response, Interceptor chain and Protocol enum by their shape
   in the DEX instead of looking for `Lokhttp3/...` names. The generated interceptor assembles
