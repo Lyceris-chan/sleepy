@@ -19,7 +19,7 @@ import dev.sleepy.app.model.PatchSet
  * no items, which is what expanding a saved set id needs.
  *
  * A set is split where a per-item choice is useful: the Hermes set's features, each standing for
- * one or more of the 212 functions it patches; the blocklist's 81 rules; and every OctoGram set,
+ * one or more of the functions it patches; the blocklist's 81 rules; and every OctoGram set,
  * whose items are the named decisions behind its one switch. A Discord static set whose patches
  * are one edit has nothing to choose between, and keeps its whole-set item.
  */
@@ -39,7 +39,7 @@ object PatchItemCatalog : PatchItemSource {
      * than a list because the items carry the id of the set they belong to.
      *
      * The OctoGram entries are built from the sets themselves rather than written out, because
-     * there are thirteen of them and all thirteen are split the same way: a set that is registered
+     * every OctoGram set is split the same way: a set that is registered
      * but missing from here would lose its items without a report, and a test asserts the two
      * agree.
      */

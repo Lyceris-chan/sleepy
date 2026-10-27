@@ -56,14 +56,14 @@ class HermesBundleApplicationTest {
      *
      * Six are longer than the body they replace, which no in-place write can hold: 8346 inserts
      * the cache clamp into the middle of the function, the four settings rows append a
-     * `usePredicate` property, and 34451 clamps the pixel budget to a wider constant. Four share
-     * a body with another entry - 32481 with 32480, 65890 with 65889, 75050 with 75038, and
+     * `usePredicate` property, and 34451 clamps the pixel budget to a wider constant. Five share
+     * a body with another entry - 32481 with 32480, 65890 with 65889, 75050 with 75038,
      * 42009 with 42008, whose two compiler variants were compiled to identical code and
-     * deduplicated - and a shared region can hold only one replacement, so the lower function
-     * id keeps it and the other is relocated beside it.
+     * deduplicated, and 57031 with 57030 - and a shared region can hold only one replacement, so
+     * the lower function id keeps it and the other is relocated beside it.
      */
     private val relocated =
-        listOf(8464, 16275, 16281, 16288, 17189, 33516, 36065, 36070, 42845, 67337, 76816)
+        listOf(8464, 16275, 16281, 16288, 17189, 33516, 36065, 36070, 42845, 67337, 76816, 57031)
 
     @Test
     fun everyEntryAppliesToTheBuildTheTableNames() {

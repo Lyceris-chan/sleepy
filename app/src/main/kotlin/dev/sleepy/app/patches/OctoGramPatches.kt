@@ -910,6 +910,41 @@ object OctoGramPatches {
     )
 
     /**
+     * The edit that stops typing and recording notifications being sent.
+     *
+     * 3.6.1 (build 38275): MessagesController.u4(IIJJLjava/lang/String;)Z builds
+     * TL_messages_setTyping and TL_messages_setEncryptedTyping. Returning false from it means
+     * neither request is built or sent; the method's other work is only the request it sends.
+     */
+    internal val TYPING_NOTIFICATIONS = listOf(
+        SmaliPatch(
+            title = "Typing and recording notifications (3.6.1)",
+            explanation = "Returns false from MessagesController.u4(...), the method that builds " +
+                "TL_messages_setTyping and TL_messages_setEncryptedTyping. No typing request is " +
+                "built or sent, so other people never see a typing or recording status from this " +
+                "device; messages themselves are unchanged.",
+            versionTag = "3.6.1",
+            smaliPath = "a28.smali",
+            methodSignature = ".method public final u4(IIJJLjava/lang/String;)Z",
+            replacementBody = """.method public final u4(IIJJLjava/lang/String;)Z
+    .locals 0
+
+    const/4 v0, 0x0
+
+    return v0
+.end method"""
+        )
+    )
+
+    /** The set that stops outgoing typing and recording notifications. */
+    val HIDE_TYPING = octoGramSet(
+        id = "octogram_hide_typing",
+        label = "Hide typing notifications",
+        description = "Stops OctoGram telling a chat that you are typing or recording. Messages, " +
+            "media and read receipts are unchanged.",
+    )
+
+    /**
      * One OctoGram set: its own switch, and the edits [OctoGramPatchItems] offers as its items.
      *
      * The set declares no patches of its own. The engine applies a set's patches whether or not
@@ -943,7 +978,8 @@ object OctoGramPatches {
         PREMIUM_SETTINGS,
         EXTERNAL_BROWSER,
         HIDE_BUSINESS,
-        PREMIUM_SHEETS
+        PREMIUM_SHEETS,
+        HIDE_TYPING
     )
 
 }

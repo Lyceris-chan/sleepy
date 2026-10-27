@@ -22,6 +22,14 @@ Each of the following changes has its own switch, so you can apply all of them, 
 - **Removes games being played.** The game a friend is playing stops appearing: no status line under their name, no entry in their profile's activity list, and no games section in a voice channel.
 - **Silences debug logging** and stops Discord capturing device logs in the background for crash reports.
 - **Removes the app-rating survey dialogs.**
+- **Hides message-card clutter.** Reaction chips, reply previews, link and embed cards, gift cards and activity invites stop being drawn, and custom emoji and GIFs stop animating.
+- **Hides the activity cards in the Appearance preview.**
+- **Stops Super Reaction decorations looping.**
+- **Leaves stickers still.**
+- **Expands messages from blocked users** instead of collapsing them behind the blocked-message notice.
+- **Stops sending your typing status** when you type or record.
+- **Disables message swipe actions**, so swiping a message no longer starts a reply or an edit.
+- **Starts replies with mentions off**, while leaving the mention toggle available.
 - **Stops background update downloads.** Discord keeps the version of its own code that shipped inside this APK instead of downloading a newer one that undoes the changes listed earlier.
 - **Makes calls and media more reliable.** Voice calls stay alive when you leave the app, the video player stops blocking the interface while it starts up, a camera that fails to start is handled instead of ending the call or the app, and media failures are reported instead of dropped without a report.
 - **Uses less memory and fewer downloads.** The image cache is smaller, screen-by-screen performance tracking is off, and all of Discord's network clients share one disk cache instead of each keeping its own in the same folder.
@@ -29,6 +37,7 @@ Each of the following changes has its own switch, so you can apply all of them, 
 ### OctoGram
 
 - **Removes sponsored messages** from public channels, including the request that fetches them.
+- **Stops typing notifications.** OctoGram no longer tells a chat that you are typing or recording.
 - **Removes the full-screen ads** shown while you swipe through photos and videos in a channel.
 - **Removes sponsored channels and bots** from search results.
 - **Stops the update check** that contacts GitHub in the background.
@@ -56,7 +65,7 @@ The patch screen is organised by what you want, not by how the app is built. Eve
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-One switch often stands for several changes: the 519 JavaScript changes are grouped into the 49 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
+One switch often stands for several changes: the 531 JavaScript changes are grouped into the 57 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
 
 ## Install and use sleepy
 
@@ -98,9 +107,9 @@ Where the source provides a SHA-256 hash, sleepy checks the download against it 
 
 ## How the changes are checked
 
-The Discord JavaScript changes are a fixed table of 519 byte ranges, each written for one function of one exact bundle and each declaring the size of the body it replaces. A table written for one release and used on another would write plausible-looking bytes into unrelated functions, so the patcher refuses an entry whose declared size does not match and reports that step as skipped instead. On the build the table names, nothing may be skipped: `HermesBundleApplicationTest` runs the whole table and requires every entry to land, and a real Hermes disassembler then reads all 519 patched functions back, which is what catches a replacement that occupies the right number of bytes but is not valid bytecode.
+The Discord JavaScript changes are a fixed table of 531 byte ranges, each written for one function of one exact bundle and each declaring the size of the body it replaces. A table written for one release and used on another would write plausible-looking bytes into unrelated functions, so the patcher refuses an entry whose declared size does not match and reports that step as skipped instead. On the build the table names, nothing may be skipped: `HermesBundleApplicationTest` runs the whole table and requires every entry to land, and a real Hermes disassembler then reads all 531 patched functions back, which is what catches a replacement that occupies the right number of bytes but is not valid bytecode.
 
-The 353.2.0 port re-pointed the table by function name, arity and the strings each function references—the same identity model Reseam's patch bundle uses—and then re-derived the 17 promise stubs and 18 body edits against the new bundle. The size declaration and the disassembler readback remain the checks that decide whether an entry is written.
+The 353.2.0 port re-pointed the table by function name, arity and the strings each function references—the same identity model Reseam's patch bundle uses—and then re-derived the 17 promise stubs and 21 body edits against the new bundle. The size declaration and the disassembler readback remain the checks that decide whether an entry is written.
 
 The 349.5 table was checked further: it was derived from a pair of builds, one of them patched and verified by hand, so sleepy's output could be compared against that build one byte at a time, and the handful of functions that differed were named. There is no such recorded build for 353.2.0, so that comparison is gone, and this release does not claim it.
 
@@ -121,6 +130,7 @@ The builds this version supports have the limitations listed in the following se
 - JavaScript changes are written for one exact Discord release, 353.2.0. A different release's code is not patched, because the identifiers these changes use are numbered per release and point at unrelated code in another build.
 - Discord 353.2.0 obfuscated or merged many of the native classes the native edits were written against. A native edit whose class, method signature or anchor is not found in this build is reported as skipped with that reason; it is never written on a guess. The JavaScript, manifest, resource and blocklist passes are unaffected, and the step log names every skipped native edit.
 - The blocklist is built from the APK you selected rather than shipped as fixed text, because five of the names it needs are renamed by the app's own obfuscation on every release: the okhttp3 Response constructor, the Protocol enum and that enum's HTTP/1.1 field, and the two Interceptor chain accessors the generated interceptor calls. A build where these cannot be found is skipped, with the reason shown, instead of being patched with names from another release.
+- The Reseam features that need a JavaScript hook or added UI are not included: keeping deleted messages, local edit history, clean outgoing links, colored names, draft preview, jump to first message, server details, moderator badges, local read state, and custom themes. sleepy replaces whole functions with stubs or byte edits and does not embed a JavaScript runtime. Firebase push fixes, Play Store signature spoofing, and the Telegram patches that depend on official-Telegram class names are also deliberately not included.
 - Every manifest edit the patch set makes is applied. The split declarations, the native library setting, any permission you switch off, the six declarations sleepy removes on its own, the crash reporter's two providers, the three Play split metadata entries, the AppsFlyer link query and the three Google Analytics components are all edited into the compiled manifest. The RPC service is closed to other apps on every build, because it is exported with no permission on it and no check on its caller. The Analytics components are marked `android:enabled="false"` rather than deleted, which leaves their classes in the app's code where the platform will not start a component declared that way.
 - New entries cannot be added to the app's resource table, only carried across from a split. Some video player image aliases would have to be added rather than carried, so they are not. Discord's own APK ships without them and runs, so this matches what Discord itself ships.
 - Three media changes stay switched off: one crashes the camera as soon as it opens and cannot be reverted without breaking a string other code reuses, one records video below the encoder's minimum, and one passes a value the media engine does not document.

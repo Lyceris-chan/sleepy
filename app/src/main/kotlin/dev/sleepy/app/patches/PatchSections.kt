@@ -95,7 +95,8 @@ object PatchSections {
         OctoGramPatches.LOGGING_GATE.id to TRACKING,
         OctoGramPatches.CRASH_REPORTER.id to CRASHES,
         OctoGramPatches.OTA_UPDATER.id to FIXES,
-        OctoGramPatches.EXTERNAL_BROWSER.id to FIXES
+        OctoGramPatches.EXTERNAL_BROWSER.id to FIXES,
+        OctoGramPatches.HIDE_TYPING.id to TRACKING
     )
 
     /**
@@ -116,6 +117,8 @@ object PatchSections {
         "Billing and subscriptions" to ADS,
         "App rating prompts" to ADS,
         "Profile decorations" to DECLUTTER,
+        "Chat display" to DECLUTTER,
+        "Privacy" to TRACKING,
         "Profile" to DECLUTTER,
         "Game status" to DECLUTTER,
         "Quests" to DECLUTTER,

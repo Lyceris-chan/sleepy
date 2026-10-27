@@ -52,6 +52,7 @@ object OctoGramPatchItems {
     private const val CRASH_REPORTER = "OctoGram's own crash reporter"
     private const val PREMIUM_ROWS = "Premium rows in the profile's settings list"
     private const val LINKS = "How links open"
+    private const val TYPING = "Typing status"
 
     /** The identity of the one Firebase item every Firebase set has. */
     private const val REGISTRAR = "registrar"
@@ -273,6 +274,17 @@ object OctoGramPatchItems {
                     "every sheet presentation goes through and refuses only a PremiumPreviewFragment, so " +
                     "every other sheet still opens.",
                 patches = OctoGramPatches.PREMIUM_UPSELL_SHEETS
+            )
+        ),
+        OctoGramPatches.HIDE_TYPING.id to listOf(
+            Entry(
+                identity = "sendTyping",
+                label = "Typing and recording notifications",
+                group = TYPING,
+                description = "The request that tells a chat you are typing or recording is never " +
+                    "built, so other people do not see a typing status from you. Messages, media " +
+                    "and read receipts still arrive normally.",
+                patches = OctoGramPatches.TYPING_NOTIFICATIONS
             )
         )
     )

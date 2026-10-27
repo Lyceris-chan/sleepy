@@ -26,15 +26,15 @@ class OctoGramSelectionTest {
 
     @Test
     fun everyOctoGramSetIsSplitIntoItemsOfItsOwn() {
-        assertEquals("the OctoGram sets are the ones sources.json declares", 16, sets.size)
+        assertEquals("the OctoGram sets are the ones sources.json declares", 17, sets.size)
         assertEquals(
             "the item table has to cover exactly the registered sets",
             sets.map { it.id },
             OctoGramPatchItems.SET_IDS
         )
         assertEquals(
-            "nineteen items over the sixteen sets",
-            19,
+            "twenty items over the seventeen sets",
+            20,
             itemsBySet.values.sumOf { it.size }
         )
 

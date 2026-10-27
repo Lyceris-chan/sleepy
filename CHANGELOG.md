@@ -5,6 +5,68 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.0] - 2026-10-27
+
+### Added
+
+- **Eight Discord message and declutter switches, ported from the Reseam patch set.** The
+  Reseam bundle identifies functions by name, arity and the strings each body references; the
+  same descriptor was resolved against the 353.2.0 bundle and the replacement was derived there,
+  not copied. The new switches are:
+  - **Message cards and animation** — forces the `createMessageContent` option reads for reaction
+    chips, reply previews, embed and link cards, gift cards and activity invites to false, and
+    stops custom emoji and GIFs animating. The body keeps its original length and every jump
+    label; only the eight six-byte option reads change.
+  - **Appearance activity cards** — returns null from both `ActivityCardsItem` copies.
+  - **Super Reaction animations** — returns null from both
+    `SuperReactionLocalImageAnimation` copies.
+  - **Animated stickers** — answers false from `shouldAnimateSticker`.
+  - **Messages from blocked users** — answers false from `isBlockedForMessage`, so an
+    already-received message is drawn expanded instead of behind the blocked-message notice.
+  - **Typing status you send** — answers false from `handleTypingStartLocal`.
+  - **Message swipe actions** — answers false from both `useIsMessageSwipeActionsEnabled`
+    copies.
+  - **Replies without pings** — forces `shouldMention` false and `showMentionToggle` true in
+    both `createPendingReply` and `createShallowPendingReply`.
+- The Discord JavaScript table is now **531 entries in 57 features**: 493 constant-shaped
+  stubs, 17 promise-shaped stubs, and 21 body edits.
+
+- **OctoGram typing notifications can be hidden.** A version-gated edit returns false from
+  `MessagesController.u4(IIJJLjava/lang/String;)Z`, so neither `TL_messages_setTyping` nor
+  `TL_messages_setEncryptedTyping` is built. Messages, media and read receipts are unchanged.
+  The OctoGram catalog is now 17 sets, 20 items and 44 edits.
+
+### Changed
+
+- `PatchSections` gains **Chat display** and **Privacy** groups, mapped to Declutter and
+  Tracking and analytics respectively.
+- The README, `sources.json` known limitations and the in-app sources manifest describe the new
+  switches and the Reseam features that remain out of scope.
+
+### Coverage
+
+- Already in sleepy from Reseam's Discord set: Block analytics, Block crash reports, Keep
+  patched bundle, Hide contact sync prompt, Hide gift button, Hide group chat promotion, Hide
+  Nitro buttons, Hide picker promotions, Hide quests and Hide shop entry.
+- Not ported: Instant chat jumps (its `ChatListView.scrollToPosition` method is minified and has
+  no bundle-level name Sleepy can resolve), Precise timestamps, the runtime features listed
+  under Not included, and the paid-feature unlocks.
+- Telegram: Hide sponsored messages and Disable auto-update were already covered. Download
+  speed boost was checked but the 3.6.1 build has neither the `updateParams` name nor the
+  2,097,152,000 literal, so it was not written on a guess. The typing-status switch is the new
+  Telegram addition; Firebase push fixes, Play Store spoofing and integrity bypass are
+  deliberately not included.
+
+### Not included
+
+- The Reseam features that need a JavaScript hook or added UI — keeping deleted messages, local
+  edit history, clean outgoing links, colored names, draft preview, jump to first message,
+  server details, moderator badges, local read state and custom themes — are not included.
+  sleepy replaces whole functions with stubs or byte edits and does not embed a JavaScript
+  runtime.
+- Firebase push fixes, Play Store signature spoofing and the Telegram patches that depend on
+  official-Telegram class names are deliberately not included.
+
 ## [3.10.0] - 2026-10-26
 
 ### Added

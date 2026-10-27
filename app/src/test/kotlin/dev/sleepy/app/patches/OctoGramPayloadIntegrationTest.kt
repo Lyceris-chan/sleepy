@@ -93,7 +93,7 @@ class OctoGramPayloadIntegrationTest {
                 patchesToApply.add(patch.copy(dexName = actualDex))
             }
         }
-        assertEquals("the catalog is forty-three edits", 43, patchesToApply.size)
+        assertEquals("the catalog is forty-four edits", 44, patchesToApply.size)
 
         println("Total 1-to-1 patch edits queued: ${patchesToApply.size}")
 
@@ -118,9 +118,9 @@ class OctoGramPayloadIntegrationTest {
         // 5. Test surgical patching on classes3.dex
         val dex3Patches = patchesToApply.filter { it.dexName == "classes3.dex" }
         assertEquals(
-            "thirty-eight edits, the other five being the Firebase registrars and the external-browser " +
+            "thirty-nine edits, the other five being the Firebase registrars and the external-browser " +
                 "default in classes.dex",
-            38,
+            39,
             dex3Patches.size
         )
         // The classes the crash reporter and the premium rows live in, named so that an edit that
@@ -208,8 +208,8 @@ class OctoGramPayloadIntegrationTest {
             }
         }
         assertEquals(
-            "the twelve sets written for the registered build are refused on this one",
-            12,
+            "the thirteen sets written for the registered build are refused on this one",
+            13,
             refusedSets
         )
         assertEquals(

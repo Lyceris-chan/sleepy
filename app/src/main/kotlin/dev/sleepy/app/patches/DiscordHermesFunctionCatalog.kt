@@ -77,6 +77,8 @@ object DiscordHermesFunctionCatalog {
     private const val FINGERPRINT_GROUP = "Device fingerprinting"
     private const val STABILITY_GROUP = "Memory and stability"
     private const val LEFTOVER_GROUP = "Unused stubs"
+    private const val CHAT_GROUP = "Chat display"
+    private const val PRIVACY_GROUP = "Privacy"
 
     /** Every patched function, in the order the patch table applies them. */
     val ENTRIES: List<Entry> = listOf(
@@ -944,6 +946,32 @@ object DiscordHermesFunctionCatalog {
             "listened-session entries."),
         entry(156514, "Stops the 60-second voice state interval callback that " +
             "repeatedly dispatches speaking and listening telemetry during calls."),
+        entry(32823, "Answers false from isBlockedForMessage, so an already-received message " +
+            "from a blocked user is drawn expanded instead of behind the blocked-message notice."),
+        entry(37655, "Answers false from shouldAnimateSticker, so sticker previews and chat images " +
+            "stay still instead of animating."),
+        entry(46632, "Rebuilds createMessageContent with reaction chips, reply previews, embed and " +
+            "link cards and activity invites turned off, and with custom emoji and GIFs not " +
+            "animating. The option reads at the top of the function are forced false in place; " +
+            "the rest of the renderer is unchanged."),
+        entry(52769, "Returns null where SuperReactionLocalImageAnimation used to draw, so Super " +
+            "Reaction decorations do not loop."),
+        entry(52770, "Returns null where SuperReactionLocalImageAnimation used to draw, so Super " +
+            "Reaction decorations do not loop."),
+        entry(57030, "Answers false from useIsMessageSwipeActionsEnabled, so swiping a message no " +
+            "longer starts a reply or an edit."),
+        entry(57031, "Answers false from useIsMessageSwipeActionsEnabled, so swiping a message no " +
+            "longer starts a reply or an edit."),
+        entry(63701, "Answers false from handleTypingStartLocal, so the app does not send a typing " +
+            "status when you type or record."),
+        entry(75117, "Returns null where ActivityCardsItem used to draw, so the Appearance preview's " +
+            "activity cards never appear."),
+        entry(75118, "Returns null where ActivityCardsItem used to draw, so the Appearance preview's " +
+            "activity cards never appear."),
+        entry(53469, "Starts a reply with mentions turned off and the mention toggle shown, so a " +
+            "reply does not ping the person it answers."),
+        entry(53470, "Starts a shallow reply with mentions turned off and the mention toggle shown, " +
+            "so the same rule applies to the short-lived reply state."),
     )
 
     /**
@@ -1390,6 +1418,68 @@ object DiscordHermesFunctionCatalog {
                 "and the encoder's resolution budget are lowered together, and a full-quality " +
                 "channel setting cannot override them. Screen sharing keeps its own 720p path.",
             functionIds = listOf(36044, 36065, 36070)
+        ),
+        Feature(
+            slug = "appearance_activity_cards",
+            group = LOOK_GROUP,
+            label = "Appearance activity cards",
+            description = "Removes the activity cards from the Appearance preview, so the theme " +
+                "preview stays a preview of the theme.",
+            functionIds = listOf(75117, 75118)
+        ),
+        Feature(
+            slug = "super_reaction_animation",
+            group = CHAT_GROUP,
+            label = "Super Reaction animations",
+            description = "Stops the Super Reaction decoration from looping on a message.",
+            functionIds = listOf(52769, 52770)
+        ),
+        Feature(
+            slug = "static_stickers",
+            group = CHAT_GROUP,
+            label = "Animated stickers",
+            description = "Makes sticker previews and chat stickers still instead of animated.",
+            functionIds = listOf(37655)
+        ),
+        Feature(
+            slug = "show_blocked_messages",
+            group = CHAT_GROUP,
+            label = "Messages from blocked users",
+            description = "Draws an already-received message from a blocked user expanded instead " +
+                "of collapsing it behind the blocked-message notice.",
+            functionIds = listOf(32823)
+        ),
+        Feature(
+            slug = "typing_status_outgoing",
+            group = PRIVACY_GROUP,
+            label = "Typing status you send",
+            description = "Stops the app sending a typing status when you type or record, so " +
+                "other people do not see that you are typing.",
+            functionIds = listOf(63701)
+        ),
+        Feature(
+            slug = "message_swipe_actions",
+            group = CHAT_GROUP,
+            label = "Message swipe actions",
+            description = "Stops swiping a message from starting a reply or an edit.",
+            functionIds = listOf(57030, 57031)
+        ),
+        Feature(
+            slug = "message_card_clutter",
+            group = CHAT_GROUP,
+            label = "Message cards and animation",
+            description = "Hides reaction chips, reply previews, link and embed cards, gift cards " +
+                "and activity invites in messages, and stops custom emoji and GIFs animating. " +
+                "One switch for the message-card clutter the Reseam bundle spreads across several.",
+            functionIds = listOf(46632)
+        ),
+        Feature(
+            slug = "replies_without_pings",
+            group = CHAT_GROUP,
+            label = "Replies without pings",
+            description = "Starts a reply with mentions turned off and the mention toggle shown, " +
+                "so answering a message does not ping its author unless you turn it back on.",
+            functionIds = listOf(53469, 53470)
         ),
     )
 
