@@ -54,7 +54,7 @@ jobs:
       # compileSdk 37 resolves to the minor-versioned package platforms;android-37.0,
       # which a default runner image does not include. Install it rather than assume.
       - name: Install required SDK packages
-        run: android sdk install platforms/android-37.0 build-tools/37.0.0
+        run: android --no-metrics sdk install platforms/android-37.0 build-tools/37.0.0
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -94,7 +94,7 @@ jobs:
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
       - name: Install required SDK packages
-        run: android sdk install platforms/android-37.0 build-tools/37.0.0
+        run: android --no-metrics sdk install platforms/android-37.0 build-tools/37.0.0
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

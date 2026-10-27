@@ -74,7 +74,7 @@ jobs:
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
       - name: Install required SDK packages
-        run: android sdk install platforms/android-37.0 build-tools/37.0.0
+        run: android --no-metrics sdk install platforms/android-37.0 build-tools/37.0.0
 
       # The tool is built once per Hermes revision and reused. It is a C++ project with its own
       # copy of LLVM's support libraries, so a cold build is the slow part of this job by a wide

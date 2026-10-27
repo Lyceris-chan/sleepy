@@ -49,7 +49,7 @@ jobs:
       - name: Set up the Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - name: Install the build tools that carry aapt2
-        run: android sdk install build-tools/37.0.0
+        run: android --no-metrics sdk install build-tools/37.0.0
       - name: Refresh the published hashes
         id: refresh
         run: |
