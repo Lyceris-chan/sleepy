@@ -5,6 +5,21 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.7] - 2026-10-28
+
+### Added
+
+- **Verification pass over the Valenced audit.** Three surfaces the first pass missed are now
+  covered: the generic form `Divider` (49252/49253) joins **Separator lines**; the empty server
+  bar's onboarding hint (`GuildsBarEmptyNUX`, 78537/78538) becomes **Server bar onboarding**;
+  and the second `useShouldShowQuestsActivityPanelItem` variant (51570) joins **Quests in the
+  app**, matching its already-covered sibling (51569).
+
+### Changed
+
+- **The JavaScript table is 625 entries in 73 features**, up from 620 in 72. The five added
+  entries are the surfaces above.
+
 ## [3.12.6] - 2026-10-28
 
 ### Added

@@ -86,6 +86,7 @@ object DiscordHermesFunctionCatalog {
     private const val CONJURE_GROUP = "AI features"
     private const val THEME_GROUP = "Server themes"
     private const val HOME_GROUP = "Home feed"
+    private const val SERVER_BAR_GROUP = "Server bar"
 
     /** Every patched function, in the order the patch table applies them. */
     val ENTRIES: List<Entry> = listOf(
@@ -1127,6 +1128,16 @@ object DiscordHermesFunctionCatalog {
             "button is not shown in a chat."),
         entry(63998, "Returns null where JumpToPresentButton used to draw, so the jump-to-present " +
             "button is not shown in a chat."),
+        entry(51570, "Answers zero from useShouldShowQuestsActivityPanelItem, so the Quests item is " +
+            "not added to the activity panel."),
+        entry(49252, "Returns null where Divider used to draw, so the generic form divider line is " +
+            "not rendered."),
+        entry(49253, "Returns null where Divider used to draw, so the generic form divider line is " +
+            "not rendered."),
+        entry(78537, "Returns null where GuildsBarEmptyNUX used to draw, so the empty server bar " +
+            "does not show its onboarding hint."),
+        entry(78538, "Returns null where GuildsBarEmptyNUX used to draw, so the empty server bar " +
+            "does not show its onboarding hint."),
     )
 
     /**
@@ -1287,7 +1298,7 @@ object DiscordHermesFunctionCatalog {
             description = "Removes the Quests screen, its dock, its navigation button, its settings row " +
                 "and its toggles in Data & Privacy.",
             functionIds = listOf(
-                51199, 51460, 51569, 73795, 73800, 73801, 73828, 73829, 74246, 74250,
+                51199, 51460, 51569, 51570, 73795, 73800, 73801, 73828, 73829, 74246, 74250,
                 74252, 74253, 74695, 74696, 76804, 76816, 80963
             )
         ),
@@ -1696,7 +1707,7 @@ object DiscordHermesFunctionCatalog {
                 40223, 40224, 70655, 70656, 40202, 40203, 49584, 49585, 74862, 74863,
                 76733, 76734, 74037, 74038, 77728, 77729, 83824, 83825, 79738, 79739,
                 79740, 79741, 79742, 79743, 53608, 53609, 66961, 66962, 78523, 78524,
-                78521, 78522, 78065
+                78521, 78522, 78065, 49252, 49253
             )
         ),
         Feature(
@@ -1766,6 +1777,13 @@ object DiscordHermesFunctionCatalog {
             label = "Jump to present button",
             description = "Removes the jump-to-present button from a chat.",
             functionIds = listOf(63997, 63998)
+        ),
+        Feature(
+            slug = "server_bar_onboarding",
+            group = SERVER_BAR_GROUP,
+            label = "Server bar onboarding",
+            description = "Removes the onboarding hint shown by an empty server bar.",
+            functionIds = listOf(78537, 78538)
         ),
     )
 

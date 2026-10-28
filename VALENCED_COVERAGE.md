@@ -13,7 +13,7 @@ The audit was run on 2026-10-28. Three plugins supplied ideas that fit: the tabl
 
 | Valenced plugin | sleepy switch |
 | --- | --- |
-| No Dividers | **Separator lines** — `TableRowDivider` (40223/40224) plus the context-menu, form, list, section, vertical, autocomplete, authorization and server-bar separator components return null; the channel-list footer-divider predicate (78065) answers false. |
+| No Dividers | **Separator lines** — `TableRowDivider` (40223/40224), the generic form `Divider` (49252/49253) and the context-menu, form, list, section, vertical, autocomplete, authorization and server-bar separator components return null; the channel-list footer-divider predicate (78065) answers false. |
 | Junk Cleanup — call screen | **Call screen extras** — the add-people banner (`VoicePanelFloatingCTAContainer`, 81454/81455) and the console section of the audio sheet (`VoicePanelAudioConsoleSection`, 50059/50060) return null. |
 | Junk Cleanup — DM cards | **Activity cards in DMs** — `HappeningNow` (77657/77658) returns null and `getMessagesItemHappeningNowHeight` (77649) returns zero. |
 | Junk Cleanup — Conjure | **Conjure AI buttons** — `ConjureChannelRow` (78150/78151) and `ConjureYouBarButton` (78671/78672) return null. |
@@ -24,6 +24,7 @@ The audit was run on 2026-10-28. Three plugins supplied ideas that fit: the tabl
 | Server Drawer — ICYMI | **ICYMI feed** — `getICYMIEnabled` (48813; the alias 48816 shares its body) and both `useICYMIEnabled` copies (48814/48815) answer false. |
 | Questify — bounties | **Quest bounties** — `QuestHomeBounties` (73986/73987) returns null. |
 | JumpToTop — anchor button | **Jump to present button** — `JumpToPresentButton` (63997/63998) returns null; the plugin itself only adds UI. |
+| Hide Servers — empty-bar hint | **Server bar onboarding** — `GuildsBarEmptyNUX` (78537/78538) returns null. |
 
 Junk Cleanup's display-name-styles option is the same target as Declutter's, so it is covered by
 **Display-name styles** as well. Most of the other hide options already have sleepy switches:

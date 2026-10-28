@@ -764,6 +764,13 @@ object DiscordHermesBundlePatch {
         // declutter surface the plugin reveals.
         FunctionPatch(63997, "JumpToPresentButton", 941, "94007e7600"),
         FunctionPatch(63998, "JumpToPresentButton", 460, "94007e7600"),
+        // Verification pass: the second Quests activity-panel variant, the generic form
+        // Divider, and the empty server bar's onboarding hint.
+        FunctionPatch(51570, "useShouldShowQuestsActivityPanelItem", 215, "8b00007600"),
+        FunctionPatch(49252, "Divider", 516, "94007e7600"),
+        FunctionPatch(49253, "Divider", 306, "94007e7600"),
+        FunctionPatch(78537, "GuildsBarEmptyNUX", 1702, "94007e7600"),
+        FunctionPatch(78538, "GuildsBarEmptyNUX", 989, "94007e7600"),
     )
 
     private fun String.hexToBytes(): ByteArray {

@@ -26,7 +26,8 @@ class ValencedPluginIdeasTest {
         Idea("message_menu_reactions", "Chat display", PatchSections.DECLUTTER),
         Idea("icymi_feed", "Home feed", PatchSections.DECLUTTER),
         Idea("quest_bounties", "Quests", PatchSections.ADS),
-        Idea("jump_to_present_button", "Chat display", PatchSections.DECLUTTER)
+        Idea("jump_to_present_button", "Chat display", PatchSections.DECLUTTER),
+        Idea("server_bar_onboarding", "Server bar", PatchSections.DECLUTTER)
     )
 
     @Test

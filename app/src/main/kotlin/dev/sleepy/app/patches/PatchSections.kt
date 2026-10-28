@@ -130,6 +130,7 @@ object PatchSections {
         "AI features" to DECLUTTER,
         "Server themes" to DECLUTTER,
         "Home feed" to DECLUTTER,
+        "Server bar" to DECLUTTER,
         "Privacy" to TRACKING,
         "Profile" to DECLUTTER,
         "Game activity" to DECLUTTER,
