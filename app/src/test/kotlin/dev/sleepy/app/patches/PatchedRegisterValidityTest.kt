@@ -34,7 +34,7 @@ class PatchedRegisterValidityTest {
 
         val dexEntries = dexEntries(baseApk)
         val classToDex = DexProcessor.buildClassToDexIndex(dexEntries)
-        val patchesByPath = DiscordNativePatches.ALL
+        val patchesByPath = (DiscordPatches.ALL + DiscordNativePatches.ALL)
             .flatMap { it.smaliPatches }
             .groupBy { it.smaliPath }
 
