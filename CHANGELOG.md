@@ -5,6 +5,52 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.3] - 2026-10-28
+
+### Fixed
+
+- **Turning on the camera no longer drops the call.** In 353.2.0 the connection registry's
+  duplicate checks are inlined into the coroutine that registers a newly created native
+  connection. The camera path creates its own stream connection, and a repeat id or a repeated
+  instance made the inlined `IllegalStateException("Check failed.")` escape the coroutine. That
+  cancelled the media engine's scope, so every later media call - mute, audio route, reconnect -
+  silently did nothing while the call still looked connected. Registration now removes an earlier
+  entry for the same native connection, registers the new one under the id, and disposes the
+  connection that the id previously held. This is the same non-throwing shape the recorded
+  change set prescribes for `MediaEngineNativeConnections.register`, re-derived against the
+  inlined 353 code.
+- **One failed media operation no longer disables the rest of the call.** The media engine's
+  `appScope` was built on a plain `Job`, so the first throw cancelled the scope and every
+  `appScope.launch` call site for the rest of the process. It is now built on a supervisor job
+  (`k40/t1`, the `SupervisorJobImpl` that `MainScope()` uses), so an operation that fails leaves
+  the scope usable.
+- **Resetting the media engine disposes every connection.** The reset coroutine removed entries
+  from the live `LinkedHashMap.keySet()` while iterating it. With more than one connection the
+  next iterator step threw `ConcurrentModificationException`, abandoned teardown before
+  `NativeEngine.dispose()`, and left the remaining connections and the engine alive. It now
+  iterates a snapshot of the keys and still removes and disposes each one.
+- **The microphone and camera foreground-service types survive backgrounding.** On Android 14+
+  the service-type promotion chain gated the microphone and camera types on the window being in
+  the foreground. A call that outlived the window was promoted with a chain that had no
+  microphone type, and the OS cut capture while the notification still said connected. The two
+  window checks are removed; permissions still gate each type, and the existing widened catches
+  make a refused type fall through to the next candidate without touching the final fallback.
+- **A failed screen-share thumbnail no longer ends the process.** The thumbnail coroutine
+  compresses a bitmap and invokes a JavaScript callback outside any catch, so a recycled bitmap,
+  a failed compression or a throwing callback reached the thread's uncaught-exception handler
+  mid-call. The case is now wrapped in a catch-all that ends the thumbnail attempt normally.
+- **The screen-share thumbnail coroutine keeps its suspension contract.** The rewritten case
+  still returns `COROUTINE_SUSPENDED` when the compression suspends and the unit value only on
+  completion, so a thumbnail that takes more than one dispatch does not complete early.
+
+### Changed
+
+- The full native set now applies 102 edits to 353.2.0. `MediaCallPatchesTest` applies the
+  supervisor, registration, teardown, foreground-service and thumbnail edits to the real base
+  DEX, checks that each anchor occurs exactly once, and asserts both the shape they replace and
+  the shape they leave. It also pins the camera path: `createOwnStreamConnectionWithOptions`
+  launches `cd/s0`, which registers through the coroutine the registration edit changes.
+
 ## [3.12.2] - 2026-10-28
 
 ### Fixed

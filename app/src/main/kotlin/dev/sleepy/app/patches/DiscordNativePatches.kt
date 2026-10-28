@@ -1118,8 +1118,11 @@ object DiscordNativePatches {
         label = "Fix the media engine and voice calls",
         description = "Stops the video renderer from blocking the UI thread while it creates a " +
             "graphics context, guards a pending EGL setup against a renderer that has already " +
-            "been released, and surfaces media callback failures in logcat under MediaEngineCB " +
-            "instead of sending them to the crash reporter.",
+            "been released, surfaces media callback failures in logcat under MediaEngineCB " +
+            "instead of sending them to the crash reporter, replaces a connection that is " +
+            "registered twice instead of throwing, tears down every connection without " +
+            "concurrent modification, keeps the media engine's coroutine scope alive after a " +
+            "failed operation, and contains a failed screen-share thumbnail.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Stopping video tiles from freezing the interface",
@@ -1188,6 +1191,340 @@ object DiscordNativePatches {
     const-string p1, "media engine native callback threw"
 
     invoke-static {p0, p1, v2}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V"""
+            ),
+            SmaliPatch(
+                title = "Keeping the media engine alive after one failure",
+                explanation = "Puts a supervisor job in the media engine's coroutine scope. With the plain job CoroutineScope installs, one failed operation cancels the scope itself and every later create, stop or device call becomes a no-op; under a supervisor the remaining children keep running.",
+                smaliPath = "com/discord/media/engine/MediaEngineModule.smali",
+                anchor = "    invoke-direct {v3, v2}, Lk40/w0;-><init>(Ljava/util/concurrent/Executor;)V",
+                replacement = """    invoke-direct {v3, v2}, Lk40/w0;-><init>(Ljava/util/concurrent/Executor;)V
+
+    # Patch: give the media engine a SupervisorJob. CoroutineScope() below
+    # installs a plain Job when the context has none, and a plain Job cancels
+    # every child - and every later launch - on the first failure. k40/t1 is
+    # SupervisorJobImpl, built from k40/e1's constructor the same way
+    # MainScope() does in k40/z.c().
+    new-instance v2, Lk40/t1;
+
+    invoke-direct {v2}, Lk40/e1;-><init>()V
+
+    invoke-interface {v3, v2}, Lb10/h;->B(Lb10/h;)Lb10/h;
+
+    move-result-object v3"""
+            ),
+            SmaliPatch(
+                title = "Registering a reconnecting call instead of throwing",
+                explanation = "Replaces the duplicate-connection checks in createVoiceConnection. A call that reconnects while the previous connection with the same id is still registered used to throw IllegalStateException, which cancelled the media engine's scope and every later call with it. The new connection now replaces the old entry, the displaced connection is disposed, and an instance that is already registered under another id is removed first so it cannot be disposed twice.",
+                smaliPath = "cd/q0.smali",
+                anchor = """    iget-object p1, p1, Lcd/b1;->a:Ljava/util/LinkedHashMap;
+
+    .line 89
+    .line 90
+    iget v1, p0, Lcd/q0;->i:I
+
+    .line 91
+    .line 92
+    invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    .line 93
+    .line 94
+    .line 95
+    move-result-object v2
+
+    .line 96
+    invoke-interface {p1, v2}, Ljava/util/Map;->containsKey(Ljava/lang/Object;)Z
+
+    .line 97
+    .line 98
+    .line 99
+    move-result v2
+
+    .line 100
+    const-string v3, "Check failed."
+
+    .line 101
+    .line 102
+    if-nez v2, :cond_7d
+
+    .line 103
+    .line 104
+    invoke-virtual {p1, v0}, Ljava/util/LinkedHashMap;->containsValue(Ljava/lang/Object;)Z
+
+    .line 105
+    .line 106
+    .line 107
+    move-result v2
+
+    .line 108
+    if-nez v2, :cond_77
+
+    .line 109
+    .line 110
+    invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    .line 111
+    .line 112
+    .line 113
+    move-result-object v1
+
+    .line 114
+    invoke-interface {p1, v1, v0}, Ljava/util/Map;->put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+    .line 115
+    .line 116
+    .line 117
+    sget-object p1, Lw00/a0;->a:Lw00/a0;
+
+    .line 118
+    .line 119
+    return-object p1
+
+    .line 120
+    :cond_77
+    new-instance p1, Ljava/lang/IllegalStateException;
+
+    .line 121
+    .line 122
+    invoke-direct {p1, v3}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
+    .line 123
+    .line 124
+    .line 125
+    throw p1
+
+    .line 126
+    :cond_7d
+    new-instance p1, Ljava/lang/IllegalStateException;
+
+    .line 127
+    .line 128
+    invoke-direct {p1, v3}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
+    .line 129
+    .line 130
+    .line 131
+    throw p1""",
+                replacement = """    iget-object p1, p1, Lcd/b1;->a:Ljava/util/LinkedHashMap;
+
+    # Patch: a reconnect can register a connection id that is still present,
+    # or re-register the same NativeConnection object. Replace instead of
+    # throwing: the throw cancels the media engine scope and turns every later
+    # call into a no-op. Remove an earlier entry for this exact instance first
+    # so no connection ends up in the map twice.
+    invoke-interface {p1}, Ljava/util/Map;->entrySet()Ljava/util/Set;
+
+    move-result-object v2
+
+    invoke-interface {v2}, Ljava/lang/Iterable;->iterator()Ljava/util/Iterator;
+
+    move-result-object v2
+
+    :goto_dup
+    invoke-interface {v2}, Ljava/util/Iterator;->hasNext()Z
+
+    move-result v3
+
+    if-eqz v3, :cond_dup_done
+
+    invoke-interface {v2}, Ljava/util/Iterator;->next()Ljava/lang/Object;
+
+    move-result-object v3
+
+    check-cast v3, Ljava/util/Map${'$'}Entry;
+
+    invoke-interface {v3}, Ljava/util/Map${'$'}Entry;->getValue()Ljava/lang/Object;
+
+    move-result-object v3
+
+    if-ne v3, v0, :goto_dup
+
+    invoke-interface {v2}, Ljava/util/Iterator;->remove()V
+
+    goto :goto_dup
+
+    :cond_dup_done
+    iget v1, p0, Lcd/q0;->i:I
+
+    invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
+    move-result-object v2
+
+    invoke-interface {p1, v2, v0}, Ljava/util/Map;->put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+
+    move-result-object v2
+
+    check-cast v2, Lcom/discord/native/engine/NativeConnection;
+
+    if-eqz v2, :cond_no_old
+
+    if-eq v2, v0, :cond_no_old
+
+    invoke-static {}, Ljava/lang/System;->nanoTime()J
+
+    invoke-virtual {v2}, Lcom/discord/native/engine/NativeConnection;->dispose()V
+
+    :cond_no_old
+    sget-object p1, Lw00/a0;->a:Lw00/a0;
+
+    return-object p1"""
+            ),
+            SmaliPatch(
+                title = "Tearing down every call connection",
+                explanation = "Takes a snapshot of the connection ids before the media engine disposes them. The old loop removed entries from the live key set while iterating it, so a second connection made the iterator throw ConcurrentModificationException, abandon teardown and leave the native engine and the remaining connections alive.",
+                smaliPath = "cd/x0.smali",
+                anchor = """    invoke-virtual {v2}, Ljava/util/LinkedHashMap;->keySet()Ljava/util/Set;
+
+    .line 158
+    .line 159
+    .line 160
+    move-result-object v3
+
+    .line 161
+    invoke-interface {v3}, Ljava/lang/Iterable;->iterator()Ljava/util/Iterator;
+
+    .line 162
+    .line 163
+    .line 164
+    move-result-object v3
+
+    .line 165
+    :cond_a4
+    :goto_a4
+    invoke-interface {v3}, Ljava/util/Iterator;->hasNext()Z
+
+    .line 166
+    .line 167
+    .line 168
+    move-result v4
+
+    .line 169
+    if-eqz v4, :cond_c9
+
+    .line 170
+    .line 171
+    invoke-interface {v3}, Ljava/util/Iterator;->next()Ljava/lang/Object;
+
+    .line 172
+    .line 173
+    .line 174
+    move-result-object v4
+
+    .line 175
+    check-cast v4, Ljava/lang/Number;
+
+    .line 176
+    .line 177
+    invoke-virtual {v4}, Ljava/lang/Number;->intValue()I
+
+    .line 178
+    .line 179
+    .line 180
+    move-result v4""",
+                replacement = """    invoke-virtual {v2}, Ljava/util/LinkedHashMap;->keySet()Ljava/util/Set;
+
+    move-result-object v3
+
+    # Patch: snapshot the keys before removing entries. Removing from the live
+    # key set changes the map's modification count, so with more than one
+    # connection the next hasNext() throws ConcurrentModificationException and
+    # abandons the rest of teardown.
+    invoke-interface {v3}, Ljava/util/Set;->toArray()[Ljava/lang/Object;
+
+    move-result-object v3
+
+    const/4 p0, 0x0
+
+    :cond_a4
+    :goto_a4
+    array-length v5, v3
+
+    if-ge p0, v5, :cond_c9
+
+    aget-object v5, v3, p0
+
+    check-cast v5, Ljava/lang/Number;
+
+    invoke-virtual {v5}, Ljava/lang/Number;->intValue()I
+
+    move-result v4
+
+    add-int/lit8 p0, p0, 0x1"""
+            ),
+            SmaliPatch(
+                title = "Containing screen-share thumbnail failures",
+                explanation = "Wraps one screen-share thumbnail coroutine in a catch-all. It compresses a bitmap and invokes a JavaScript callback; a recycled bitmap, a failed compression or a throwing callback escaped the coroutine as an uncaught exception, which ends the process while the call is sharing its screen. A failure now ends the thumbnail attempt normally, without touching the call.",
+                smaliPath = "a7/b.smali",
+                switchCaseLabel = ":pswitch_969",
+                switchCaseBody = """    :pswitch_969
+    :try_start_thumbnail
+    sget-object v0, Lc10/a;->d:Lc10/a;
+
+    iget v2, v1, La7/b;->e:I
+
+    const/4 v8, 0x1
+
+    if-eqz v2, :cond_thumbnail_first
+
+    if-ne v2, v8, :cond_thumbnail_bad_state
+
+    invoke-static/range {p1 .. p1}, Lxk/a;->R(Ljava/lang/Object;)V
+
+    move-object/from16 v2, p1
+
+    goto :goto_thumbnail_result
+
+    :cond_thumbnail_bad_state
+    new-instance v0, Ljava/lang/IllegalStateException;
+
+    const-string v2, "call to 'resume' before 'invoke' with coroutine"
+
+    invoke-direct {v0, v2}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
+    throw v0
+
+    :cond_thumbnail_first
+    invoke-static/range {p1 .. p1}, Lxk/a;->R(Ljava/lang/Object;)V
+
+    sget-object v2, Lcd/p;->j:Ljava/util/Set;
+
+    iget-object v2, v1, La7/b;->i:Ljava/lang/Object;
+
+    check-cast v2, Landroid/graphics/Bitmap;
+
+    iput v8, v1, La7/b;->e:I
+
+    invoke-static {v2, v1}, Lkv/d;->r(Landroid/graphics/Bitmap;Ld10/c;)Ljava/lang/Object;
+
+    move-result-object v2
+
+    if-ne v2, v0, :cond_thumbnail_resume
+
+    goto :goto_thumbnail_suspended
+
+    :cond_thumbnail_resume
+    :goto_thumbnail_result
+    check-cast v2, Ljava/lang/String;
+
+    iget-object v0, v1, La7/b;->v:Ljava/lang/Object;
+
+    check-cast v0, Laf/g;
+
+    invoke-virtual {v0, v2}, Laf/g;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
+
+    sget-object v0, Lw00/a0;->a:Lw00/a0;
+
+    :goto_thumbnail_suspended
+    :try_end_thumbnail
+    return-object v0
+
+    :catch_thumbnail
+    move-exception v0
+
+    sget-object v0, Lw00/a0;->a:Lw00/a0;
+
+    return-object v0
+
+    .catchall {:try_start_thumbnail .. :try_end_thumbnail} :catch_thumbnail"""
             ),
         )
     )
@@ -1279,8 +1616,24 @@ object DiscordNativePatches {
     val FOREGROUND_SERVICE = PatchSet(
         id = "discord_native_foreground_service",
         label = "Keep calls alive in the background",
-        description = "Widens the per-type catch when promoting the foreground service so a refusal falls through to the next candidate instead of escaping as an uncaught exception, which is what makes a call drop while the notification still says connected. The chain itself is left as Discord built it: which service types the app is eligible for is a fact about the call, not about whether the window is in front.",
+        description = "Keeps the microphone and camera types in the foreground-service promotion chain while the app is backgrounded, and widens the per-type catch so a refusal falls through to the next candidate instead of escaping as an uncaught exception. Stock builds the chain from the window's foreground state, so a call that outlives the window is promoted without a microphone type and the OS cuts capture while the notification still says connected.",
         smaliPatches = listOf(
+            SmaliPatch(
+                title = "Keeping the microphone type while backgrounded",
+                explanation = "Drops the window-foreground test from the microphone branch of the service-type chain, so a call that outlives the window is promoted with its microphone type. The app's permission checks stay in front of it, and the widened catches below make the OS refuse a type by falling through to the next candidate instead of aborting the promotion. The final fallback type is untouched.",
+                smaliPath = "androidx/core/view/f1.smali",
+                anchor = "    if-eqz v16, :cond_a8",
+                replacement = """    # Patch: the microphone type stays in the chain while backgrounded.
+    nop"""
+            ),
+            SmaliPatch(
+                title = "Keeping the camera type while backgrounded",
+                explanation = "Drops the same window-foreground test from the camera branch, so screen sharing and video keep their camera type after the app is backgrounded.",
+                smaliPath = "androidx/core/view/f1.smali",
+                anchor = "    if-eqz v16, :cond_c8",
+                replacement = """    # Patch: the camera type stays in the chain while backgrounded.
+    nop"""
+            ),
             SmaliPatch(
                 title = "Falling through to the next service type (first attempt)",
                 explanation = "Catches any refusal around the first service-type attempt, not just the security exception, so a failed type falls through instead of aborting the promotion.",
