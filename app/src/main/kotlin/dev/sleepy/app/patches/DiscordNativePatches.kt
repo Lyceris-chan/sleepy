@@ -1122,8 +1122,9 @@ object DiscordNativePatches {
             "instead of sending them to the crash reporter, replaces a connection that is " +
             "registered twice instead of throwing, tears down every connection without " +
             "concurrent modification, keeps the media engine's coroutine scope alive after a " +
-            "failed operation, contains a failed screen-share thumbnail, and bounds the " +
-            "UI-thread surface-release waits that can freeze a backgrounded call.",
+            "failed operation, contains a failed screen-share thumbnail, bounds the UI-thread " +
+            "surface-release waits that can freeze a backgrounded call, and keeps a camera " +
+            "reconfigure failure from escaping into the native connection.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Stopping video tiles from freezing the interface",
@@ -1560,6 +1561,161 @@ object DiscordNativePatches {
     return-object v0
 
     .catchall {:try_start_thumbnail .. :try_end_thumbnail} :catch_thumbnail"""
+            ),
+            SmaliPatch(
+                title = "A camera reconfigure cannot end the call",
+                explanation = "Catches any failure from starting the camera or changing its capture format, logs it under MediaEngineCB, and returns normally. The call into this method comes from the native video engine; an exception crossing back through JNI took the connection down with it, so a camera the device refused ended the call instead of only leaving the video off.",
+                smaliPath = "co/discord/media_engine/NativeCapturerObserver.smali",
+                methodSignature = ".method public declared-synchronized reconfigure(III)V",
+                replacementBody = """.method public declared-synchronized reconfigure(III)V
+    .registers 9
+
+    monitor-enter p0
+
+    :try_start_0
+    iget-object v0, p0, Lco/discord/media_engine/NativeCapturerObserver;->videoCapturer_:Lorg/webrtc/VideoCapturer;
+
+    if-nez v0, :cond_7
+
+    monitor-exit p0
+
+    return-void
+
+    :cond_7
+    iget-boolean v1, p0, Lco/discord/media_engine/NativeCapturerObserver;->startCaptureOnReconfigure_:Z
+
+    if-eqz v1, :cond_14
+
+    const/4 v1, 0x0
+
+    iput-boolean v1, p0, Lco/discord/media_engine/NativeCapturerObserver;->startCaptureOnReconfigure_:Z
+
+    invoke-interface {v0, p1, p2, p3}, Lorg/webrtc/VideoCapturer;->startCapture(III)V
+
+    goto :goto_17
+
+    :cond_14
+    invoke-interface {v0, p1, p2, p3}, Lorg/webrtc/VideoCapturer;->changeCaptureFormat(III)V
+
+    :goto_17
+    :try_end_0
+    monitor-exit p0
+
+    return-void
+
+    :catch_0
+    move-exception v2
+
+    const-string v3, "MediaEngineCB"
+
+    const-string v4, "camera reconfigure failed"
+
+    invoke-static {v3, v4, v2}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+
+    monitor-exit p0
+
+    return-void
+
+    .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_0} :catch_0
+.end method"""
+            ),
+            SmaliPatch(
+                title = "A camera that fails to create cannot end the call",
+                explanation = "Catches the camera enumerator returning nothing or throwing while it creates the capturer, logs it under MediaEngineCB, and passes a null capturer to the constructor. The call keeps its audio and the video path is simply unavailable instead of the exception crossing into the native connection.",
+                smaliPath = "co/discord/media_engine/NativeCapturerObserver.smali",
+                methodSignature = ".method public constructor <init>(JLandroid/content/Context;Ljava/lang/String;)V",
+                replacementBody = """.method public constructor <init>(JLandroid/content/Context;Ljava/lang/String;)V
+    .registers 8
+
+    :try_start_create
+    invoke-static {p4}, Lco/discord/media_engine/CameraEnumeratorProvider;->createCapturer(Ljava/lang/String;)Lorg/webrtc/CameraVideoCapturer;
+
+    move-result-object p4
+    :try_end_create
+    goto :call_init
+
+    :catch_create
+    move-exception v0
+
+    const-string v1, "MediaEngineCB"
+
+    const-string v2, "camera create failed"
+
+    invoke-static {v1, v2, v0}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+
+    const/4 p4, 0x0
+
+    :call_init
+    invoke-direct {p0, p1, p2, p3, p4}, Lco/discord/media_engine/NativeCapturerObserver;-><init>(JLandroid/content/Context;Lorg/webrtc/VideoCapturer;)V
+
+    return-void
+
+    .catch Ljava/lang/Exception; {:try_start_create .. :try_end_create} :catch_create
+.end method"""
+            ),
+            SmaliPatch(
+                title = "A camera that fails to initialize cannot end the call",
+                explanation = "Catches a capturer initialize failure, logs it under MediaEngineCB, and clears the capturer field so later reconfigure calls return early. The call keeps its audio instead of the exception crossing into the native connection.",
+                smaliPath = "co/discord/media_engine/NativeCapturerObserver.smali",
+                methodSignature = ".method public constructor <init>(JLandroid/content/Context;Lorg/webrtc/VideoCapturer;)V",
+                replacementBody = """.method public constructor <init>(JLandroid/content/Context;Lorg/webrtc/VideoCapturer;)V
+    .registers 10
+
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+
+    const-string v0, "DiscordTextureCapture"
+
+    invoke-static {}, Lco/discord/media_engine/SharedEglBaseContext;->getEglContext()Lorg/webrtc/EglBase${'$'}Context;
+
+    move-result-object v1
+
+    invoke-static {v0, v1}, Lorg/webrtc/SurfaceTextureHelper;->create(Ljava/lang/String;Lorg/webrtc/EglBase${'$'}Context;)Lorg/webrtc/SurfaceTextureHelper;
+
+    move-result-object v0
+
+    iput-object v0, p0, Lco/discord/media_engine/NativeCapturerObserver;->surfaceTextureHelper_:Lorg/webrtc/SurfaceTextureHelper;
+
+    const/4 v1, 0x1
+
+    iput-boolean v1, p0, Lco/discord/media_engine/NativeCapturerObserver;->startCaptureOnReconfigure_:Z
+
+    iput-wide p1, p0, Lco/discord/media_engine/NativeCapturerObserver;->nativeHandle_:J
+
+    if-nez v0, :cond_1e
+
+    const-string v2, "NativeCapturerObserver"
+
+    const-string v3, "SurfaceTextureHelper.create returned null; capture disabled"
+
+    invoke-static {v2, v3}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;)I
+
+    return-void
+
+    :cond_1e
+    iput-object p4, p0, Lco/discord/media_engine/NativeCapturerObserver;->videoCapturer_:Lorg/webrtc/VideoCapturer;
+
+    :try_start_init
+    invoke-interface {p4, v0, p3, p0}, Lorg/webrtc/VideoCapturer;->initialize(Lorg/webrtc/SurfaceTextureHelper;Landroid/content/Context;Lorg/webrtc/CapturerObserver;)V
+    :try_end_init
+    return-void
+
+    :catch_init
+    move-exception v2
+
+    const-string v3, "MediaEngineCB"
+
+    const-string v4, "camera initialize failed"
+
+    invoke-static {v3, v4, v2}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
+
+    const/4 v1, 0x0
+
+    iput-object v1, p0, Lco/discord/media_engine/NativeCapturerObserver;->videoCapturer_:Lorg/webrtc/VideoCapturer;
+
+    return-void
+
+    .catch Ljava/lang/Exception; {:try_start_init .. :try_end_init} :catch_init
+.end method"""
             ),
         )
     )

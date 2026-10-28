@@ -5,6 +5,22 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.1] - 2026-10-29
+
+### Fixed
+
+- **A camera that fails while starting no longer takes the call down.** Three methods on
+  `NativeCapturerObserver` let an exception cross back into the native video engine: creating the
+  capturer from a camera name, initializing it, and starting or changing its capture format.
+  Each now catches the failure, logs it under the `MediaEngineCB` tag, and leaves the video path
+  off instead of letting the exception end the connection. The call keeps its audio; a camera
+  failure stays a camera failure.
+
+### Changed
+
+- **The native set is 108 edits**, up from 105; all apply to the real 353.2.0 build with nothing
+  skipped, and the register-validity test accepts every replacement.
+
 ## [3.13.0] - 2026-10-28
 
 ### Added
