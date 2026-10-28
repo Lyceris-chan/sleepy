@@ -5,6 +5,25 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.2] - 2026-10-28
+
+### Fixed
+
+- **The contact-photo stub returns a string, not null.** React Native's contact-sync wrapper
+  calls `replace()` on the image string the native method hands it. The privacy stub answered
+  null, so asking for a contact photo threw a `TypeError` in that wrapper. It now returns an
+  empty string, the same no-photo value the UI handles.
+- **The push-notification-log stub resolves JSON, not an array.** The JavaScript wrapper runs
+  `JSON.parse(result)` on the resolved value, so resolving a `WritableNativeArray` made the
+  request throw a `SyntaxError` instead of returning no history. The stub now resolves an empty
+  `{"pushNotifications":[]}` log, the same JSON shape the real method returns.
+
+### Changed
+
+- The native reference audit now covers every Discord native set, not only the bundle, Sentry and
+  telemetry sets, and a new test pins the two JavaScript-facing stubs to the types their React
+  Native wrappers read.
+
 ## [3.12.1] - 2026-10-28
 
 ### Fixed

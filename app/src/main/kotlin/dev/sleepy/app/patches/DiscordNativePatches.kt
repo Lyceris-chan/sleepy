@@ -381,14 +381,16 @@ object DiscordNativePatches {
 .end method"""
             ),
             SmaliPatch(
-                title = "Returning no push notification logs",
-                explanation = "Answers the log request with an empty array so no notification history is handed out.",
+                title = "Returning an empty push notification log",
+                explanation = "Answers the log request with an empty log serialized as JSON, the " +
+                    "same shape the real method returns. The JavaScript wrapper runs JSON.parse on " +
+                    "the result, so resolving an array here would throw instead of returning no " +
+                    "history.",
                 smaliPath = "com/discord/push_notification_monitor/PushNotificationMonitorModule.smali",
                 methodSignature = ".method public getPushNotificationLogs(Ljava/lang/String;Lcom/facebook/react/bridge/Promise;)V",
                 replacementBody = """.method public getPushNotificationLogs(Ljava/lang/String;Lcom/facebook/react/bridge/Promise;)V
     .locals 1
-    new-instance v0, Lcom/facebook/react/bridge/WritableNativeArray;
-    invoke-direct {v0}, Lcom/facebook/react/bridge/WritableNativeArray;-><init>()V
+    const-string v0, "{\"pushNotifications\":[]}"
     invoke-interface {p2, v0}, Lcom/facebook/react/bridge/Promise;->resolve(Ljava/lang/Object;)V
     return-void
 .end method"""
@@ -870,23 +872,26 @@ object DiscordNativePatches {
             ),
             SmaliPatch(
                 title = "Returning no contact photos",
-                explanation = "Answers the contact photo request with null so no contact image is read, even if a contact id is supplied.",
+                explanation = "Answers the contact photo request with an empty string so no contact " +
+                    "image is read, even if a contact id is supplied. The JavaScript bridge calls " +
+                    "replace() on the returned string, so null would be a TypeError there.",
                 smaliPath = "ta/h.smali",
                 methodSignature = ".method public static c(Lcom/facebook/react/bridge/ReactApplicationContext;Ljava/lang/String;)Ljava/lang/String;",
                 replacementBody = """.method public static c(Lcom/facebook/react/bridge/ReactApplicationContext;Ljava/lang/String;)Ljava/lang/String;
     .locals 1
-    const/4 v0, 0x0
+    const-string v0, ""
     return-object v0
 .end method"""
             ),
             SmaliPatch(
                 title = "Returning no contact image URIs",
-                explanation = "Answers the contact image URI lookup with null, so a caller that has a URI still gets no photo.",
+                explanation = "Answers the contact image URI lookup with an empty string, so a caller " +
+                    "that has a URI still gets no photo and no caller has to handle a null string.",
                 smaliPath = "ta/h.smali",
                 methodSignature = ".method public static a(Landroid/net/Uri;Lcom/facebook/react/bridge/ReactApplicationContext;)Ljava/lang/String;",
                 replacementBody = """.method public static a(Landroid/net/Uri;Lcom/facebook/react/bridge/ReactApplicationContext;)Ljava/lang/String;
     .locals 1
-    const/4 v0, 0x0
+    const-string v0, ""
     return-object v0
 .end method"""
             ),

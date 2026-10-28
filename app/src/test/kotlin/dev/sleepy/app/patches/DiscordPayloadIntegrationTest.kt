@@ -335,7 +335,8 @@ class DiscordPayloadIntegrationTest {
         val registered = (
             dev.sleepy.app.patches.DiscordPatches.BUNDLE_LOCK.smaliPatches +
                 dev.sleepy.app.patches.DiscordPatches.SENTRY.smaliPatches +
-                dev.sleepy.app.patches.DiscordPatches.TELEMETRY.smaliPatches
+                dev.sleepy.app.patches.DiscordPatches.TELEMETRY.smaliPatches +
+                dev.sleepy.app.patches.DiscordNativePatches.ALL.flatMap { it.smaliPatches }
             )
         val patches = registered.filter {
             "L" + it.smaliPath.removeSuffix(".smali") + ";" in classToDex
@@ -439,5 +440,43 @@ class DiscordPayloadIntegrationTest {
         )
         println("Reference audit: $checked references across ${patches.size} patches and " +
             "${generatedBodies.size} generated bodies all resolve")
+    }
+
+    /**
+     * The stubs that answer JavaScript resolve the type its wrapper reads.
+     *
+     * Two of these are not visible in the smali alone. The contact-photo bridge does
+     * `str.replace(...)` on the callback's second argument, so a null there is a TypeError.
+     * The push-notification-log wrapper runs `JSON.parse(result)`, so resolving an array instead
+     * of the real method's serialized JSON string is a SyntaxError. Both were found by following
+     * the native methods into the JavaScript that calls them, not by reading the stub tables.
+     */
+    @Test
+    fun stubsReadByJavaScriptResolveTheTypeTheirWrapperExpects() {
+        val contactPhoto = DiscordNativePatches.PRIVACY.smaliPatches.first {
+            it.smaliPath == "ta/h.smali" && it.methodSignature?.contains(" c(") == true
+        }
+        assertTrue(
+            "the contact-photo stub must return a String, not null: the JS wrapper calls replace",
+            contactPhoto.replacementBody.orEmpty().contains("const-string v0, \"\"")
+        )
+        assertFalse(
+            "a null contact photo reaches str.replace() in ContactSyncUtils",
+            contactPhoto.replacementBody.orEmpty().contains("const/4 v0, 0x0")
+        )
+
+        val pushLogs = DiscordNativePatches.TELEMETRY_MODULES.smaliPatches.first {
+            it.methodSignature?.contains("getPushNotificationLogs") == true
+        }
+        assertTrue(
+            "the push-log stub must resolve the JSON string the wrapper parses",
+            pushLogs.replacementBody.orEmpty().contains(
+                "const-string v0, \"{\\\"pushNotifications\\\":[]}\""
+            )
+        )
+        assertFalse(
+            "an array here reaches JSON.parse() in getPushNotificationLogs.android.tsx",
+            pushLogs.replacementBody.orEmpty().contains("WritableNativeArray")
+        )
     }
 }
