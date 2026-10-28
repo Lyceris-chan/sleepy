@@ -80,6 +80,12 @@ object DiscordHermesFunctionCatalog {
     private const val CHAT_GROUP = "Chat display"
     private const val PRIVACY_GROUP = "Privacy"
     private const val BOOST_GROUP = "Server boosts"
+    private const val ROWS_GROUP = "Rows and dividers"
+    private const val DM_ACTIVITY_GROUP = "Activity cards"
+    private const val CALL_SCREEN_GROUP = "Call screen"
+    private const val CONJURE_GROUP = "AI features"
+    private const val THEME_GROUP = "Server themes"
+    private const val HOME_GROUP = "Home feed"
 
     /** Every patched function, in the order the patch table applies them. */
     val ENTRIES: List<Entry> = listOf(
@@ -1039,6 +1045,88 @@ object DiscordHermesFunctionCatalog {
             "progress bar above the channel list is not rendered."),
         entry(82740, "Returns null from renderBoostProgressBar, so the Settings overview does " +
             "not show its boost progress bar toggle row."),
+        entry(40223, "Returns null where TableRowDivider used to draw, so the line between table " +
+            "rows is not rendered."),
+        entry(40224, "Returns null where TableRowDivider used to draw, so the line between table " +
+            "rows is not rendered."),
+        entry(77649, "Returns zero from getMessagesItemHappeningNowHeight, so a direct-message " +
+            "list reserves no space for the activity cards."),
+        entry(77657, "Returns null where HappeningNow used to draw, so the activity cards above a " +
+            "direct message are not rendered."),
+        entry(77658, "Returns null where HappeningNow used to draw, so the activity cards above a " +
+            "direct message are not rendered."),
+        entry(50059, "Returns null where VoicePanelAudioConsoleSection used to draw, so the " +
+            "console section does not appear in the audio output sheet."),
+        entry(50060, "Returns null where VoicePanelAudioConsoleSection used to draw, so the " +
+            "console section does not appear in the audio output sheet."),
+        entry(81454, "Returns null where VoicePanelFloatingCTAContainer used to draw, so the Add " +
+            "people banner is not shown on the call screen."),
+        entry(81455, "Returns null where VoicePanelFloatingCTAContainer used to draw, so the Add " +
+            "people banner is not shown on the call screen."),
+        entry(78150, "Returns null where ConjureChannelRow used to draw, so the Conjure row is " +
+            "not added to the channel list."),
+        entry(78151, "Returns null where ConjureChannelRow used to draw, so the Conjure row is " +
+            "not added to the channel list."),
+        entry(78671, "Returns null where ConjureYouBarButton used to draw, so the Conjure button " +
+            "is not added to the you bar."),
+        entry(78672, "Returns null where ConjureYouBarButton used to draw, so the Conjure button " +
+            "is not added to the you bar."),
+        entry(37278, "Returns null from useDisplayNameStyles, so collectible display-name colors, " +
+            "fonts and effects are not applied to names."),
+        entry(34014, "Answers false from useServerThemeUserEnabled, so a server theme is not " +
+            "enabled for this account."),
+        entry(34015, "Answers false from useServerThemeUserEnabled, so a server theme is not " +
+            "enabled for this account."),
+        entry(34016, "Answers false from getServerThemeUserEnabled, so a server theme is not " +
+            "applied even where the hook is not used."),
+        entry(66759, "Answers false from shouldShowEmojiRow, so the reaction row is not shown at " +
+            "the top of a message's long-press menu."),
+        entry(48813, "Answers false from getICYMIEnabled, so the ICYMI feed and the controls that " +
+            "open it are disabled."),
+        entry(48814, "Answers false from useICYMIEnabled, so a screen that reads the hook does not " +
+            "treat the ICYMI feed as enabled."),
+        entry(48815, "Answers false from useICYMIEnabled, so a screen that reads the hook does not " +
+            "treat the ICYMI feed as enabled."),
+        entry(70655, "Returns null where ContextMenuDivider used to draw, so its context-menu separator is not rendered."),
+        entry(70656, "Returns null where ContextMenuDivider used to draw, so its context-menu separator is not rendered."),
+        entry(40202, "Returns null where FormSeparator used to draw, so its form separator is not rendered."),
+        entry(40203, "Returns null where FormSeparator used to draw, so its form separator is not rendered."),
+        entry(49584, "Returns null where FormSeparator used to draw, so its form separator is not rendered."),
+        entry(49585, "Returns null where FormSeparator used to draw, so its form separator is not rendered."),
+        entry(74862, "Returns null where FormSeparator used to draw, so its form separator is not rendered."),
+        entry(74863, "Returns null where FormSeparator used to draw, so its form separator is not rendered."),
+        entry(76733, "Returns null where ListItemSeparator used to draw, so its list-row separator is not rendered."),
+        entry(76734, "Returns null where ListItemSeparator used to draw, so its list-row separator is not rendered."),
+        entry(74037, "Returns null where ItemSeparator used to draw, so its item separator is not rendered."),
+        entry(74038, "Returns null where ItemSeparator used to draw, so its item separator is not rendered."),
+        entry(77728, "Returns null where DottedLineSeparator used to draw, so its dotted separator line is not rendered."),
+        entry(77729, "Returns null where DottedLineSeparator used to draw, so its dotted separator line is not rendered."),
+        entry(83824, "Returns null where SectionSeparator used to draw, so its section separator is not rendered."),
+        entry(83825, "Returns null where SectionSeparator used to draw, so its section separator is not rendered."),
+        entry(79738, "Returns null where MessageVerticalSeparator used to draw, so its message-action separator is not rendered."),
+        entry(79739, "Returns null where MessageVerticalSeparator used to draw, so its message-action separator is not rendered."),
+        entry(79740, "Returns null where MediaVerticalSeparator used to draw, so its media-action separator is not rendered."),
+        entry(79741, "Returns null where MediaVerticalSeparator used to draw, so its media-action separator is not rendered."),
+        entry(79742, "Returns null where CardVerticalSeparator used to draw, so its card-action separator is not rendered."),
+        entry(79743, "Returns null where CardVerticalSeparator used to draw, so its card-action separator is not rendered."),
+        entry(53608, "Returns null where AutocompleteFormDivider used to draw, so its autocomplete form divider is not rendered."),
+        entry(53609, "Returns null where AutocompleteFormDivider used to draw, so its autocomplete form divider is not rendered."),
+        entry(66961, "Returns null where AuthorizeFormSeparator used to draw, so its authorization form separator is not rendered."),
+        entry(66962, "Returns null where AuthorizeFormSeparator used to draw, so its authorization form separator is not rendered."),
+        entry(78523, "Returns null where GuildsBarSeparator used to draw, so its server-bar separator is not rendered."),
+        entry(78524, "Returns null where GuildsBarSeparator used to draw, so its server-bar separator is not rendered."),
+        entry(78521, "Returns null where GuildsBarHomeDrawerSeparator used to draw, so its home-drawer separator is not rendered."),
+        entry(78522, "Returns null where GuildsBarHomeDrawerSeparator used to draw, so its home-drawer separator is not rendered."),
+        entry(78065, "Answers false from getChannelListSectionHasFooterDivider, so a " +
+            "channel-list section does not draw its footer divider line."),
+        entry(73986, "Returns null where QuestHomeBounties used to draw, so the Bounties section " +
+            "is not added to Quest Home."),
+        entry(73987, "Returns null where QuestHomeBounties used to draw, so the Bounties section " +
+            "is not added to Quest Home."),
+        entry(63997, "Returns null where JumpToPresentButton used to draw, so the jump-to-present " +
+            "button is not shown in a chat."),
+        entry(63998, "Returns null where JumpToPresentButton used to draw, so the jump-to-present " +
+            "button is not shown in a chat."),
     )
 
     /**
@@ -1596,6 +1684,88 @@ object DiscordHermesFunctionCatalog {
                 77995, 77996, 78157, 78158, 78159, 78160, 78161, 78162, 78163, 78164,
                 78171, 78172, 82740
             )
+        ),
+        Feature(
+            slug = "row_separators",
+            group = ROWS_GROUP,
+            label = "Separator lines",
+            description = "Removes the thin divider lines between rows, menu items, form fields, " +
+                "list items, sections, message actions and server-bar groups. Text and controls " +
+                "stay.",
+            functionIds = listOf(
+                40223, 40224, 70655, 70656, 40202, 40203, 49584, 49585, 74862, 74863,
+                76733, 76734, 74037, 74038, 77728, 77729, 83824, 83825, 79738, 79739,
+                79740, 79741, 79742, 79743, 53608, 53609, 66961, 66962, 78523, 78524,
+                78521, 78522, 78065
+            )
+        ),
+        Feature(
+            slug = "dm_activity_cards",
+            group = DM_ACTIVITY_GROUP,
+            label = "Activity cards in DMs",
+            description = "Removes the happening-now activity cards above a direct message and " +
+                "the height they reserve in the list.",
+            functionIds = listOf(77649, 77657, 77658)
+        ),
+        Feature(
+            slug = "call_screen_extras",
+            group = CALL_SCREEN_GROUP,
+            label = "Call screen extras",
+            description = "Removes the Add people banner from the call screen and the game-console " +
+                "section from the audio output sheet.",
+            functionIds = listOf(50059, 50060, 81454, 81455)
+        ),
+        Feature(
+            slug = "conjure_ai",
+            group = CONJURE_GROUP,
+            label = "Conjure AI buttons",
+            description = "Removes the Conjure row from the channel list and its button from the " +
+                "you bar.",
+            functionIds = listOf(78150, 78151, 78671, 78672)
+        ),
+        Feature(
+            slug = "display_name_styles",
+            group = LOOK_GROUP,
+            label = "Display-name styles",
+            description = "Stops collectible display-name colors, fonts and effects from being " +
+                "applied to names.",
+            functionIds = listOf(37278)
+        ),
+        Feature(
+            slug = "server_themes",
+            group = THEME_GROUP,
+            label = "Server themes",
+            description = "Stops a server's theme from replacing your own appearance.",
+            functionIds = listOf(34014, 34015, 34016)
+        ),
+        Feature(
+            slug = "message_menu_reactions",
+            group = CHAT_GROUP,
+            label = "Reaction bar in message menu",
+            description = "Hides the emoji reaction row at the top of a message's long-press " +
+                "menu. Every other action stays.",
+            functionIds = listOf(66759)
+        ),
+        Feature(
+            slug = "icymi_feed",
+            group = HOME_GROUP,
+            label = "ICYMI feed",
+            description = "Disables the ICYMI feed and the controls that open it.",
+            functionIds = listOf(48813, 48814, 48815)
+        ),
+        Feature(
+            slug = "quest_bounties",
+            group = QUESTS_GROUP,
+            label = "Quest bounties",
+            description = "Removes the Bounties section from Quest Home.",
+            functionIds = listOf(73986, 73987)
+        ),
+        Feature(
+            slug = "jump_to_present_button",
+            group = CHAT_GROUP,
+            label = "Jump to present button",
+            description = "Removes the jump-to-present button from a chat.",
+            functionIds = listOf(63997, 63998)
         ),
     )
 

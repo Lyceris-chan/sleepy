@@ -690,6 +690,80 @@ object DiscordHermesBundlePatch {
         FunctionPatch(78171, "GuildPowerupsProgressBar", 2255, "94007e7600"),
         FunctionPatch(78172, "GuildPowerupsProgressBar", 1185, "94007e7600"),
         FunctionPatch(82740, "renderBoostProgressBar", 283, "94007e7600"),
+        // Hide-only ideas from the Valenced plugin repositories: the table divider, the DM
+        // "happening now" cards and their reserved height, the call screen's add-people banner,
+        // the game-console section of the audio sheet, and the Conjure row and you-bar button.
+        // All are components or a height function, so a null or zero return removes them.
+        FunctionPatch(40223, "TableRowDivider", 282, "94007e7600"),
+        FunctionPatch(40224, "TableRowDivider", 150, "94007e7600"),
+        FunctionPatch(77649, "getMessagesItemHappeningNowHeight", 74, "8b00007600"),
+        FunctionPatch(77657, "HappeningNow", 1672, "94007e7600"),
+        FunctionPatch(77658, "HappeningNow", 907, "94007e7600"),
+        FunctionPatch(50059, "VoicePanelAudioConsoleSection", 910, "94007e7600"),
+        FunctionPatch(50060, "VoicePanelAudioConsoleSection", 519, "94007e7600"),
+        FunctionPatch(81454, "VoicePanelFloatingCTAContainer", 1029, "94007e7600"),
+        FunctionPatch(81455, "VoicePanelFloatingCTAContainer", 663, "94007e7600"),
+        FunctionPatch(78150, "ConjureChannelRow", 834, "94007e7600"),
+        FunctionPatch(78151, "ConjureChannelRow", 467, "94007e7600"),
+        FunctionPatch(78671, "ConjureYouBarButton", 1075, "94007e7600"),
+        FunctionPatch(78672, "ConjureYouBarButton", 560, "94007e7600"),
+        // Declutter's display-name styles and server-theme switches: the style hook already
+        // returns null when the feature is off, and the two server-theme predicates are read as
+        // booleans by every caller, so false restores the personal theme.
+        FunctionPatch(37278, "useDisplayNameStyles", 303, "94007e7600"),
+        FunctionPatch(34014, "useServerThemeUserEnabled", 100, "96007e7600"),
+        FunctionPatch(34015, "useServerThemeUserEnabled", 38, "96007e7600"),
+        FunctionPatch(34016, "getServerThemeUserEnabled", 38, "96007e7600"),
+        // Junk Cleanup's reaction-row switch gates the row at its own predicate rather than
+        // hiding the whole long-press sheet, so the sheet keeps every other action.
+        FunctionPatch(66759, "shouldShowEmojiRow", 135, "96007e7600"),
+        // Server Drawer's ICYMI switch force-returns false from the getter and the hook. The
+        // alias 48816 shares the getter's body, so patching 48813 covers both call forms.
+        FunctionPatch(48813, "getICYMIEnabled", 65, "96007e7600"),
+        FunctionPatch(48814, "useICYMIEnabled", 187, "96007e7600"),
+        FunctionPatch(48815, "useICYMIEnabled", 100, "96007e7600"),
+        // The rest of the visual separator components. No Dividers replaces TableRowDivider
+        // alone; the same one-line null shape covers the other line-drawing components the
+        // bundle exports, and the section-footer predicate answers false. Text, controls and
+        // spacing stay.
+        FunctionPatch(70655, "ContextMenuDivider", 117, "94007e7600"),
+        FunctionPatch(70656, "ContextMenuDivider", 45, "94007e7600"),
+        FunctionPatch(40202, "FormSeparator", 216, "94007e7600"),
+        FunctionPatch(40203, "FormSeparator", 73, "94007e7600"),
+        FunctionPatch(49584, "FormSeparator", 118, "94007e7600"),
+        FunctionPatch(49585, "FormSeparator", 41, "94007e7600"),
+        FunctionPatch(74862, "FormSeparator", 312, "94007e7600"),
+        FunctionPatch(74863, "FormSeparator", 115, "94007e7600"),
+        FunctionPatch(76733, "ListItemSeparator", 117, "94007e7600"),
+        FunctionPatch(76734, "ListItemSeparator", 45, "94007e7600"),
+        FunctionPatch(74037, "ItemSeparator", 122, "94007e7600"),
+        FunctionPatch(74038, "ItemSeparator", 45, "94007e7600"),
+        FunctionPatch(77728, "DottedLineSeparator", 163, "94007e7600"),
+        FunctionPatch(77729, "DottedLineSeparator", 105, "94007e7600"),
+        FunctionPatch(83824, "SectionSeparator", 346, "94007e7600"),
+        FunctionPatch(83825, "SectionSeparator", 155, "94007e7600"),
+        FunctionPatch(79738, "MessageVerticalSeparator", 117, "94007e7600"),
+        FunctionPatch(79739, "MessageVerticalSeparator", 45, "94007e7600"),
+        FunctionPatch(79740, "MediaVerticalSeparator", 117, "94007e7600"),
+        FunctionPatch(79741, "MediaVerticalSeparator", 45, "94007e7600"),
+        FunctionPatch(79742, "CardVerticalSeparator", 117, "94007e7600"),
+        FunctionPatch(79743, "CardVerticalSeparator", 45, "94007e7600"),
+        FunctionPatch(53608, "AutocompleteFormDivider", 126, "94007e7600"),
+        FunctionPatch(53609, "AutocompleteFormDivider", 58, "94007e7600"),
+        FunctionPatch(66961, "AuthorizeFormSeparator", 117, "94007e7600"),
+        FunctionPatch(66962, "AuthorizeFormSeparator", 45, "94007e7600"),
+        FunctionPatch(78523, "GuildsBarSeparator", 256, "94007e7600"),
+        FunctionPatch(78524, "GuildsBarSeparator", 154, "94007e7600"),
+        FunctionPatch(78521, "GuildsBarHomeDrawerSeparator", 278, "94007e7600"),
+        FunctionPatch(78522, "GuildsBarHomeDrawerSeparator", 203, "94007e7600"),
+        FunctionPatch(78065, "getChannelListSectionHasFooterDivider", 171, "96007e7600"),
+        // Questify's bounty surface: a whole section of Quest Home, hidden at the component.
+        FunctionPatch(73986, "QuestHomeBounties", 1010, "94007e7600"),
+        FunctionPatch(73987, "QuestHomeBounties", 578, "94007e7600"),
+        // JumpToTop uses this button only as its anchor; hiding the button itself is the one
+        // declutter surface the plugin reveals.
+        FunctionPatch(63997, "JumpToPresentButton", 941, "94007e7600"),
+        FunctionPatch(63998, "JumpToPresentButton", 460, "94007e7600"),
     )
 
     private fun String.hexToBytes(): ByteArray {

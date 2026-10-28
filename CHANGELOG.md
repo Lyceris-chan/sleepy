@@ -5,6 +5,41 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.6] - 2026-10-28
+
+### Added
+
+- **Ten hide-only ideas from the Valenced plugin repositories.**
+  - **Lines between rows** removes the divider line from Settings and every other table-style
+    list (`TableRowDivider`, ids 40223/40224).
+  - **Activity cards in DMs** removes the happening-now cards above a direct message and the
+    height they reserve (`HappeningNow`, ids 77657/77658, and the height function, id 77649).
+  - **Call screen extras** removes the Add people banner from the call screen and the game-console
+    section from the audio output sheet (`VoicePanelFloatingCTAContainer`, ids 81454/81455;
+    `VoicePanelAudioConsoleSection`, ids 50059/50060).
+  - **Conjure AI buttons** removes the Conjure row from the channel list and its you-bar button
+    (`ConjureChannelRow`, ids 78150/78151; `ConjureYouBarButton`, ids 78671/78672).
+  - **Display-name styles** stops collectible colors, fonts and effects from rendering on names
+    (`useDisplayNameStyles`, id 37278 returns null).
+  - **Server themes** stops a server theme from replacing your appearance (the server-theme
+    experiment predicates, ids 34014/34015/34016, answer false).
+  - **Reaction bar in message menu** hides the emoji reaction row at the top of a long-press
+    menu (`shouldShowEmojiRow`, id 66759, answers false).
+  - **ICYMI feed** disables the ICYMI feed and the controls that open it (`getICYMIEnabled` and
+    both `useICYMIEnabled` copies, ids 48813/48814/48815, answer false).
+  - **Quest bounties** removes the Bounties section from Quest Home (`QuestHomeBounties`, ids
+    73986/73987, return null).
+  - **Jump to present button** removes the jump-to-present button from a chat
+    (`JumpToPresentButton`, ids 63997/63998, return null).
+- **A Valenced coverage record.** [VALENCED_COVERAGE.md](VALENCED_COVERAGE.md) maps every plugin in
+  the seven repositories to a sleepy switch or to the runtime feature that keeps it out.
+
+### Changed
+
+- **The JavaScript table is 620 entries in 72 features**, up from 564 in 62. The fifty-six added
+  entries are the component, predicate and height stubs above; `ValencedPluginIdeasTest` pins
+  their shape and their sections.
+
 ## [3.12.5] - 2026-10-28
 
 ### Added
