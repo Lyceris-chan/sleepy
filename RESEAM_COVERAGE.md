@@ -8,6 +8,14 @@ Reseam targets Discord 347.12 and Telegram 12.10.6. sleepy targets Discord 353.2
 OctoGram 3.6.1, so a Reseam target that was renamed, removed or inlined by those builds is
 listed as not applicable instead of being written from another release's names.
 
+Re-audited at Reseam commit `0ab5714` (2026-10-27, engine 0.33.0). Every `patch("...")` name in
+its Discord, Telegram and universal sets is still listed below; the latest Discord additions are
+the 2026-10-13/14 Custom themes, Server details, Draft preview, Jump to first message, Colored
+names, Moderator badges, Better stream quality and Add source cards patches, all of which are
+either included or require the Reseam runtime. The Hide typing indicator patch's second target,
+`sendTyping`, no longer exists in 353.2.0 under that name or as a string cross-reference; the
+353 path is `handleTypingStartLocal`, which sleepy stubs.
+
 ## Discord
 
 | Reseam patch | Status in sleepy |
@@ -93,8 +101,8 @@ listed as not applicable instead of being written from another release's names.
 
 ## Verification
 
-- Discord native set: **96 applied, 0 skipped** on the real 353.2.0 APK.
-- Discord JavaScript table: **545 entries**, all read back by real Hermes with **0 rejected**.
+- Discord native set: **105 applied, 0 skipped** on the real 353.2.0 APK.
+- Discord JavaScript table: **564 entries**, all read back by real Hermes with **0 rejected**.
 - OctoGram: **20 sets, 23 items, 48 edits**, all applied and reassembled by the payload test.
-- Full unit suite: 274 tests, 0 failures (17 fixture-dependent tests skip when a split or fixture
+- Full unit suite: 284 tests, 0 failures (17 fixture-dependent tests skip when a split or fixture
   APK is not present locally).

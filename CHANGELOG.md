@@ -5,6 +5,28 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.5] - 2026-10-28
+
+### Added
+
+- **Server boost displays can be removed.** A new **Server boost displays** switch under
+  **Ads and offers → Server boosts** returns null from every surface that advertises or tracks a
+  server's boosts: the progress bar above the channel list, the boost count and tier progress
+  circle, the boost channel row and its unread/warning indicator, the boost coachmark host and
+  coachmark, the Settings overview's boost-progress-bar row, and the two boost marketing calls to
+  action. The two coachmarks that used to be part of **Guild and boost upsells** now belong to
+  this switch, so one row covers every boost display.
+
+### Changed
+
+- **The JavaScript table is 564 entries in 62 features**, up from 545 in 61. The 19 added entries
+  are the boost surfaces above; the four coachmark entries moved from **Guild and boost upsells**
+  to the new switch. Every entry was applied to the real 353.2.0 bundle and read back by the
+  Hermes disassembler.
+- **ReSeam was re-audited at commit `0ab5714`.** Its latest Discord additions are already
+  included or need its JavaScript runtime, and no new applicable patch was found;
+  [RESEAM_COVERAGE.md](RESEAM_COVERAGE.md) records the audit and current verification counts.
+
 ## [3.12.4] - 2026-10-28
 
 ### Fixed

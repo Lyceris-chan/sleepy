@@ -63,7 +63,7 @@ class HermesBundleApplicationTest {
      * the lower function id keeps it and the other is relocated beside it.
      */
     private val relocated =
-        listOf(8464, 16275, 16281, 16288, 17189, 33516, 36065, 36070, 42845, 67337, 76816, 57031)
+        listOf(8464, 16275, 16281, 16288, 17189, 33516, 36065, 36070, 42845, 67337, 76816, 57031, 78160)
 
     @Test
     fun everyEntryAppliesToTheBuildTheTableNames() {

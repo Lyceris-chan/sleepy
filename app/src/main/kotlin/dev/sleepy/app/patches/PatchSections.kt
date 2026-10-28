@@ -118,6 +118,7 @@ object PatchSections {
         "Premium prompts" to ADS,
         "Store pages" to ADS,
         "Free trials" to ADS,
+        "Server boosts" to ADS,
         "Leaderboards" to DECLUTTER,
         "Gifts" to ADS,
         "Billing" to ADS,

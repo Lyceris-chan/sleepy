@@ -79,6 +79,7 @@ object DiscordHermesFunctionCatalog {
     private const val LEFTOVER_GROUP = "Miscellaneous fixes"
     private const val CHAT_GROUP = "Chat display"
     private const val PRIVACY_GROUP = "Privacy"
+    private const val BOOST_GROUP = "Server boosts"
 
     /** Every patched function, in the order the patch table applies them. */
     val ENTRIES: List<Entry> = listOf(
@@ -1000,6 +1001,44 @@ object DiscordHermesFunctionCatalog {
             "check never turns the quest dock on."),
         entry(74246, "Returns zero from useMobileQuestDockHeight, so the quest dock reserves no " +
             "height and cannot appear."),
+        entry(42625, "Returns null where the persistent boost marketing call to action used to " +
+            "draw, so it is not shown on any screen."),
+        entry(42626, "Returns null where the persistent boost marketing call to action used to " +
+            "draw, so it is not shown on any screen."),
+        entry(65194, "Returns null where GuildPowerupsBoostInfo used to draw, removing the boost " +
+            "count and boost icon from the progress bar."),
+        entry(65195, "Returns null where GuildPowerupsBoostInfo used to draw, removing the boost " +
+            "count and boost icon from the progress bar."),
+        entry(68872, "Returns null where BoostedGuildTierProgressCircle used to draw, so the " +
+            "tier progress ring is not rendered."),
+        entry(68873, "Returns null where BoostedGuildTierProgressCircle used to draw, so the " +
+            "tier progress ring is not rendered."),
+        entry(69000, "Returns null where the boost marketing call-to-action bar used to draw, " +
+            "so the upgrade banner does not appear."),
+        entry(69001, "Returns null where the boost marketing call-to-action bar used to draw, " +
+            "so the upgrade banner does not appear."),
+        entry(78157, "Returns null from the channel row indicator, so boost notifications and the " +
+            "unread boost badge never appear beside a channel."),
+        entry(78158, "Returns null from the channel row indicator, so boost notifications and the " +
+            "unread boost badge never appear beside a channel."),
+        entry(78159, "Returns null from the coachmark host, so the boost coachmark is never set " +
+            "up or shown."),
+        entry(78160, "Returns null from the coachmark host, so the boost coachmark is never set " +
+            "up or shown."),
+        entry(78161, "Returns null where GuildPowerupsCoachmark used to draw, so the boost " +
+            "coachmark itself never appears."),
+        entry(78162, "Returns null where GuildPowerupsCoachmark used to draw, so the boost " +
+            "coachmark itself never appears."),
+        entry(78163, "Returns null where GuildPowerupsChannelRow used to draw, so the boost " +
+            "progress row is never added to the channel list."),
+        entry(78164, "Returns null where GuildPowerupsChannelRow used to draw, so the boost " +
+            "progress row is never added to the channel list."),
+        entry(78171, "Returns null where GuildPowerupsProgressBar used to draw, so the boost " +
+            "progress bar above the channel list is not rendered."),
+        entry(78172, "Returns null where GuildPowerupsProgressBar used to draw, so the boost " +
+            "progress bar above the channel list is not rendered."),
+        entry(82740, "Returns null from renderBoostProgressBar, so the Settings overview does " +
+            "not show its boost progress bar toggle row."),
     )
 
     /**
@@ -1374,8 +1413,8 @@ object DiscordHermesFunctionCatalog {
             description = "The guild boosting, server tag and role-subscription upsells.",
             functionIds = listOf(
                 38361, 38376, 38377, 41446, 42629, 42630, 52903, 52904, 52913, 52914, 56011, 56012,
-                56013, 65292, 65293, 65856, 65857, 65858, 65859, 67275, 67276, 68896, 68897, 77991,
-                77992, 77995, 77996, 78239, 78240, 78247, 78248, 78252, 78253, 78300, 78301, 78314,
+                56013, 65292, 65293, 65856, 65857, 65858, 65859, 67275, 67276, 68896, 68897, 78239,
+                78240, 78247, 78248, 78252, 78253, 78300, 78301, 78314,
                 78315, 78316, 83045, 83046, 83759, 83760
             )
         ),
@@ -1543,6 +1582,20 @@ object DiscordHermesFunctionCatalog {
             description = "Starts a reply with mentions turned off and the mention toggle shown, " +
                 "so answering a message does not ping its author unless you turn it back on.",
             functionIds = listOf(53469, 53470)
+        ),
+        Feature(
+            slug = "server_boost_displays",
+            group = BOOST_GROUP,
+            label = "Server boost displays",
+            description = "Removes the boost progress bar above the channel list, the boost count " +
+                "and tier circle, the boost channel row and its indicator, the boost coachmarks, " +
+                "the Settings overview toggle, and the boost marketing banners, so boost surfaces " +
+                "are not shown.",
+            functionIds = listOf(
+                42625, 42626, 65194, 65195, 68872, 68873, 69000, 69001, 77991, 77992,
+                77995, 77996, 78157, 78158, 78159, 78160, 78161, 78162, 78163, 78164,
+                78171, 78172, 82740
+            )
         ),
     )
 

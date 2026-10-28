@@ -664,6 +664,32 @@ object DiscordHermesBundlePatch {
         FunctionPatch(74253, "useIsMobileQuestDockRenderedBase", 531, "96007e7e7600"),
         // 74246 and 74247 share one body; patching either replaces it for both callers.
         FunctionPatch(74246, "useMobileQuestDockHeight", 50, "8b00007600"),
+        // The server-boost surfaces. Discord renders these from the powerups and guild-boosting
+        // modules: the progress bar above the channel list, the boost count and tier circle, the
+        // channel list row and its unread/warning indicator, the coachmarks, the Settings overview
+        // toggle, and the two marketing calls to action. Each is a React component (or a render
+        // method that returns one), so returning null removes it without a caller having to
+        // handle a missing value.
+        FunctionPatch(42625, "GuildBoostingMarketingPersistentCta", 1541, "94007e7600"),
+        FunctionPatch(42626, "GuildBoostingMarketingPersistentCta", 714, "94007e7600"),
+        FunctionPatch(65194, "GuildPowerupsBoostInfo", 824, "94007e7600"),
+        FunctionPatch(65195, "GuildPowerupsBoostInfo", 444, "94007e7600"),
+        FunctionPatch(68872, "BoostedGuildTierProgressCircle", 1113, "94007e7600"),
+        FunctionPatch(68873, "BoostedGuildTierProgressCircle", 583, "94007e7600"),
+        FunctionPatch(69000, "GuildBoostingMarketingCtaBar", 4753, "94007e7600"),
+        FunctionPatch(69001, "GuildBoostingMarketingCtaBar", 2240, "94007e7600"),
+        FunctionPatch(78157, "GuildPowerupsChannelRowIndicator", 311, "94007e7600"),
+        FunctionPatch(78158, "GuildPowerupsChannelRowIndicator", 201, "94007e7600"),
+        // 78159 and 78160 share one body; patching either replaces it for both callers.
+        FunctionPatch(78159, "GuildPowerupsCoachmarkHost", 53, "94007e7600"),
+        FunctionPatch(78160, "GuildPowerupsCoachmarkHost", 53, "94007e7600"),
+        FunctionPatch(78161, "GuildPowerupsCoachmark", 287, "94007e7600"),
+        FunctionPatch(78162, "GuildPowerupsCoachmark", 155, "94007e7600"),
+        FunctionPatch(78163, "GuildPowerupsChannelRow", 1179, "94007e7600"),
+        FunctionPatch(78164, "GuildPowerupsChannelRow", 680, "94007e7600"),
+        FunctionPatch(78171, "GuildPowerupsProgressBar", 2255, "94007e7600"),
+        FunctionPatch(78172, "GuildPowerupsProgressBar", 1185, "94007e7600"),
+        FunctionPatch(82740, "renderBoostProgressBar", 283, "94007e7600"),
     )
 
     private fun String.hexToBytes(): ByteArray {
