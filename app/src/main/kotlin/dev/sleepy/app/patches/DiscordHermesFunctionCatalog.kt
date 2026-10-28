@@ -58,7 +58,7 @@ object DiscordHermesFunctionCatalog {
     private const val STOREFRONT_GROUP = "Store pages"
     private const val TRIAL_GROUP = "Free trials"
     private const val LEADERBOARD_GROUP = "Leaderboards"
-    private const val GAME_GROUP = "Game activity"
+    private const val GAME_GROUP = "Friends' activity"
     private const val GIFTS_GROUP = "Gifts"
     private const val BILLING_GROUP = "Billing"
     private const val LOOK_GROUP = "Profile decorations"
@@ -81,7 +81,6 @@ object DiscordHermesFunctionCatalog {
     private const val PRIVACY_GROUP = "Privacy"
     private const val BOOST_GROUP = "Server boosts"
     private const val ROWS_GROUP = "Rows and dividers"
-    private const val DM_ACTIVITY_GROUP = "Activity cards"
     private const val CALL_SCREEN_GROUP = "Call screen"
     private const val CONJURE_GROUP = "AI features"
     private const val THEME_GROUP = "Server themes"
@@ -1150,10 +1149,9 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "game_activity",
             group = GAME_GROUP,
-            label = "Games being played",
-            description = "Removes the game someone is playing from the app: the status line " +
-                "under a name, the entry in a profile's activity list, and the games section in " +
-                "a voice channel.",
+            label = "Games friends are playing",
+            description = "Removes the game a friend is playing from their status line, profile " +
+                "activity list and voice channel. Turn this switch off to see games again.",
             functionIds = listOf(50285, 55002, 81379, 81380)
         ),
         Feature(
@@ -1215,7 +1213,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "storefront",
             group = SHOP_GROUP,
-            label = "Store and product lookups",
+            label = "Store requests",
             description = "Stops the app fetching store products, prices and collections, and the " +
                 "guild data it loaded on every connection.",
             functionIds = listOf(48318, 48753, 50741, 50742, 51094, 54789, 54793)
@@ -1386,7 +1384,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "crash_context",
             group = CRASH_GROUP,
-            label = "What a crash report would carry",
+            label = "Crash report contents",
             description = "Stops the identity, tags, context, breadcrumbs and feature flags that would " +
                 "be attached to a report.",
             functionIds = listOf(22110, 24812, 24813, 24814, 24815, 24819, 24820, 24824)
@@ -1414,7 +1412,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "session_telemetry",
             group = TELEMETRY_GROUP,
-            label = "Session and network statistics",
+            label = "Session and network telemetry",
             description = "Stops the app recording network, session and message-cache statistics, and " +
                 "the heartbeat that reported them.",
             functionIds = listOf(
@@ -1424,7 +1422,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "gateway_telemetry",
             group = TELEMETRY_GROUP,
-            label = "Gateway connection reporting",
+            label = "Gateway connection logs",
             description = "Stops the gateway connection being logged, measured and reported, and the " +
                 "patched socket that read every message.",
             functionIds = listOf(69276, 69277, 69278, 69279, 84222)
@@ -1457,7 +1455,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "markup_cache_bound",
             group = STABILITY_GROUP,
-            label = "Bound the message cache",
+            label = "Message cache limit",
             description = "Caps the cache the app fills while drawing messages. It had no limit " +
                 "and its expiry was refreshed on every read, so it grew for as long as the app " +
                 "ran, which is memory pressure the app cannot recover.",
@@ -1466,7 +1464,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "leftover_stubs",
             group = LEFTOVER_GROUP,
-            label = "Stubs by function id",
+            label = "Technical leftovers",
             description = "Four functions stubbed by id. This release moved what " +
                 "those ids hold, so three of the stubs change nothing you can see; the other " +
                 "stands in for a typing-indicator hook. Switching this off leaves all four as " +
@@ -1492,8 +1490,9 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "premium_upsells",
             group = UPSELL_GROUP,
-            label = "Other upsell prompts",
-            description = "The remaining upsell sheets, cards, alerts and the buttons that open them.",
+            label = "Remaining premium prompts",
+            description = "The remaining upsell sheets, cards, alerts and the buttons that open " +
+                "them.",
             functionIds = listOf(
                 33453, 42687, 42688, 42775, 42777, 42785, 42786, 42787, 42834, 42835, 52193, 52195,
                 52201, 52202, 52203, 52204, 52771, 52772, 52905, 52906, 52907, 52908, 52911, 52912,
@@ -1607,7 +1606,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "appearance_activity_cards",
             group = LOOK_GROUP,
-            label = "Appearance activity cards",
+            label = "Activity cards in theme preview",
             description = "Removes the activity cards from the Appearance preview, so the theme " +
                 "preview stays a preview of the theme.",
             functionIds = listOf(75117, 75118)
@@ -1712,26 +1711,26 @@ object DiscordHermesFunctionCatalog {
         ),
         Feature(
             slug = "dm_activity_cards",
-            group = DM_ACTIVITY_GROUP,
-            label = "Activity cards in DMs",
-            description = "Removes the happening-now activity cards above a direct message and " +
-                "the height they reserve in the list.",
+            group = GAME_GROUP,
+            label = "Friends' activity in DMs",
+            description = "Hides the happening-now strip above your DMs, where friends in calls, " +
+                "games and other activities appear. Turn this switch off to see them again.",
             functionIds = listOf(77649, 77657, 77658)
         ),
         Feature(
             slug = "call_screen_extras",
             group = CALL_SCREEN_GROUP,
-            label = "Call screen extras",
+            label = "Call screen clutter",
             description = "Removes the Add people banner from the call screen and the game-console " +
-                "section from the audio output sheet.",
+                "transfer section from the audio output sheet.",
             functionIds = listOf(50059, 50060, 81454, 81455)
         ),
         Feature(
             slug = "conjure_ai",
             group = CONJURE_GROUP,
-            label = "Conjure AI buttons",
-            description = "Removes the Conjure row from the channel list and its button from the " +
-                "you bar.",
+            label = "Conjure AI shortcuts",
+            description = "Removes the Conjure AI row from the channel list and its wand button " +
+                "from the You bar.",
             functionIds = listOf(78150, 78151, 78671, 78672)
         ),
         Feature(
@@ -1760,8 +1759,9 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "icymi_feed",
             group = HOME_GROUP,
-            label = "ICYMI feed",
-            description = "Disables the ICYMI feed and the controls that open it.",
+            label = "ICYMI activity feed",
+            description = "Disables Discord's ICYMI feed, which gathers activity you missed, and " +
+                "the controls that open it.",
             functionIds = listOf(48813, 48814, 48815)
         ),
         Feature(
@@ -1781,8 +1781,9 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "server_bar_onboarding",
             group = SERVER_BAR_GROUP,
-            label = "Server bar onboarding",
-            description = "Removes the onboarding hint shown by an empty server bar.",
+            label = "Empty server bar hint",
+            description = "Removes the onboarding hint shown when the server bar has nothing in " +
+                "it.",
             functionIds = listOf(78537, 78538)
         ),
     )

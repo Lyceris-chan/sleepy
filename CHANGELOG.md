@@ -5,6 +5,29 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.0] - 2026-10-28
+
+### Added
+
+- **The patch list has a search field.** It filters patches and permissions by what they change,
+  not only by the section they live in: `friends`, `calls`, `boosts`, `privacy` or a section name
+  all find the rows a person is looking for. Matches keep their section and heading, and every row
+  keeps its switch and technical panel. A no-match state suggests what to try instead.
+- **The list says what a switch's on state means.** "On applies a change; turn a switch off to
+  restore that part of the app" sits under the search field, so the direction of a switch is not
+  left to inference.
+
+### Changed
+
+- **Activity switches are named after what they show.** **Games being played** is now **Games
+  friends are playing**, and **Activity cards in DMs** is **Friends' activity in DMs**; both sit
+  under one **Friends' activity** heading. The DM row's description now names the calls, games and
+  other activities in the happening-now strip and says that turning it off brings them back.
+- **Several labels were worded as the thing a user recognises rather than the implementation:**
+  **Call screen clutter**, **ICYMI activity feed**, **Conjure AI shortcuts**, **Empty server bar
+  hint**, **Store requests**, **Message cache limit**, **Crash report contents**, **Session and
+  network telemetry**, **Gateway connection logs** and **Technical leftovers**.
+
 ## [3.12.7] - 2026-10-28
 
 ### Added

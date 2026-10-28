@@ -104,5 +104,5 @@ either included or require the Reseam runtime. The Hide typing indicator patch's
 - Discord native set: **105 applied, 0 skipped** on the real 353.2.0 APK.
 - Discord JavaScript table: **625 entries**, all read back by real Hermes with **0 rejected**.
 - OctoGram: **20 sets, 23 items, 48 edits**, all applied and reassembled by the payload test.
-- Full unit suite: 286 tests, 0 failures (17 fixture-dependent tests skip when a split or fixture
+- Full unit suite: 293 tests, 0 failures (17 fixture-dependent tests skip when a split or fixture
   APK is not present locally).

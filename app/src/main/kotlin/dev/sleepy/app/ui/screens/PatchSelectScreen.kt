@@ -1,5 +1,6 @@
 package dev.sleepy.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
@@ -69,6 +72,7 @@ import dev.sleepy.app.ui.components.PatchItemRow
 import dev.sleepy.app.ui.components.PatchSectionCard
 import dev.sleepy.app.ui.state.PatchRow
 import dev.sleepy.app.ui.state.PatchRows
+import dev.sleepy.app.ui.state.PatchSearch
 import dev.sleepy.app.ui.state.TriState
 import dev.sleepy.app.viewmodel.PatchViewModel
 
@@ -86,7 +90,7 @@ import dev.sleepy.app.viewmodel.PatchViewModel
  * @param onStartPatch Called when a run starts.
  * @param onBack Called when the user leaves the screen.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PatchSelectScreen(
     sourceId: String,
@@ -139,6 +143,15 @@ fun PatchSelectScreen(
             .orEmpty()
     }
     val permissionRemovalCount = permissionRows.count { it.switchable && !it.enabled }
+
+    // The search is a filter over the same rows, not a second catalogue: a matching row keeps its
+    // switch, its inert reason and its technical panel, and clearing the query restores the list
+    // with the sections still expanded.
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searching = searchQuery.isNotBlank()
+    val searchResults = remember(sections, permissionRows, searchQuery) {
+        PatchSearch.search(sections, permissionRows, searchQuery)
+    }
 
     val selectedItemCount = sections.sumOf { it.selectedItemCount }
     val totalItemCount = sections.sumOf { it.itemCount }
@@ -227,90 +240,101 @@ fun PatchSelectScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item(key = "intro") {
-                Spacer(modifier = Modifier.height(4.dp))
-
-                CloneModeCard(
-                    isCloneMode = isCloneMode,
-                    customPackageName = customPackageName,
-                    originalPackageName = source?.packageName.orEmpty(),
-                    problem = packageNameProblem,
-                    onCloneModeChange = { viewModel.setCloneMode(it) },
-                    onPackageNameChange = { viewModel.setCustomPackageName(it) }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // The permission section comes before the patch sections, not after them: its list is
-            // shipped with the app, so it is ready before anything is downloaded, and a section
-            // after the patch list is one most people do not scroll to.
-            item(key = PatchRows.permissionCardKey(), contentType = "permissions") {
-                PermissionCard(
-                    scan = permissionScan,
-                    rows = permissionRows,
-                    expanded = PermissionCatalog.SET_ID in expandedSections,
-                    onRead = { viewModel.readPermissions() },
-                    onExpandedChange = {
-                        expandedSections = expandedSections.toggled(PermissionCatalog.SET_ID)
+            stickyHeader(key = "search") {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp)
+                    ) {
+                        val clearSearch: (@Composable () -> Unit)? =
+                            if (searchQuery.isEmpty()) {
+                                null
+                            } else {
+                                {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear search"
+                                        )
+                                    }
+                                }
+                            }
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.large,
+                            placeholder = {
+                                Text("Search patches, e.g. friends, calls, boosts")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null
+                                )
+                            },
+                            trailingIcon = clearSearch,
+                            supportingText = {
+                                Text(
+                                    text = if (searching) {
+                                        val count = searchResults.total
+                                        "$count matching " +
+                                            (if (count == 1) "option" else "options") +
+                                            ". Turn one off to bring it back."
+                                    } else {
+                                        "On applies a change; turn a switch off to restore " +
+                                            "that part of the app."
+                                    }
+                                )
+                            }
+                        )
                     }
-                )
-            }
-
-            if (permissionRows.isNotEmpty() && PermissionCatalog.SET_ID in expandedSections) {
-                item(key = PatchRows.permissionGroupKey(), contentType = "group") {
-                    GroupHeading(
-                        label = PermissionCatalog.DECLARED_GROUP,
-                        rows = permissionRows
-                    )
-                }
-                items(
-                    items = permissionRows,
-                    key = { it.key },
-                    contentType = { "row" }
-                ) { row ->
-                    PatchItemRow(
-                        row = row,
-                        onToggle = { viewModel.toggleItem(it) }
-                    )
                 }
             }
 
-            sections.forEach { section ->
-                val expanded = section.label in expandedSections
-
-                item(key = PatchRows.sectionKey(section.label), contentType = "section") {
-                    PatchSectionCard(
-                        section = section,
-                        expanded = expanded,
-                        onSectionToggled = { enabled ->
-                            viewModel.setItemsEnabled(section.rows.mapNotNull { it.item }, enabled)
-                        },
-                        onExpandedChange = {
-                            expandedSections = expandedSections.toggled(section.label)
+            if (searching) {
+                if (searchResults.total == 0) {
+                    item(key = "search-empty") {
+                        EmptySearch(searchQuery)
+                    }
+                } else {
+                    searchResults.sections.forEach { section ->
+                        item(key = "search-section:${section.label}") {
+                            SearchSectionHeading(section.label, section.description)
                         }
-                    )
-                }
-
-                if (expanded) {
-                    section.groups.forEach { group ->
-                        // A heading that repeats the section card above it adds a level without
-                        // adding information, so the rows under it start immediately.
-                        if (group.label.isNotBlank() && group.label != section.label) {
-                            item(
-                                key = PatchRows.sectionGroupKey(
-                                    section.label,
-                                    group.label,
-                                    group.rows.first().key
-                                ),
-                                contentType = "group"
-                            ) {
-                                GroupHeading(label = group.label, rows = group.rows)
+                        section.groups.forEach { group ->
+                            if (group.label.isNotBlank()) {
+                                item(
+                                    key = "search-group:${section.label}:${group.label}"
+                                ) {
+                                    SearchGroupHeading(group.label)
+                                }
+                            }
+                            items(
+                                items = group.rows,
+                                key = { "search:${it.key}" },
+                                contentType = { "row" }
+                            ) { row ->
+                                PatchItemRow(
+                                    row = row,
+                                    onToggle = { viewModel.toggleItem(it) }
+                                )
                             }
                         }
+                    }
+                    if (searchResults.permissions.isNotEmpty()) {
+                        item(key = "search-permissions-heading") {
+                            SearchSectionHeading(
+                                "Permissions",
+                                "The permissions this build declares, with the same switches " +
+                                    "as the Permissions card."
+                            )
+                        }
                         items(
-                            items = group.rows,
-                            key = { it.key },
+                            items = searchResults.permissions,
+                            key = { "search:${it.key}" },
                             contentType = { "row" }
                         ) { row ->
                             PatchItemRow(
@@ -320,37 +344,132 @@ fun PatchSelectScreen(
                         }
                     }
                 }
-            }
+            } else {
+                item(key = "intro") {
+                    Spacer(modifier = Modifier.height(4.dp))
 
-            item(key = "pipeline") {
-                Spacer(modifier = Modifier.height(12.dp))
+                    CloneModeCard(
+                        isCloneMode = isCloneMode,
+                        customPackageName = customPackageName,
+                        originalPackageName = source?.packageName.orEmpty(),
+                        problem = packageNameProblem,
+                        onCloneModeChange = { viewModel.setCloneMode(it) },
+                        onPackageNameChange = { viewModel.setCustomPackageName(it) }
+                    )
 
-                Text(
-                    text = "How patching works",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.semantics { heading() }
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Changes are applied to a copy of the app built in memory. The app " +
-                        "already on your phone is never modified.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = selectionSummary(selectedItemCount, totalItemCount),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
-            item(key = "footer") {
-                Spacer(modifier = Modifier.height(24.dp))
+                // The permission section comes before the patch sections, not after them: its list is
+                // shipped with the app, so it is ready before anything is downloaded, and a section
+                // after the patch list is one most people do not scroll to.
+                item(key = PatchRows.permissionCardKey(), contentType = "permissions") {
+                    PermissionCard(
+                        scan = permissionScan,
+                        rows = permissionRows,
+                        expanded = PermissionCatalog.SET_ID in expandedSections,
+                        onRead = { viewModel.readPermissions() },
+                        onExpandedChange = {
+                            expandedSections = expandedSections.toggled(PermissionCatalog.SET_ID)
+                        }
+                    )
+                }
+
+                if (permissionRows.isNotEmpty() && PermissionCatalog.SET_ID in expandedSections) {
+                    item(key = PatchRows.permissionGroupKey(), contentType = "group") {
+                        GroupHeading(
+                            label = PermissionCatalog.DECLARED_GROUP,
+                            rows = permissionRows
+                        )
+                    }
+                    items(
+                        items = permissionRows,
+                        key = { it.key },
+                        contentType = { "row" }
+                    ) { row ->
+                        PatchItemRow(
+                            row = row,
+                            onToggle = { viewModel.toggleItem(it) }
+                        )
+                    }
+                }
+
+                sections.forEach { section ->
+                    val expanded = section.label in expandedSections
+
+                    item(key = PatchRows.sectionKey(section.label), contentType = "section") {
+                        PatchSectionCard(
+                            section = section,
+                            expanded = expanded,
+                            onSectionToggled = { enabled ->
+                                viewModel.setItemsEnabled(section.rows.mapNotNull { it.item }, enabled)
+                            },
+                            onExpandedChange = {
+                                expandedSections = expandedSections.toggled(section.label)
+                            }
+                        )
+                    }
+
+                    if (expanded) {
+                        section.groups.forEach { group ->
+                            // A heading that repeats the section card above it adds a level without
+                            // adding information, so the rows under it start immediately.
+                            if (group.label.isNotBlank() && group.label != section.label) {
+                                item(
+                                    key = PatchRows.sectionGroupKey(
+                                        section.label,
+                                        group.label,
+                                        group.rows.first().key
+                                    ),
+                                    contentType = "group"
+                                ) {
+                                    GroupHeading(label = group.label, rows = group.rows)
+                                }
+                            }
+                            items(
+                                items = group.rows,
+                                key = { it.key },
+                                contentType = { "row" }
+                            ) { row ->
+                                PatchItemRow(
+                                    row = row,
+                                    onToggle = { viewModel.toggleItem(it) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item(key = "pipeline") {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "How patching works",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() }
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Changes are applied to a copy of the app built in memory. The app " +
+                            "already on your phone is never modified.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = selectionSummary(selectedItemCount, totalItemCount),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                item(key = "footer") {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
             }
         }
     }
@@ -763,6 +882,69 @@ private fun selectionSummary(selectedItems: Int, totalItems: Int): String {
  * The count is of the rows that can be switched, and it says how many of those are on, so a row the
  * build decides about does not read as one the user switched off.
  */
+/** What a search with no matches says, and what to try instead. */
+@Composable
+private fun EmptySearch(query: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp, horizontal = 4.dp)
+    ) {
+        Text(
+            text = "No options match \"$query\".",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Try a word for what you want to change, such as activity, calls, boosts, " +
+                "privacy or a section name.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** A section's name and one-line purpose above its matching rows in a search result. */
+@Composable
+private fun SearchSectionHeading(label: String, description: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 2.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.semantics { heading() }
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** A group's short heading above its rows inside a search result. */
+@Composable
+private fun SearchGroupHeading(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, top = 6.dp, bottom = 2.dp)
+            .semantics { heading() }
+    )
+}
+
 @Composable
 private fun GroupHeading(
     label: String,

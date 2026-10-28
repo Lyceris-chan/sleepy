@@ -59,6 +59,8 @@ Each of the following changes has its own switch, so you can apply all of them, 
 
 The patch screen is organised by what you want, not by how the app is built. Every change sits in one of eight sections: **Ads and offers**, **Interface cleanup**, **Privacy and tracking**, **Crash reports**, **Performance and battery**, **Calls and media**, **App fixes** and **Network blocking**. Expand a section to see the changes inside it, grouped under short headings such as **Shop and offers**, **Gifts**, **Billing**, **Profile decorations** or **Timers**.
 
+Search at the top of the screen filters the whole list, including permissions, by what a switch changes: try `friends`, `activity`, `calls`, `boosts`, `privacy` or a section name. Matches keep their section and heading, so a row is not separated from what it belongs to. A switch is on when its change is applied; turn it off to bring that part of the app back. The **Friends' activity** heading is where the switches that hide games and the happening-now strip above DMs live.
+
 - Each change has its own switch. Turn it on or off on its own.
 - A section's own switch turns everything in that section on or off at once. It reports whether none, some or all of them are selected, so a section you have partly chosen shows that rather than rounding up or down. Tapping a partly selected section completes it; tapping a fully selected one clears it.
 - Some switches are unavailable, with the reason shown. Two reasons appear:

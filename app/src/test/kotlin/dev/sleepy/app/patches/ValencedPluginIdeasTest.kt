@@ -18,7 +18,7 @@ class ValencedPluginIdeasTest {
 
     private val ideas = listOf(
         Idea("row_separators", "Rows and dividers", PatchSections.DECLUTTER),
-        Idea("dm_activity_cards", "Activity cards", PatchSections.DECLUTTER),
+        Idea("dm_activity_cards", "Friends' activity", PatchSections.DECLUTTER),
         Idea("call_screen_extras", "Call screen", PatchSections.CALLS),
         Idea("conjure_ai", "AI features", PatchSections.DECLUTTER),
         Idea("display_name_styles", "Profile decorations", PatchSections.DECLUTTER),
