@@ -5,6 +5,22 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.4] - 2026-10-28
+
+### Fixed
+
+- **Joining a call no longer crashes the app with a `VerifyError`.** The speaking-while-muted
+  callback log edit wrote its tag and message to `p0` and `p1`. That method has only `this` as a
+  parameter, so `p1` is register 5 in a five-register frame; ART rejected the whole `a2.d` class
+  when the join path first loaded it:
+  `VerifyError: void a2.d.onSpeakingWhileMuted(): register index out of range (5 >= 5)`. The edit
+  now writes the two strings through the catch block's dead local registers (`v1` and `v3`).
+- **A verifier-level test now guards every native patch.** `PatchedRegisterValidityTest`
+  disassembles each patched class from the real 353.2.0 base, applies the set's own edits, parses
+  every method's descriptor and parameter-register count, and rejects any `pN` operand the method
+  cannot supply. The existing reassembly check cannot see this: the smali assembles cleanly and
+  only ART rejects it when the class loads.
+
 ## [3.12.3] - 2026-10-28
 
 ### Fixed

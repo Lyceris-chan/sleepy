@@ -1187,11 +1187,13 @@ object DiscordNativePatches {
                 smaliPath = "a2/d.smali",
                 anchor = "    invoke-static {v2, v0}, Lcom/discord/crash_reporting/CrashReporting;->c(Ljava/lang/Throwable;Z)V",
                 replacement = """    # Patch: surface the swallowed failure instead of reporting it.
-    const-string p0, "MediaEngineCB"
+    # This method has only `this` as a parameter, so there is no p1: use
+    # the crash-reporting object and message locals, both dead here.
+    const-string v1, "MediaEngineCB"
 
-    const-string p1, "media engine native callback threw"
+    const-string v3, "media engine native callback threw"
 
-    invoke-static {p0, p1, v2}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V"""
+    invoke-static {v1, v3, v2}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V"""
             ),
             SmaliPatch(
                 title = "Keeping the media engine alive after one failure",
