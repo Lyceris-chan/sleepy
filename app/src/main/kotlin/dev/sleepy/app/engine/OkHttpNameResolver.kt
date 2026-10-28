@@ -32,6 +32,16 @@ import dev.sleepy.app.model.TargetApk
  * @property responseClass The `okhttp3.Response` type.
  * @property responseConstructorDescriptor The Response constructor's parameter list and return
  *   type, for example `(Lar/n;Lm50/d0;...)V`.
+ * @property headersType The `okhttp3.Headers` type as a descriptor, read from the Response
+ *   constructor. The synthetic response needs a real, empty instance: every response has one, and
+ *   callers dereference it without a null check.
+ * @property emptyResponseClass The class carrying OkHttp's own empty `Headers` and `ResponseBody`
+ *   constants, for example `n50/b`.
+ * @property emptyHeadersField The static field of [headersType] to read.
+ * @property emptyHeadersFieldType The field's declared type.
+ * @property emptyBodyField The static field whose type implements the Response constructor's body
+ *   parameter.
+ * @property emptyBodyFieldType The field's declared type.
  * @property protocolClass The `okhttp3.Protocol` enum.
  * @property protocolHttp11Field The enum field holding `HTTP_1_1`.
  */
@@ -48,6 +58,12 @@ data class OkHttpProtocolNames(
     val chainIsInterface: Boolean,
     val responseClass: String,
     val responseConstructorDescriptor: String,
+    val headersType: String,
+    val emptyResponseClass: String,
+    val emptyHeadersField: String,
+    val emptyHeadersFieldType: String,
+    val emptyBodyField: String,
+    val emptyBodyFieldType: String,
     val protocolClass: String,
     val protocolHttp11Field: String
 ) {
@@ -81,10 +97,12 @@ sealed interface OkHttpResolution {
  *    `"http/1.1"` string and stores it in a static field of its own type.
  * 2. The `Response` class is the one with a constructor whose second parameter is that Protocol
  *    type and whose first is the `Request` type.
- * 3. The `Request` type's URL field is the first object field its five-parameter constructor
+ * 3. The Response constructor also names `Headers` and `ResponseBody`; the empty header and body
+ *    the synthetic response is built from are read from those types in the same build.
+ * 4. The `Request` type's URL field is the first object field its five-parameter constructor
  *    writes.
- * 4. The `Chain` is the class with a Request field and a method from Request to Response.
- * 5. The stock resource-usage interceptor is the class with a Chain-to-Response method whose body
+ * 5. The `Chain` is the class with a Request field and a method from Request to Response.
+ * 6. The stock resource-usage interceptor is the class with a Chain-to-Response method whose body
  *    calls a static helper with `(Chain, <stats>) -> Response`.
  *
  * 353.2.0 obfuscates OkHttp completely; there is no `Lokhttp3/...` descriptor to anchor on. This
@@ -164,7 +182,18 @@ object OkHttpNameResolver {
             )
         }
 
-        // 3. Request URL: the first object field the Request's five-parameter constructor writes.
+        // 3. The Response's empty Headers and ResponseBody constants. Every caller reads the
+        //    headers without a null check, and the React Native bridge rejects a null body before
+        //    it reports the response, so the synthetic 204 reads OkHttp's own empty pair rather
+        //    than passing nulls.
+        val emptyResponse = emptyResponseOf(classes, response.headersType, response.bodyType, byType)
+            ?: return OkHttpResolution.Unresolved(
+                "No class carries a public static ${response.headersType} field together with a " +
+                    "${response.bodyType} implementation, so the empty response headers and " +
+                    "body could not be identified."
+            )
+
+        // 4. Request URL: the first object field the Request's five-parameter constructor writes.
         val requestType = response.requestType
         val request = byType[requestType] ?: return OkHttpResolution.Unresolved(
             "$requestType is not in this APK, so the Request shape cannot be read."
@@ -217,6 +246,13 @@ object OkHttpNameResolver {
                 chainIsInterface = AccessFlags.INTERFACE.isSet(chain.accessFlags),
                 responseClass = response.responseType.removePrefix("L").removeSuffix(";"),
                 responseConstructorDescriptor = response.constructorDescriptor,
+                headersType = response.headersType,
+                emptyResponseClass =
+                    emptyResponse.type.removePrefix("L").removeSuffix(";"),
+                emptyHeadersField = emptyResponse.headersField.name,
+                emptyHeadersFieldType = emptyResponse.headersField.type.toString(),
+                emptyBodyField = emptyResponse.bodyField.name,
+                emptyBodyFieldType = emptyResponse.bodyField.type.toString(),
                 protocolClass = protocol.type.removePrefix("L").removeSuffix(";"),
                 protocolHttp11Field = protocol.http11Field
             )
@@ -228,7 +264,15 @@ object OkHttpNameResolver {
     private data class ResponseCandidate(
         val responseType: String,
         val requestType: String,
-        val constructorDescriptor: String
+        val constructorDescriptor: String,
+        val headersType: String,
+        val bodyType: String
+    )
+
+    private data class EmptyResponseParts(
+        val type: String,
+        val headersField: FieldShape,
+        val bodyField: FieldShape
     )
 
     private data class ChainCandidate(
@@ -311,8 +355,61 @@ object OkHttpNameResolver {
         return ResponseCandidate(
             responseType = classDef.type,
             requestType = params[0],
-            constructorDescriptor = "(${params.joinToString("")})${ctor.returnType}"
+            constructorDescriptor = "(${params.joinToString("")})${ctor.returnType}",
+            headersType = params[5],
+            bodyType = params[6]
         )
+    }
+
+    /**
+     * The class carrying OkHttp's own empty `Headers` and `ResponseBody` constants, or null when
+     * this build has none.
+     *
+     * The supported build keeps both as public static fields on its `Util` class: the headers
+     * field is declared as the Response constructor's headers type, and the body field is a
+     * subtype of its body parameter. A build that moves or renames them is reported as unresolved
+     * rather than written with another release's field names.
+     */
+    private fun emptyResponseOf(
+        classes: List<ClassDef>,
+        headersType: String,
+        bodyType: String,
+        byType: Map<String, ClassDef>
+    ): EmptyResponseParts? {
+        for (classDef in classes) {
+            val publicStatics = classDef.fields.filter { field ->
+                AccessFlags.STATIC.isSet(field.accessFlags) &&
+                    AccessFlags.PUBLIC.isSet(field.accessFlags)
+            }
+            val headers = publicStatics.firstOrNull { it.type == headersType }
+                ?: continue
+            val body = publicStatics.firstOrNull { field ->
+                field.type == bodyType ||
+                    byType[field.type]?.let { extendsType(it, bodyType, byType) } == true
+            } ?: continue
+            if (headers.name == body.name) continue
+            return EmptyResponseParts(
+                type = classDef.type,
+                headersField = FieldShape(headers.name, headers.type),
+                bodyField = FieldShape(body.name, body.type)
+            )
+        }
+        return null
+    }
+
+    /** True when [classDef] inherits from [type], directly or through its superclasses. */
+    private fun extendsType(
+        classDef: ClassDef,
+        type: String,
+        byType: Map<String, ClassDef>
+    ): Boolean {
+        val seen = mutableSetOf<String>()
+        var current = classDef.superclass ?: return false
+        while (seen.add(current)) {
+            if (current == type) return true
+            current = byType[current]?.superclass ?: return false
+        }
+        return false
     }
 
     /** True when [classDef] has an instance `toString()String`. */

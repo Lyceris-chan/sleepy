@@ -22,11 +22,15 @@ import dev.sleepy.app.model.TargetWrittenGenerator
  * One stock interceptor is shared by every OkHttp client this set concerns. Its body is replaced
  * with one that matches the request URL against [DiscordBlocklistRules] and answers a match with
  * a synthetic HTTP 204 — a dropped response would make the client retry without a limit — so the
- * request is never sent. 353.2.0 already registers that interceptor on OkHttp's application
- * list, where answering without calling `proceed` is legal.
+ * request is never sent. 353.2.0 registers that interceptor on OkHttp's network list through two
+ * clients; [DiscordNativePatches.INTERCEPTORS] moves those registrations to the application list,
+ * where answering without calling `proceed` is legal.
  *
  * The body cannot be a constant: it constructs an `okhttp3.Response` by hand, so it is generated
- * against the selected APK's own class and member names ([OkHttpNameResolver]).
+ * against the selected APK's own class and member names ([OkHttpNameResolver]). The synthetic
+ * response carries the build's own empty `Headers` and zero-length `ResponseBody` instances,
+ * because callers dereference the headers without a null check and the React Native bridge
+ * reports a null body as a failed request.
  */
 object DiscordBlocklistPatch {
 
@@ -275,9 +279,17 @@ object DiscordBlocklistPatch {
             "",
             "    const/4 v13, 0x0",
             "",
-            "    const/4 v14, 0x0",
+            "    # A real response always carries a Headers instance. Callers read it",
+            "    # without a null check, including the React Native networking bridge,",
+            "    # so the synthetic response reads OkHttp's own empty headers constant.",
+            "    sget-object v14, L${names.emptyResponseClass};->" +
+                "${names.emptyHeadersField}:${names.emptyHeadersFieldType}",
             "",
-            "    const/4 v15, 0x0",
+            "    # A 204 has no content, but the React Native bridge reports a null",
+            "    # body as a failed request before it reports the response. Use the",
+            "    # same zero-length body OkHttp uses for a no-content response.",
+            "    sget-object v15, L${names.emptyResponseClass};->" +
+                "${names.emptyBodyField}:${names.emptyBodyFieldType}",
             "",
             "    const/16 v16, 0x0",
             "",

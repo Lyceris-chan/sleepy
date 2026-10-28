@@ -9,6 +9,7 @@ import dev.sleepy.app.testing.ComparisonApks
 import dev.sleepy.app.testing.dexEntries
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -108,9 +109,38 @@ class DiscordBlocklistPatchTest {
             "the generated body must target the resolved interceptor",
             generated.contains(names.interceptorSignature)
         )
+
+        // A response without a Headers instance or body is not one a caller can read: the
+        // React Native networking bridge dereferences the headers and reports a null body as a
+        // failed request. Both are read from OkHttp's own empty constants.
+        assertTrue(
+            "the resolved Headers type must be in this build",
+            names.headersType in classToDex
+        )
+        val emptyResponseDescriptor = "L${names.emptyResponseClass};"
+        assertTrue(
+            "the empty-response class must be in this build",
+            emptyResponseDescriptor in classToDex
+        )
+        val headersReference = "$emptyResponseDescriptor->${names.emptyHeadersField}:" +
+            names.emptyHeadersFieldType
+        assertTrue(
+            "the generated body must read the empty headers through $headersReference",
+            generated.contains("sget-object v14, $headersReference")
+        )
+        val bodyReference = "$emptyResponseDescriptor->${names.emptyBodyField}:" +
+            names.emptyBodyFieldType
+        assertTrue(
+            "the generated body must read the empty body through $bodyReference",
+            generated.contains("sget-object v15, $bodyReference")
+        )
+        assertFalse(
+            "the synthetic response must not leave its headers or body null",
+            generated.contains("const/4 v14, 0x0") || generated.contains("const/4 v15, 0x0")
+        )
         println(
             "Blocklist interceptor: ${names.interceptorClass}${names.interceptorSignature}, " +
-                "${names.responseConstructorDescriptor}, " +
+                "${names.responseConstructorDescriptor}, $headersReference, $bodyReference, " +
                 "${names.protocolClass}->${names.protocolHttp11Field}, all present in this build"
         )
     }

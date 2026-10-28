@@ -5,6 +5,20 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.1] - 2026-10-28
+
+### Fixed
+
+- **The patched Discord no longer crashes on a blocked request.** The network blocklist
+  answers a match with a synthetic HTTP 204, but 3.12.0's generated response passed `null` for
+  both the response headers and the body. Every caller reads the headers without a null check:
+  React Native's networking bridge reads them before it reports the response, so the first
+  blocked request from the JavaScript side threw a `NullPointerException` on the OkHttp callback
+  thread and killed the process. The synthetic response now reads the target APK's own empty
+  `Headers` and `ResponseBody` constants, which the resolver finds by type alongside the
+  `Response` constructor, so a real 204 and the synthetic one have the same shape. A blocked
+  request from JavaScript now receives an empty successful response instead of a failed one.
+
 ## [3.12.0] - 2026-10-27
 
 ### Fixed
