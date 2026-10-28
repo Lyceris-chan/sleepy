@@ -27,10 +27,10 @@ import dev.sleepy.app.model.PatchItem
 object DiscordBlocklistRules {
 
     /** Heading for the host rules in the item list. */
-    private const val HOST_GROUP = "Hosts (blocked on every request)"
+    private const val HOST_GROUP = "Hosts"
 
     /** Heading for the API path rules in the item list. */
-    private const val API_GROUP = "API paths (blocked on Discord API calls only)"
+    private const val API_GROUP = "API paths"
 
     /**
      * Rules matched anywhere in the request URL, on every request.

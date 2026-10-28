@@ -293,15 +293,31 @@ fun PatchSelectScreen(
                 }
 
                 if (expanded) {
-                    items(
-                        items = section.rows,
-                        key = { it.key },
-                        contentType = { "row" }
-                    ) { row ->
-                        PatchItemRow(
-                            row = row,
-                            onToggle = { viewModel.toggleItem(it) }
-                        )
+                    section.groups.forEach { group ->
+                        // A heading that repeats the section card above it adds a level without
+                        // adding information, so the rows under it start immediately.
+                        if (group.label.isNotBlank() && group.label != section.label) {
+                            item(
+                                key = PatchRows.sectionGroupKey(
+                                    section.label,
+                                    group.label,
+                                    group.rows.first().key
+                                ),
+                                contentType = "group"
+                            ) {
+                                GroupHeading(label = group.label, rows = group.rows)
+                            }
+                        }
+                        items(
+                            items = group.rows,
+                            key = { it.key },
+                            contentType = { "row" }
+                        ) { row ->
+                            PatchItemRow(
+                                row = row,
+                                onToggle = { viewModel.toggleItem(it) }
+                            )
+                        }
                     }
                 }
             }
@@ -310,7 +326,7 @@ fun PatchSelectScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Configure modding pipeline",
+                    text = "How patching works",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -318,8 +334,8 @@ fun PatchSelectScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Select the modifications to apply surgically in memory during the " +
-                        "build step, by section or one item at a time.",
+                    text = "Changes are applied to a copy of the app built in memory. The app " +
+                        "already on your phone is never modified.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -759,7 +775,8 @@ private fun GroupHeading(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 8.dp, end = 8.dp),
+            .padding(start = 8.dp, end = 8.dp)
+            .semantics { heading() },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -781,12 +798,15 @@ private fun GroupHeading(
         )
         Spacer(modifier = Modifier.weight(1f))
         // The count is of what can be switched, and it says how much of it is on, so a heading
-        // reads the same way as the set switch above it.
-        Text(
-            text = if (state == TriState.NONE) "$switchable" else "$selected of $switchable",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // reads the same way as the set switch above it. A heading with nothing switchable - the
+        // gates the blocklist always applies - has no count to report.
+        if (switchable > 0) {
+            Text(
+                text = if (state == TriState.NONE) "$switchable" else "$selected of $switchable",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

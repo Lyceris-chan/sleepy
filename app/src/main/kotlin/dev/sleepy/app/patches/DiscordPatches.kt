@@ -31,7 +31,7 @@ object DiscordPatches {
      */
     val BUNDLE_LOCK = PatchSet(
         id = "discord_ota_bundle",
-        label = "Stop the app replacing its JavaScript",
+        label = "Updates can't replace the patch",
         description = "Neutralizes Discord's BundleUpdater pref keys (`key_android_js_bundle`) and reroutes the OTA host to invalid.com so Discord executes our patched APK asset bundle instead of downloading an unpatched bundle.",
         smaliPatches = listOf(
             SmaliPatch(
@@ -65,7 +65,7 @@ object DiscordPatches {
      */
     val SENTRY = PatchSet(
         id = "discord_sentry",
-        label = "Stop crash reporting",
+        label = "No crash reporting",
         description = "Stubs out Sentry NDK native shared library loading (`SentryNdk.loadNativeLibraries()`) and disables RNSentryModuleImpl SDK init and envelope dispatching so crash dumps, thread states, and device info are never sent to Sentry.",
         smaliPatches = listOf(
             SmaliPatch(
@@ -118,7 +118,7 @@ object DiscordPatches {
      */
     val TELEMETRY = PatchSet(
         id = "discord_telemetry",
-        label = "Stop native telemetry",
+        label = "No native telemetry",
         description = "Stubs native Google Advertising ID retrieval, InstallReferrerModule, TelemetryRing buffer appending, and WebRTC crash reporting so native event telemetry is dropped.",
         smaliPatches = listOf(
             SmaliPatch(
@@ -192,7 +192,7 @@ object DiscordPatches {
      */
     val HERMES = PatchSet(
         id = "discord_hermes",
-        label = "Patch the app's JavaScript",
+        label = "Selected JavaScript features",
         description = "Rewrites index.android.bundle bytecode directly on-device in pure Kotlin using Modern12 in-place opcode stubs and Sentry DSN nulling without native binary dependencies:",
         hermesPatches = listOf(
             HermesPatch(

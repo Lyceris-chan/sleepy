@@ -20,6 +20,7 @@ import dev.sleepy.app.ui.state.PatchSectionRows
 import dev.sleepy.app.ui.state.TriState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -137,13 +138,35 @@ class PatchRowStateTest {
         val sections = sectionsOf(hermes, PatchSelection().setEnabled(hermesItems, true))
 
         sections.forEach { section ->
-            // The rows of a section are its items, in the catalogue's own order: the list has no
-            // second level, so the section is the only grouping and the order inside it is the
-            // order the items were declared in.
+            // The rows of a section are its items. The list groups them under headings, so the
+            // order is the headings' order; inside one heading the rows keep the order the
+            // catalogue declared them in.
             val expected = hermesItems.filter { it.section == section.label }
-            assertEquals(expected.map { it.key }, section.rows.map { it.key })
-            assertEquals(expected.map { it.label }, section.rows.map { it.label })
-            assertEquals(expected.map { it.description }, section.rows.map { it.description })
+            assertEquals(
+                "the section has a row that is not one of its items",
+                expected.map { it.key }.toSet(),
+                section.rows.map { it.key }.toSet()
+            )
+            section.groups.forEach { group ->
+                val inGroup = expected.filter {
+                    PatchSections.displayGroup(it.group) == group.label
+                }
+                assertEquals(
+                    "${section.label}/${group.label} has a row from another heading",
+                    inGroup.map { it.key },
+                    group.rows.map { it.key }
+                )
+                assertEquals(
+                    "${section.label}/${group.label} rewrote a row's label",
+                    inGroup.map { it.label },
+                    group.rows.map { it.label }
+                )
+                assertEquals(
+                    "${section.label}/${group.label} rewrote a row's description",
+                    inGroup.map { it.description },
+                    group.rows.map { it.description }
+                )
+            }
             assertTrue(
                 "${section.label} has a row that is not its item",
                 section.rows.all { it.item != null }
@@ -156,6 +179,49 @@ class PatchRowStateTest {
         assertTrue(
             "and every row says which function it rewrites",
             sections.flatMap { it.rows }.all { !it.technicalTarget.isNullOrBlank() }
+        )
+    }
+
+    /**
+     * A section is split into one heading per group, and the headings say something the section
+     * card above them does not: a group that repeats the section name would add a level without
+     * adding information.
+     */
+    @Test
+    fun aSectionIsSplitIntoOneHeadingPerGroup() {
+        val sections = sectionsOf(hermes, PatchSelection().setEnabled(hermesItems, true))
+
+        sections.forEach { section ->
+            assertEquals(
+                "the headings have to flatten back into the same rows, in the same order",
+                section.rows.map { it.key },
+                section.groups.flatMap { it.rows }.map { it.key }
+            )
+            assertTrue(
+                "${section.label} has an empty heading",
+                section.groups.all { it.rows.isNotEmpty() }
+            )
+            assertTrue(
+                "${section.label} has a heading with no name",
+                section.groups.all { it.label.isNotBlank() }
+            )
+            section.groups.zipWithNext().forEach { (first, second) ->
+                assertNotEquals(
+                    "${section.label} has two headings in a row with one name",
+                    first.label,
+                    second.label
+                )
+            }
+        }
+
+        val ads = sections.single { it.label == ADS }
+        assertTrue(
+            "the ads section is not grouped at all, so the headings are not doing any work",
+            ads.groups.size > 1
+        )
+        assertTrue(
+            "the ads headings only repeat the section name",
+            ads.groups.none { it.label == ads.label }
         )
     }
 

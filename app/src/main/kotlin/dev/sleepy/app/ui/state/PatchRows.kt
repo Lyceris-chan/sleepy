@@ -80,22 +80,41 @@ data class PatchRow(
     val inertKind: InertKind? = null,
     val inertReason: String? = null,
     val technicalTarget: String? = null,
-    val detail: String? = null
+    val detail: String? = null,
+    /** Short heading the row is listed under inside its section; blank when it has none. */
+    val group: String = ""
 ) {
     /** True when the user can move this row's switch. */
     val switchable: Boolean get() = inertKind == null && item != null
 }
 
 /**
+ * A run of rows under one heading inside a section.
+ *
+ * The list has two levels again at the section: the section says what the rows are for, and the
+ * group says which part of it they belong to. A group whose label is the section's own name is
+ * shown without a heading, because the heading would repeat the card above it.
+ *
+ * @property label Heading text, for example "Shop and offers".
+ * @property rows Every row under the heading, in list order.
+ */
+data class PatchRowGroup(
+    val label: String,
+    val rows: List<PatchRow>
+)
+
+/**
  * One section as the list renders it: its rows and what its own switch reports.
  *
- * Rows are flat, in catalogue order, with no heading inside a section. Counts are of items, not
- * rows: a gate is not an item, so Network blocking reports 81 items whether or not its gates are
- * listed.
+ * Rows stay in catalogue order inside their group; groups appear in the order their first row
+ * does, and all rows with one heading are collected under it even when the catalogue declared
+ * them apart. Counts are of items, not rows: a gate is not an item, so Network blocking reports
+ * 81 items whether or not its gates are listed.
  *
  * @property label Section name, from [PatchSections].
  * @property description One line saying what the section is for.
  * @property rows Every row under the section, in list order.
+ * @property groups The same rows split into their headings, in list order.
  * @property itemCount How many items the section holds.
  * @property selectedItemCount How many of those are on.
  * @property triState What the section's switch reports.
@@ -104,6 +123,7 @@ data class PatchSectionRows(
     val label: String,
     val description: String,
     val rows: List<PatchRow>,
+    val groups: List<PatchRowGroup>,
     val itemCount: Int,
     val selectedItemCount: Int,
     val triState: TriState
@@ -137,6 +157,16 @@ object PatchRows {
      * to outlive it, and a renamed section is a different section on screen anyway.
      */
     fun sectionKey(label: String): String = "section:$label"
+
+    /**
+     * The key of one group heading inside a section in the lazy list.
+     *
+     * The first row's key is part of it: a group whose label repeats after another group has
+     * intervened appears twice, and two headings with one key would be one item as far as the
+     * lazy list is concerned.
+     */
+    fun sectionGroupKey(sectionLabel: String, groupLabel: String, firstRowKey: String): String =
+        "section-group:$sectionLabel:$firstRowKey:$groupLabel"
 
     /** The key of the permission section's card in the lazy list. */
     fun permissionCardKey(): String = "permissions"
@@ -181,8 +211,8 @@ object PatchRows {
      * A set that is not split into items is not left out: its one item stands for the whole set, so
      * it is a row inside its section, and switching that row is the same choice as selecting the
      * set. A section nothing lands in is left out entirely rather than shown empty: a source
-     * carries different sets, so which of the seven sections exist is a property of the source, and
-     * a section with nothing under it would be a heading with no switch behind it.
+     * carries different sets, so which sections exist is a property of the source, and a section
+     * with nothing under it would be a heading with no switch behind it.
      *
      * @param sets The source's sets.
      * @param selection The selection the rows are derived from.
@@ -214,15 +244,36 @@ object PatchRows {
             val rows = (if (section == gatesSection) gates else emptyList()) +
                 items.map { item -> itemRow(item, selection, rulesByIdentity[item.identity]) }
             if (rows.isEmpty()) return@mapNotNull null
+            val groups = groupsOf(rows)
             PatchSectionRows(
                 label = section,
                 description = PatchSections.descriptionOf(section),
-                rows = rows,
+                // The rendered order is the group order, and a group holds every one of its rows
+                // together even where the catalogue declared them apart. The order inside a group
+                // is the catalogue's own.
+                rows = groups.flatMap { it.rows },
+                groups = groups,
                 itemCount = items.size,
                 selectedItemCount = selection.selected(items).size,
                 triState = triState(items, selection)
             )
         }
+    }
+
+    /**
+     * Collects rows under their heading, in the order each heading first appears.
+     *
+     * A catalogue can declare one heading's rows in more than one place - the OctoGram premium
+     * sets are separate sets - and a list that repeated the heading each time would read as two
+     * groups with one name. Collecting first and ordering second keeps each heading in one place
+     * without moving its rows out of catalogue order relative to each other.
+     */
+    private fun groupsOf(rows: List<PatchRow>): List<PatchRowGroup> {
+        val byGroup = LinkedHashMap<String, MutableList<PatchRow>>()
+        rows.forEach { row ->
+            byGroup.getOrPut(row.group) { mutableListOf() } += row
+        }
+        return byGroup.map { (label, groupRows) -> PatchRowGroup(label, groupRows) }
     }
 
     /**
@@ -257,7 +308,8 @@ object PatchRows {
                 inertKind = if (row.lockedReason != null) InertKind.REQUIRED else null,
                 inertReason = row.lockedReason,
                 technicalTarget = "android:name=\"${row.permission.name}\"",
-                detail = permissionDetail(item, row)
+                detail = permissionDetail(item, row),
+                group = PermissionCatalog.DECLARED_GROUP
             )
         }
     }
@@ -353,7 +405,8 @@ object PatchRows {
             detail = ruleRow?.let { ruleDetail(item, it) }
                 ?: hermesDetail(item)
                 ?: octoGramDetail(item)
-                ?: wholeSetDetail(item)
+                ?: wholeSetDetail(item),
+            group = PatchSections.displayGroup(item.group)
         )
     }
 
@@ -366,7 +419,8 @@ object PatchRows {
         enabled = true,
         inertKind = InertKind.REQUIRED,
         inertReason = row.lockedReason,
-        technicalTarget = constString(row.gate.pattern)
+        technicalTarget = constString(row.gate.pattern),
+        group = "Always applied"
     )
 
     /** The literal the generated interceptor emits for a pattern, as it emits it. */

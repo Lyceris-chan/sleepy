@@ -20,12 +20,14 @@ import dev.sleepy.app.patches.DiscordHermesFunctionCatalog
 import dev.sleepy.app.patches.DiscordPatches
 import dev.sleepy.app.patches.PatchItemCatalog
 import dev.sleepy.app.patches.PatchRegistry
+import dev.sleepy.app.patches.PatchSections
 import dev.sleepy.app.patches.PermissionCatalog
 import dev.sleepy.app.util.Downloader
 import dev.sleepy.app.util.HashUtils
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.util.IdentityHashMap
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.CancellationException
@@ -155,6 +157,12 @@ class PatchingPipeline(private val context: Context) {
                 apk.delete()
             }
         }
+
+    /**
+     * The heading a patch is reported under: the short group the selection list shows, and the
+     * section description that explains it.
+     */
+    private data class ProgressGroup(val label: String, val description: String)
 
     /**
      * The job itself.
@@ -481,6 +489,10 @@ class PatchingPipeline(private val context: Context) {
         }
 
         val smaliPatchesToApply = mutableListOf<SmaliPatch>()
+        // The group and section each copied patch belongs to, for the progress headline. Identity
+        // is what matters here: the copy is the object the DEX processor hands back to the start
+        // callback, and two equal-looking patches from different sets are still different edits.
+        val groupByPatch = IdentityHashMap<SmaliPatch, ProgressGroup>()
         val targetApk = TargetApk(classToDexIndex = classToDexIndex, dexEntries = dexEntries)
         for (patchSet in activePatchSets) {
             // A generated set has nothing to filter until it has read the target APK, so it is
@@ -505,10 +517,17 @@ class PatchingPipeline(private val context: Context) {
             }
 
             if (matchingPatches.isNotEmpty()) {
+                val section = PatchSections.forSet(patchSet.id)
+                val progressGroup = ProgressGroup(
+                    label = PatchSections.displayGroup(PatchSections.groupForSet(patchSet.id)),
+                    description = PatchSections.descriptionOf(section)
+                )
                 matchingPatches.forEach { patch ->
                     val descriptor = "L" + patch.smaliPath.removeSuffix(".smali") + ";"
                     val actualDex = patch.dexName ?: classToDexIndex[descriptor]!!
-                    smaliPatchesToApply.add(patch.copy(dexName = actualDex))
+                    val copy = patch.copy(dexName = actualDex)
+                    smaliPatchesToApply.add(copy)
+                    groupByPatch[copy] = progressGroup
                 }
             } else if (generated?.skipReason != null) {
                 log(
@@ -555,21 +574,27 @@ class PatchingPipeline(private val context: Context) {
                 continue
             }
 
+            val firstGroup = patchesForDex.firstOrNull()?.let(groupByPatch::get)
             _progress.value = PatchProgress.Patching(
-                step = "Editing $dexName",
+                step = "Preparing changes",
                 current = completedPatchCount,
                 total = totalPatchCount,
-                explanation = null
+                explanation = null,
+                group = firstGroup?.label,
+                groupDescription = firstGroup?.description
             )
             val (patchedBytes, dexResults) = DexProcessor.patchDexSurgically(
                 dexBytes = dexBytes,
                 patches = patchesForDex,
                 onPatchStart = { patch ->
+                    val group = groupByPatch[patch]
                     _progress.value = PatchProgress.Patching(
                         step = patch.title ?: patch.smaliPath,
                         current = completedPatchCount,
                         total = totalPatchCount,
-                        explanation = patch.explanation
+                        explanation = patch.explanation,
+                        group = group?.label,
+                        groupDescription = group?.description
                     )
                 }
             )
@@ -582,11 +607,14 @@ class PatchingPipeline(private val context: Context) {
 
         // 6. Apply the Hermes JS bytecode patches.
         var finalBundle = bundleBytes
+        val hermesProgress = if (hermesSelected) hermesGroupFor(selection) else null
         if (hermesSelected && bundleBytes != null) {
             _progress.value = PatchProgress.Patching(
                 step = "Neutralizing the JavaScript Sentry endpoint",
                 current = completedPatchCount,
-                total = totalPatchCount
+                total = totalPatchCount,
+                group = hermesProgress?.label,
+                groupDescription = hermesProgress?.description
             )
             val (afterDsn, dsnResult) = HermesPatcher.nullifySentryDsn(bundleBytes)
             if (dsnResult != null) log(dsnResult)
@@ -594,9 +622,11 @@ class PatchingPipeline(private val context: Context) {
 
             if (bundleBytes.size == DiscordHermesBundlePatch.TARGET_BUNDLE_SIZE) {
                 _progress.value = PatchProgress.Patching(
-                    step = "Patching JavaScript functions",
+                    step = "Replacing JavaScript functions",
                     current = completedPatchCount,
-                    total = totalPatchCount
+                    total = totalPatchCount,
+                    group = hermesProgress?.label,
+                    groupDescription = hermesProgress?.description
                 )
                 val outcome = HermesBundlePatcher.apply(afterDsn, hermesTableToApply)
                 finalBundle = outcome.bundleBytes
@@ -1473,6 +1503,30 @@ class PatchingPipeline(private val context: Context) {
             )
         }
         return result
+    }
+
+    /**
+     * The progress headline for the JavaScript phase: the selected features' section, or one
+     * neutral group when the selection spans several.
+     *
+     * The JavaScript table is applied in one pass, so there is no per-feature step to report. If
+     * the selected features all live in one section, that section is the headline the reader
+     * already knows from the list. A selection that spans sections gets a group of its own rather
+     * than picking one of them and mislabelling the rest.
+     */
+    private fun hermesGroupFor(selection: PatchSelection?): ProgressGroup {
+        val sections = PatchItemCatalog.itemsOf(DiscordPatches.HERMES.id)
+            .filter { selection == null || selection.contains(it) }
+            .map { it.section }
+            .distinct()
+        return if (sections.size == 1) {
+            ProgressGroup(sections.single(), PatchSections.descriptionOf(sections.single()))
+        } else {
+            ProgressGroup(
+                "App features",
+                "Replacing the JavaScript behind the features you selected."
+            )
+        }
     }
 
     private fun extractDexEntries(apk: File): Map<String, ByteArray> {

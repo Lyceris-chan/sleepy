@@ -85,7 +85,7 @@ object OctoGramPatches {
     /** The set that blocks sponsored posts in channels. */
     val SPONSORED_MSGS = octoGramSet(
         id = "octogram_sponsored_msgs",
-        label = "Block sponsored posts in channels",
+        label = "Sponsored channel posts",
         description = "Stops the promoted posts OctoGram shows in public channels: the ad row is " +
             "never built into the chat list, and the request that would fill it is never made. Both " +
             "entry points are the ones on the build this app offers.",
@@ -119,7 +119,7 @@ object OctoGramPatches {
     /** The set that removes the ads shown between photos. */
     val PHOTO_VIEWER_ADS = octoGramSet(
         id = "octogram_photo_viewer_ads",
-        label = "Remove the ads between photos",
+        label = "Ads between photos",
         description = "No promotion appears full-screen while swiping through a channel's photos or media: the " +
             "viewer's ad callback is stubbed, so the interstitial is never presented and the request behind " +
             "it is never made.",
@@ -158,7 +158,7 @@ object OctoGramPatches {
     /** The set that filters sponsored channels and bots out of search results. */
     val SEARCH_ADS = octoGramSet(
         id = "octogram_search_ads",
-        label = "Filter sponsored channels out of search",
+        label = "Sponsored search results",
         description = "Search stops putting promoted channels and bots above real results: the response that " +
             "carries them is discarded and the pending-request id reset, so the search controller stays " +
             "consistent while the sponsored entries go nowhere.",
@@ -198,7 +198,7 @@ object OctoGramPatches {
     /** The set that stops the built-in GitHub update check. */
     val OTA_UPDATER = octoGramSet(
         id = "octogram_ota_updater",
-        label = "Stop the built-in update check",
+        label = "Built-in update check",
         description = "OctoGram asks GitHub whether a newer release exists and puts a prompt up when it thinks " +
             "one does. This cuts the request off and signals the \"no update\" path instead, so nothing is " +
             "fetched and the update screen is not left waiting for a reply that will never arrive.",
@@ -269,7 +269,7 @@ object OctoGramPatches {
     /** The set that drops navigation to the Premium upsell in the app's routers. */
     val PREMIUM_UPSELL = octoGramSet(
         id = "octogram_premium_upsell",
-        label = "Stop the premium screen opening",
+        label = "Premium screen",
         description = "The premium screen no longer opens when the app navigates to it, which is most of the ways " +
             "it can be reached. The other two ways are covered too: the sheets it can open as are closed by " +
             "their own switch, and the rows that lead to it are hidden by theirs. Premium feature cells and " +
@@ -457,7 +457,7 @@ object OctoGramPatches {
     /** The set that silences OctoGram's own diagnostic log and its uploaders. */
     val OCTO_LOGGER = octoGramSet(
         id = "octogram_logger",
-        label = "Silence OctoGram's own diagnostic log",
+        label = "OctoGram diagnostic log",
         description = "OctoGram keeps a log of its own, written both to logcat and to a file, and can upload it. " +
             "This silences all twelve of the log class's emitters, so nothing further is written to either, and " +
             "stubs the five uploaders that would send a log file or an app event to Telegram's servers. The " +
@@ -521,7 +521,7 @@ object OctoGramPatches {
     /** The set that pins Telegram's global logging switch to false. */
     val LOGGING_GATE = octoGramSet(
         id = "octogram_logging_gate",
-        label = "Turn Telegram's logging off app-wide",
+        label = "Telegram logging",
         description = "Telegram decides whether to write its own logs from a single flag, and reads it in hundreds " +
             "of places—the database layer, network buffers, VoIP among them. Pinning the flag to false at the " +
             "four sites that write it turns logging off everywhere at once, instead of editing every reader. " +
@@ -570,7 +570,7 @@ object OctoGramPatches {
     /** The set that disables Firebase A/B testing. */
     val FIREBASE_ABT = octoGramSet(
         id = "octogram_firebase_abt",
-        label = "Disable Firebase A/B testing",
+        label = "Firebase A/B testing",
         description = "Rewrites AbtRegistrar.getComponents() to return an empty list, so startup registers none of the A/B " +
             "testing components: no experiment is assigned and no experiment telemetry is produced.",
     )
@@ -587,7 +587,7 @@ object OctoGramPatches {
     /** The set that disables Firebase Remote Config. */
     val FIREBASE_REMOTE_CONFIG = octoGramSet(
         id = "octogram_firebase_remoteconfig",
-        label = "Disable Firebase Remote Config",
+        label = "Firebase Remote Config",
         description = "Rewrites RemoteConfigRegistrar.getComponents() to return an empty list, so startup registers none of " +
             "its components and the app no longer downloads server-side experiment flags or telemetry parameters.",
     )
@@ -605,7 +605,7 @@ object OctoGramPatches {
     /** The set that disables the Kotlin wrapper around Remote Config. */
     val FIREBASE_REMOTE_CONFIG_KTX = octoGramSet(
         id = "octogram_firebase_remoteconfig_ktx",
-        label = "Disable the Remote Config Kotlin wrapper",
+        label = "Remote Config wrapper",
         description = "Rewrites FirebaseRemoteConfigKtxRegistrar.getComponents() to return an empty list, so the Kotlin " +
             "extension for Remote Config registers no lifecycle components and never subscribes on the app's " +
             "behalf.",
@@ -624,7 +624,7 @@ object OctoGramPatches {
     /** The set that disables Google Play Services data transport. */
     val FIREBASE_DATATRANSPORT = octoGramSet(
         id = "octogram_firebase_datatransport",
-        label = "Disable Google Play Services data transport",
+        label = "Google Play data transport",
         description = "Rewrites TransportRegistrar.getComponents() to return an empty list, so startup registers none of the " +
             "Google Play Services DataTransport components and no telemetry event can be queued, batched or " +
             "uploaded to Google's backends.",
@@ -660,7 +660,7 @@ object OctoGramPatches {
     /** The set that stops OctoGram's own crash reporter from being installed. */
     val CRASH_REPORTER = octoGramSet(
         id = "octogram_crash_reporter",
-        label = "Switch off OctoGram's own crash reporter",
+        label = "OctoGram crash reports",
         description = "OctoGram installs a crash reporter of its own while the app starts: it writes the stack trace " +
             "of a crash into the app's own storage and raises an \"OctoGram just crashed!\" notification the next " +
             "time the app opens. This stops that handler being installed, so a crash leaves no log behind and " +
@@ -738,7 +738,7 @@ object OctoGramPatches {
     /** The set that hides the premium rows in the profile's settings list. */
     val PREMIUM_SETTINGS = octoGramSet(
         id = "octogram_premium_settings",
-        label = "Hide the Telegram Premium row",
+        label = "Telegram Premium row",
         description = "Takes the Telegram Premium row out of both settings lists: the one on your profile, " +
             "together with the Send a Gift row and the combined premium-sections row that would otherwise " +
             "appear in its place, and the one on the app's Settings screen. The profile's rows share a list " +
@@ -786,7 +786,7 @@ object OctoGramPatches {
     /** The set that ships links opening in the phone's browser. */
     val EXTERNAL_BROWSER = octoGramSet(
         id = "octogram_external_browser",
-        label = "Open links in the phone's browser",
+        label = "Links open in your browser",
         description = "OctoGram's setting for opening links outside the app ships off, so http and https links " +
             "go to its in-app viewer until the setting is found and changed. This registers the setting's " +
             "default as on, so a fresh install opens them in the phone's browser. A device that has already " +
@@ -847,7 +847,7 @@ object OctoGramPatches {
     /** The set that hides the Telegram Business upsell row and closes its commands. */
     val HIDE_BUSINESS = octoGramSet(
         id = "octogram_hide_business",
-        label = "Hide the Telegram Business upsell row and its commands",
+        label = "Telegram Business row",
         description = "Takes the Telegram Business row out of both settings lists, the one on your profile and " +
             "the one on the app's Settings screen, and closes the /premium and /business commands. The row is " +
             "a Telegram Premium upsell rather than an entry to the Business settings, and the commands open " +
@@ -902,7 +902,7 @@ object OctoGramPatches {
     /** The set that closes the paywall's remaining sheet presentations. */
     val PREMIUM_SHEETS = octoGramSet(
         id = "octogram_premium_sheets",
-        label = "Close the paywall's remaining sheets",
+        label = "Remaining paywall sheets",
         description = "The navigation-router switch blocks the paywall for 53 of the 61 places the app can " +
             "present it; the other eight open it as a bottom sheet through a different helper, which that " +
             "switch never sees. This refuses a PremiumPreviewFragment in that helper, so those eight stop " +
@@ -939,7 +939,7 @@ object OctoGramPatches {
     /** The set that stops outgoing typing and recording notifications. */
     val HIDE_TYPING = octoGramSet(
         id = "octogram_hide_typing",
-        label = "Hide typing notifications",
+        label = "Typing notifications",
         description = "Stops OctoGram telling a chat that you are typing or recording. Messages, " +
             "media and read receipts are unchanged.",
     )
@@ -967,7 +967,7 @@ object OctoGramPatches {
     /** The set that allows screenshots of view-once and self-destruct media. */
     val ALLOW_SCREENSHOTS = octoGramSet(
         id = "octogram_allow_screenshots",
-        label = "Allow screenshots in secret viewers",
+        label = "Secret-viewer screenshots",
         description = "Strips FLAG_SECURE from the view-once and self-destruct media viewer, so " +
             "its content can be screenshotted or screen-recorded. Nothing else about the viewer changes.",
     )
@@ -1032,7 +1032,7 @@ object OctoGramPatches {
     /** The set that lets login pass on rooted or non-Google devices. */
     val BYPASS_INTEGRITY = octoGramSet(
         id = "octogram_bypass_integrity",
-        label = "Bypass integrity checks",
+        label = "Integrity checks bypassed",
         description = "Makes the two SafetyNet verdicts the login path reads report true, so a " +
             "rooted or non-Google device is not blocked from signing in. Ported from Reseam's " +
             "Bypass integrity patch.",
@@ -1068,7 +1068,7 @@ object OctoGramPatches {
     /** The set that makes the app treat the signed-in account as premium. */
     val UNLOCK_PREMIUM = octoGramSet(
         id = "octogram_unlock_premium",
-        label = "Unlock premium features",
+        label = "Premium features unlocked",
         description = "Makes the client-side premium checks treat the signed-in account as " +
             "subscribed, so premium-only surfaces stop being gated. Server-checked features still " +
             "need a real subscription. Ported from Reseam's Unlock Premium patch.",

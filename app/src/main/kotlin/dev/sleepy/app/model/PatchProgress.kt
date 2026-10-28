@@ -31,12 +31,21 @@ sealed interface PatchProgress {
         val abis: List<String>
     ) : PatchProgress
 
-    /** Patches are being applied, out of [total]. */
+    /**
+     * Patches are being applied, out of [total].
+     *
+     * [step] is the live status of the one change being applied and changes on every patch;
+     * [group] is the section those changes are filed under and stays put for a run of them.
+     * The progress card shows the group, while the live status is shown where it can change
+     * without rewriting the headline on every step.
+     */
     data class Patching(
         val step: String,
         val current: Int,
         val total: Int,
-        val explanation: String? = null
+        val explanation: String? = null,
+        val group: String? = null,
+        val groupDescription: String? = null
     ) : PatchProgress
 
     /** The patched files are being repackaged into an APK. */

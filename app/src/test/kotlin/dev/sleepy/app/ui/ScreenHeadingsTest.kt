@@ -29,7 +29,7 @@ class ScreenHeadingsTest {
         ),
         Site(
             "ui/screens/PatchSelectScreen.kt",
-            "text = \"Configure modding pipeline\"",
+            "text = \"How patching works\"",
             "the pipeline title"
         ),
         Site(

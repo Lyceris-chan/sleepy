@@ -7,8 +7,8 @@ import dev.sleepy.app.model.PatchProgress
  *
  * The copy is built here rather than inside the composable so the pacing rule can be checked on the
  * JVM: [announcement] carries only the two lines that change at a phase boundary, while [detail]
- * carries the values that move continuously—a byte count, a step number, a merge count. A live
- * region placed on the announcement therefore announces each phase once, not each percent.
+ * carries the values that move continuously—a byte count, a change count, a merge count. A live
+ * region placed on the announcement therefore announces each group once, not each percent.
  *
  * The two fields are separate for that reason: folding [detail] into [announcement] makes the
  * screen announce every progress tick.
@@ -32,7 +32,7 @@ internal fun phaseCopy(progress: PatchProgress): PhaseCopy {
         is PatchProgress.Downloading -> "Downloading the app"
         is PatchProgress.Decoding -> "Opening the package"
         is PatchProgress.MergingSplits -> "Adding the missing native libraries"
-        is PatchProgress.Patching -> p.step
+        is PatchProgress.Patching -> p.group?.let { "Applying changes: $it" } ?: p.step
         is PatchProgress.Assembling -> "Rebuilding the APK"
         is PatchProgress.Signing -> "Signing the result"
         is PatchProgress.Done -> "Finished"
@@ -52,7 +52,14 @@ internal fun phaseCopy(progress: PatchProgress): PhaseCopy {
             } else {
                 "Checking the extra pieces this build was split into."
             }
-        is PatchProgress.Patching -> p.explanation ?: "Applying the changes you selected."
+        is PatchProgress.Patching -> when {
+            // The headline is the group, so the reason has to be the group's too. The per-patch
+            // explanation belongs to the live status bar, where it can change without rewriting
+            // the card and being announced again.
+            p.group != null -> p.groupDescription
+                ?: "Applying the changes you selected in this group."
+            else -> p.explanation ?: "Applying the changes you selected."
+        }
         is PatchProgress.Assembling ->
             "Putting the modified files back and " + "re-aligning the archive."
         is PatchProgress.Signing ->
@@ -80,7 +87,11 @@ internal fun phaseCopy(progress: PatchProgress): PhaseCopy {
                 null
             }
         is PatchProgress.Patching ->
-            if (p.total > 0) "Step ${(p.current + 1).coerceAtMost(p.total)} of ${p.total}" else null
+            if (p.total > 0) {
+                "${p.current.coerceAtMost(p.total)} of ${p.total} changes applied"
+            } else {
+                null
+            }
         is PatchProgress.Failed -> p.detail?.lineSequence()?.take(3)?.joinToString("\n")
         else -> null
     }

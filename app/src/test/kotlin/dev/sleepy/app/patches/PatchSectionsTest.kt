@@ -121,6 +121,34 @@ class PatchSectionsTest {
         )
     }
 
+    /**
+     * Every set gets a group heading, and the calls are a section of their own rather than a
+     * corner of App fixes.
+     */
+    @Test
+    fun everySetHasAGroupAndCallsAreTheirOwnSection() {
+        PatchRegistry.all.forEach { set ->
+            assertTrue(
+                "set ${set.id} has no group heading",
+                PatchSections.groupForSet(set.id).isNotBlank()
+            )
+        }
+        assertEquals(
+            listOf(PatchSections.CALLS),
+            PatchItemCatalog.itemsOf(DiscordNativePatches.MEDIA.id).map { it.section }.distinct()
+        )
+        assertEquals(
+            listOf(PatchSections.CALLS),
+            PatchItemCatalog.itemsOf(DiscordNativePatches.CAMERA_LOG.id).map { it.section }
+                .distinct()
+        )
+        assertEquals(
+            listOf(PatchSections.CALLS),
+            PatchItemCatalog.itemsOf(DiscordNativePatches.FOREGROUND_SERVICE.id)
+                .map { it.section }.distinct()
+        )
+    }
+
     @Test
     fun everySectionHasANameAndAOneLineDescription() {
         assertEquals(

@@ -41,20 +41,20 @@ object OctoGramPatchItems {
 
     // The feature headings, declared once. A heading repeated inline at each use is a heading that
     // can be spelled two ways, which would list one feature twice.
-    private const val CHANNEL_POSTS = "Sponsored posts in channels"
-    private const val MEDIA_VIEWER = "Ads in the media viewer"
-    private const val SEARCH = "Sponsored search results"
-    private const val UPDATE_CHECK = "The built-in update check"
-    private const val PAYWALL = "Premium paywall screens"
-    private const val OCTO_LOG = "OctoGram's own diagnostic log"
-    private const val LOGGING = "Telegram's own logging"
-    private const val FIREBASE = "Firebase components registered at startup"
-    private const val CRASH_REPORTER = "OctoGram's own crash reporter"
-    private const val PREMIUM_ROWS = "Premium rows in the profile's settings list"
-    private const val LINKS = "How links open"
-    private const val TYPING = "Typing status"
-    private const val SCREENSHOTS = "Screenshots in secret viewers"
-    private const val INTEGRITY = "Device integrity checks"
+    private const val CHANNEL_POSTS = "Channel posts"
+    private const val MEDIA_VIEWER = "Photo viewer"
+    private const val SEARCH = "Search"
+    private const val UPDATE_CHECK = "Updates"
+    private const val PAYWALL = "Premium screens"
+    private const val OCTO_LOG = "OctoGram logs"
+    private const val LOGGING = "Telegram logs"
+    private const val FIREBASE = "Firebase"
+    private const val CRASH_REPORTER = "Crash reports"
+    private const val PREMIUM_ROWS = "Premium rows"
+    private const val LINKS = "Links"
+    private const val TYPING = "Typing"
+    private const val SCREENSHOTS = "Screenshots"
+    private const val INTEGRITY = "Integrity checks"
     private const val PREMIUM_FEATURES = "Premium features"
 
     /** The identity of the one Firebase item every Firebase set has. */
@@ -72,7 +72,7 @@ object OctoGramPatchItems {
         OctoGramPatches.SPONSORED_MSGS.id to listOf(
             Entry(
                 identity = "chatListRows",
-                label = "The sponsored rows in a channel's chat list",
+                label = "Sponsored posts in channels",
                 group = CHANNEL_POSTS,
                 description = "A channel's chat list is built without the sponsored rows and the bot banner, " +
                     "rather than built with them and then hidden. Only the rows inside a channel are affected; " +
@@ -81,7 +81,7 @@ object OctoGramPatchItems {
             ),
             Entry(
                 identity = "sponsoredRequest",
-                label = "The request that would fill a sponsored row",
+                label = "Sponsored post requests",
                 group = CHANNEL_POSTS,
                 description = "The request that fetches the posts a sponsored row would show is never made, so " +
                     "there is nothing to display even where a row exists. This is the half that stops the " +
@@ -92,7 +92,7 @@ object OctoGramPatchItems {
         OctoGramPatches.PHOTO_VIEWER_ADS.id to listOf(
             Entry(
                 identity = "viewerCallback",
-                label = "The full-screen promotion between photos",
+                label = "Ads between photos",
                 group = MEDIA_VIEWER,
                 description = "Swiping through a channel's photos no longer stops on a full-screen promotion, and " +
                     "the request behind it is not made. Photos, videos and GIFs themselves are untouched.",
@@ -102,7 +102,7 @@ object OctoGramPatchItems {
         OctoGramPatches.SEARCH_ADS.id to listOf(
             Entry(
                 identity = "sponsoredResponse",
-                label = "Promoted channels and bots in search",
+                label = "Sponsored channels in search",
                 group = SEARCH,
                 description = "Search results hold only what matched what you typed: the response carrying " +
                     "promoted peers is discarded and the request it belongs to is closed out, so nothing is " +
@@ -113,7 +113,7 @@ object OctoGramPatchItems {
         OctoGramPatches.OTA_UPDATER.id to listOf(
             Entry(
                 identity = "updateRequest",
-                label = "The GitHub release request",
+                label = "Built-in update check",
                 group = UPDATE_CHECK,
                 description = "The app stops asking GitHub whether a newer OctoGram exists. The \"you are up to " +
                     "date\" path is signaled instead, so the update screen still finishes rather than waiting " +
@@ -124,7 +124,7 @@ object OctoGramPatchItems {
         OctoGramPatches.PREMIUM_UPSELL.id to listOf(
             Entry(
                 identity = "routerGuard",
-                label = "The navigation router",
+                label = "Premium screen navigation",
                 group = PAYWALL,
                 description = "Navigation into the Premium screen is dropped at the router, so the paywall does " +
                     "not open when something in the app tries to show it. This is the path most of the app's " +
@@ -133,7 +133,7 @@ object OctoGramPatchItems {
             ),
             Entry(
                 identity = "windowStackOverride",
-                label = "The main window's override",
+                label = "Premium screen window",
                 group = PAYWALL,
                 description = "The same drop on the window-stack override the main window uses. The paywall is " +
                     "reachable that way too, so the router guard alone would leave those paths open—the two " +
@@ -145,7 +145,7 @@ object OctoGramPatchItems {
         OctoGramPatches.OCTO_LOGGER.id to listOf(
             Entry(
                 identity = "emitters",
-                label = "The log itself (12 entry points)",
+                label = "OctoGram diagnostic log",
                 group = OCTO_LOG,
                 description = "All twelve entry points of OctoGram's log class become no-ops: the eleven emitters " +
                     "and the sink they all write through. Nothing further reaches logcat or OctoGram's own log " +
@@ -155,7 +155,7 @@ object OctoGramPatchItems {
             ),
             Entry(
                 identity = "uploaders",
-                label = "Sending a log to Telegram's servers",
+                label = "Log uploads",
                 group = OCTO_LOG,
                 description = "The five places that would ship a diagnostic off the device become no-ops: the " +
                     "three behind the app's own \"send log\" action, the one in the app's message controller, " +
@@ -166,7 +166,7 @@ object OctoGramPatchItems {
         OctoGramPatches.LOGGING_GATE.id to listOf(
             Entry(
                 identity = "globalFlag",
-                label = "The global logging flag",
+                label = "Global logging switch",
                 group = LOGGING,
                 description = "Telegram decides whether to write its own logs from a single flag read in hundreds " +
                     "of places; pinning it to false at the four sites that write it turns logging off " +
@@ -179,7 +179,7 @@ object OctoGramPatchItems {
         OctoGramPatches.FIREBASE_ABT.id to listOf(
             Entry(
                 identity = REGISTRAR,
-                label = "A/B testing components",
+                label = "A/B testing",
                 group = FIREBASE,
                 description = "Startup registers nothing for Firebase A/B testing: no experiment is assigned and no " +
                     "experiment telemetry is produced.",
@@ -189,7 +189,7 @@ object OctoGramPatchItems {
         OctoGramPatches.FIREBASE_REMOTE_CONFIG.id to listOf(
             Entry(
                 identity = REGISTRAR,
-                label = "Remote Config components",
+                label = "Remote Config",
                 group = FIREBASE,
                 description = "Startup registers nothing for Firebase Remote Config, so the app no longer downloads " +
                     "server-side experiment flags or telemetry parameters.",
@@ -199,7 +199,7 @@ object OctoGramPatchItems {
         OctoGramPatches.FIREBASE_REMOTE_CONFIG_KTX.id to listOf(
             Entry(
                 identity = REGISTRAR,
-                label = "Remote Config's Kotlin wrapper",
+                label = "Remote Config wrapper",
                 group = FIREBASE,
                 description = "Startup registers nothing for the Kotlin extension that wraps Remote Config, so it " +
                     "never subscribes to an app's lifecycle on the app's behalf.",
@@ -219,7 +219,7 @@ object OctoGramPatchItems {
         OctoGramPatches.CRASH_REPORTER.id to listOf(
             Entry(
                 identity = "startup",
-                label = "The crash handler installed while the app starts",
+                label = "Crash handler",
                 group = CRASH_REPORTER,
                 description = "OctoGram's own crash reporter is not installed, so a crash writes no crash log into " +
                     "the app's storage and raises no \"OctoGram just crashed!\" notification next time the app " +
@@ -231,7 +231,7 @@ object OctoGramPatchItems {
         OctoGramPatches.PREMIUM_SETTINGS.id to listOf(
             Entry(
                 identity = "premiumRows",
-                label = "The Telegram Premium row",
+                label = "Telegram Premium row",
                 group = PREMIUM_ROWS,
                 description = "Neither settings list carries the Telegram Premium row: the one on your profile, " +
                     "where the Send a Gift row goes with it and the combined premium-sections row that would " +
@@ -246,7 +246,7 @@ object OctoGramPatchItems {
         OctoGramPatches.EXTERNAL_BROWSER.id to listOf(
             Entry(
                 identity = "defaultOn",
-                label = "Opening links outside the app by default",
+                label = "Links open outside the app",
                 group = LINKS,
                 description = "A fresh install sends http and https links to the phone's browser rather than to " +
                     "OctoGram's own in-app viewer. The setting stays in the app, so a device that has already " +
@@ -257,7 +257,7 @@ object OctoGramPatchItems {
         OctoGramPatches.HIDE_BUSINESS.id to listOf(
             Entry(
                 identity = "rowAndCommands",
-                label = "The Telegram Business row and its two commands",
+                label = "Telegram Business row",
                 group = PAYWALL,
                 description = "The Telegram Business row leaves both settings lists, the one on your profile " +
                     "and the one on the app's Settings screen, and the /premium and /business commands stop " +
@@ -270,7 +270,7 @@ object OctoGramPatchItems {
         OctoGramPatches.PREMIUM_SHEETS.id to listOf(
             Entry(
                 identity = "sheetGuard",
-                label = "The premium screens that open as a sheet",
+                label = "Premium sheets",
                 group = PAYWALL,
                 description = "Closes the eight premium entry points that present the paywall as a bottom " +
                     "sheet, the ones the navigation-router switch cannot see. The guard sits in the helper " +
@@ -282,7 +282,7 @@ object OctoGramPatchItems {
         OctoGramPatches.HIDE_TYPING.id to listOf(
             Entry(
                 identity = "sendTyping",
-                label = "Typing and recording notifications",
+                label = "Typing notifications",
                 group = TYPING,
                 description = "The request that tells a chat you are typing or recording is never " +
                     "built, so other people do not see a typing status from you. Messages, media " +
@@ -293,7 +293,7 @@ object OctoGramPatchItems {
         OctoGramPatches.ALLOW_SCREENSHOTS.id to listOf(
             Entry(
                 identity = "secretViewerFlags",
-                label = "The secret viewer's FLAG_SECURE bit",
+                label = "Secret-viewer screenshots",
                 group = SCREENSHOTS,
                 description = "View-once and self-destruct media can be screenshotted or " +
                     "screen-recorded; every other flag the viewer sets is kept.",
@@ -303,7 +303,7 @@ object OctoGramPatchItems {
         OctoGramPatches.BYPASS_INTEGRITY.id to listOf(
             Entry(
                 identity = "safetyNetVerdicts",
-                label = "The SafetyNet verdicts",
+                label = "Integrity checks",
                 group = INTEGRITY,
                 description = "The two verdicts the login path reads report true, so a rooted or " +
                     "non-Google device is not blocked from signing in.",
@@ -313,7 +313,7 @@ object OctoGramPatchItems {
         OctoGramPatches.UNLOCK_PREMIUM.id to listOf(
             Entry(
                 identity = "premiumFlag",
-                label = "The account's premium flag",
+                label = "Premium features",
                 group = PREMIUM_FEATURES,
                 description = "Client-side premium checks treat the signed-in account as " +
                     "subscribed. Server-checked features still need a real subscription.",

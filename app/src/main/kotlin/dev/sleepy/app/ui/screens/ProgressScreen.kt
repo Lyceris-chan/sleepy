@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -47,6 +50,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.sleepy.app.model.PatchProgress
 import dev.sleepy.app.model.StepStatus
@@ -215,6 +219,11 @@ fun ProgressScreen(
                 }
             }
 
+            if (isPatching) {
+                Spacer(modifier = Modifier.height(12.dp))
+                LiveStatusBar(progress)
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
@@ -256,6 +265,74 @@ fun ProgressScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * The pinned status strip: the exact change being applied right now.
+ *
+ * The card above changes at group boundaries, so the reader can follow the run without the
+ * headline rewriting itself on every patch. This strip is the other half: it updates for every
+ * change and can be read at a glance, while the log underneath keeps the full history. It is not
+ * a live region - a screen reader that announced every patch title would undo the pacing the
+ * card's live region exists for - but it is a single labeled target that can be focused.
+ */
+@Composable
+private fun LiveStatusBar(progress: PatchProgress) {
+    val copy = phaseCopy(progress)
+    val live = (progress as? PatchProgress.Patching)?.step ?: copy.title
+    val explanation = (progress as? PatchProgress.Patching)?.explanation ?: copy.detail
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {
+                contentDescription = if (explanation.isNullOrBlank()) {
+                    "Current status: $live"
+                } else {
+                    "Current status: $live. $explanation"
+                }
+            },
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 6.dp,
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "In progress",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = live,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!explanation.isNullOrBlank()) {
+                    Text(
+                        text = explanation,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
     }
 }
 

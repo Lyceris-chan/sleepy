@@ -52,31 +52,31 @@ object DiscordHermesFunctionCatalog {
 
     // Feature groups, in the order the list shows them. Declared here rather than inline so each
     // is named once and a typo fails to compile instead of creating a heading of one item.
-    private const val SHOP_GROUP = "Shop and promotions"
-    private const val NITRO_UPSELL_GROUP = "Nitro upsells"
-    private const val UPSELL_GROUP = "Premium upsells"
-    private const val STOREFRONT_GROUP = "Storefront"
-    private const val TRIAL_GROUP = "Trials"
+    private const val SHOP_GROUP = "Shop and offers"
+    private const val NITRO_UPSELL_GROUP = "Nitro prompts"
+    private const val UPSELL_GROUP = "Premium prompts"
+    private const val STOREFRONT_GROUP = "Store pages"
+    private const val TRIAL_GROUP = "Free trials"
     private const val LEADERBOARD_GROUP = "Leaderboards"
-    private const val GAME_GROUP = "Game status"
+    private const val GAME_GROUP = "Game activity"
     private const val GIFTS_GROUP = "Gifts"
-    private const val BILLING_GROUP = "Billing and subscriptions"
+    private const val BILLING_GROUP = "Billing"
     private const val LOOK_GROUP = "Profile decorations"
     private const val PROFILE_GROUP = "Profile"
     private const val QUESTS_GROUP = "Quests"
     private const val WISHLIST_GROUP = "Wishlists"
     private const val SPOTIFY_GROUP = "Spotify"
-    private const val SURVEYS_GROUP = "App rating prompts"
-    private const val ANALYTICS_GROUP = "Analytics"
-    private const val CRASH_GROUP = "Crash reporting"
-    private const val PERFORMANCE_GROUP = "Performance metrics"
-    private const val VIDEO_GROUP = "Video calls"
-    private const val TELEMETRY_GROUP = "Session telemetry"
+    private const val SURVEYS_GROUP = "Rating prompts"
+    private const val ANALYTICS_GROUP = "Usage analytics"
+    private const val CRASH_GROUP = "Crash reports"
+    private const val PERFORMANCE_GROUP = "Performance sampling"
+    private const val VIDEO_GROUP = "Call quality"
+    private const val TELEMETRY_GROUP = "Session reporting"
     private const val STARTUP_GROUP = "Startup timing"
-    private const val LOGGING_GROUP = "Debug logs"
-    private const val FINGERPRINT_GROUP = "Device fingerprinting"
-    private const val STABILITY_GROUP = "Memory and stability"
-    private const val LEFTOVER_GROUP = "Unused stubs"
+    private const val LOGGING_GROUP = "Debug logging"
+    private const val FINGERPRINT_GROUP = "Device fingerprint"
+    private const val STABILITY_GROUP = "Memory use"
+    private const val LEFTOVER_GROUP = "Miscellaneous fixes"
     private const val CHAT_GROUP = "Chat display"
     private const val PRIVACY_GROUP = "Privacy"
 
@@ -1240,7 +1240,7 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "crash_upload",
             group = CRASH_GROUP,
-            label = "Crash reporting",
+            label = "Crash uploads",
             description = "Stops the crash reporter starting at all, and with it every crash, " +
                 "exception and logged message it would have sent.",
             functionIds = listOf(24816, 24817, 24818, 24822, 24823, 24831)

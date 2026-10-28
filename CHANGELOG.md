@@ -42,14 +42,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The screen-share thumbnail coroutine keeps its suspension contract.** The rewritten case
   still returns `COROUTINE_SUSPENDED` when the compression suspends and the unit value only on
   completion, so a thumbnail that takes more than one dispatch does not complete early.
+- **A backgrounded or screen-off video call no longer freezes the app.** Three surface-release
+  waits run on the UI thread and waited for the video render thread with no usable ceiling:
+  Discord's `TextureView.onSurfaceTextureDestroyed` used a `Long.MAX_VALUE` timeout, the React
+  Native video view's release and WebRTC's `SurfaceEglRenderer.surfaceDestroyed` used the
+  unbounded `awaitUninterruptibly` overload. Turning the screen off or dropping the call UI
+  while the render thread was wedged left the UI thread parked until the system ANR watchdog
+  fired. All three now wait at most two seconds; the normal release completes in microseconds,
+  so only the pathological case changes.
 
 ### Changed
 
-- The full native set now applies 102 edits to 353.2.0. `MediaCallPatchesTest` applies the
+- **The patch list is organised by what you want, not by how the app is built.** The old seven
+  sections mixed calls into App fixes and split shops, upsells and purchases across Ads and
+  Declutter. There are now eight: **Ads and offers**, **Interface cleanup**, **Privacy and
+  tracking**, **Crash reports**, **Performance and battery**, **Calls and media**, **App fixes**
+  and **Network blocking**. Rows inside a section are collected under short headings such as
+  **Sponsored content**, **Premium and Nitro**, **Shop and offers**, **Profile and decorations**,
+  **Logs and metrics** or **Timers**, instead of one flat list of set names.
+- **The set names are outcomes rather than implementation notes.** "Blank the crash reporter's
+  keys" is now **Crash reports blocked**, "Cut work from the call path" is **Lighter call
+  overhead**, "Stop the camera's frame-rate log" is **No camera frame-rate log**, and the
+  OctoGram rows name the thing you see ("Sponsored posts in channels", "Premium screen
+  navigation") rather than the code that draws it ("The navigation router").
+- **The progress screen names the group, not every patch.** During patching the headline now
+  says **Applying changes: Ads and offers** and stays there until the run reaches another group,
+  instead of rewriting the title and the "Step x of y" counter on every edit. A pinned strip at
+  the bottom of the screen shows the exact change being applied in real time, and the existing
+  log stays available for the full history. The step counter is gone.
+- The full native set now applies 105 edits to 353.2.0. `MediaCallPatchesTest` applies the
   supervisor, registration, teardown, foreground-service and thumbnail edits to the real base
   DEX, checks that each anchor occurs exactly once, and asserts both the shape they replace and
   the shape they leave. It also pins the camera path: `createOwnStreamConnectionWithOptions`
   launches `cd/s0`, which registers through the coroutine the registration edit changes.
+  `SurfaceReleaseWaitTest` applies the three bounded-wait edits across both DEX files and
+  asserts that no unbounded overload or `Long.MAX_VALUE` timeout survives in those classes.
 
 ## [3.12.2] - 2026-10-28
 

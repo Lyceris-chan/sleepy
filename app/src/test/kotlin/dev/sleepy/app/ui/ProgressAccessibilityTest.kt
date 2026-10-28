@@ -64,6 +64,59 @@ class ProgressAccessibilityTest {
         assertNotEquals(firstStep.detail, lastStep.detail)
     }
 
+    /**
+     * Within one section the headline names the section, not the patch, so the card stops
+     * rewriting itself on every step. The live step still moves the detail, and the pinned status
+     * strip below the card is what shows it in real time.
+     */
+    @Test
+    fun aGroupHoldsTheHeadlineWhileTheLiveStepMovesBelowIt() {
+        val first = phaseCopy(
+            PatchProgress.Patching(
+                step = "First patch in the section",
+                current = 0,
+                total = 10,
+                group = "Ads and offers",
+                groupDescription = "Removes the shops and offers."
+            )
+        )
+        val second = phaseCopy(
+            PatchProgress.Patching(
+                step = "Second patch in the section",
+                current = 3,
+                total = 10,
+                group = "Ads and offers",
+                groupDescription = "Removes the shops and offers."
+            )
+        )
+        assertEquals("Applying changes: Ads and offers", first.title)
+        assertEquals(first.announcement, second.announcement)
+        assertNotEquals(first.detail, second.detail)
+        assertFalse("the card must not count steps", first.detail.orEmpty().contains("Step"))
+        assertEquals("3 of 10 changes applied", second.detail)
+
+        val elsewhere = phaseCopy(
+            PatchProgress.Patching(
+                step = "A patch in another section",
+                current = 3,
+                total = 10,
+                group = "Privacy and tracking",
+                groupDescription = "Stops the app recording what you do."
+            )
+        )
+        assertNotEquals(first.announcement, elsewhere.announcement)
+
+        val source = source("app/src/main/kotlin/dev/sleepy/app/ui/screens/ProgressScreen.kt")
+        assertTrue(
+            "the screen does not pin a live status strip",
+            source.contains("LiveStatusBar(progress)")
+        )
+        assertTrue(
+            "the live strip does not show the per-patch step",
+            source.contains("(progress as? PatchProgress.Patching)?.step")
+        )
+    }
+
     @Test
     fun aNewStepOrANewPhaseChangesTheAnnouncement() {
         val first = phaseCopy(PatchProgress.Patching("First patch", current = 0, total = 2))

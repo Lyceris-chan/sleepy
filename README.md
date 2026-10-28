@@ -57,7 +57,7 @@ Each of the following changes has its own switch, so you can apply all of them, 
 
 ## Choose which patches to apply
 
-The patch screen is organised by what you want, not by how the app is built. Every change sits in one of seven sections: **Ads and promotions**, **Declutter**, **Tracking and analytics**, **Crash reporting**, **Background work**, **App fixes** and **Network blocking**. Expand a section to see the changes inside it.
+The patch screen is organised by what you want, not by how the app is built. Every change sits in one of eight sections: **Ads and offers**, **Interface cleanup**, **Privacy and tracking**, **Crash reports**, **Performance and battery**, **Calls and media**, **App fixes** and **Network blocking**. Expand a section to see the changes inside it, grouped under short headings such as **Shop and offers**, **Gifts**, **Billing**, **Profile decorations** or **Timers**.
 
 - Each change has its own switch. Turn it on or off on its own.
 - A section's own switch turns everything in that section on or off at once. It reports whether none, some or all of them are selected, so a section you have partly chosen shows that rather than rounding up or down. Tapping a partly selected section completes it; tapping a fully selected one clears it.

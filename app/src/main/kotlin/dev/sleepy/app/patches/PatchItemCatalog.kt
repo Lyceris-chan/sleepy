@@ -67,7 +67,9 @@ object PatchItemCatalog : PatchItemSource {
         setId = set.id,
         identity = WHOLE_SET_IDENTITY,
         label = set.label,
-        group = set.label,
+        // A set that is one row has no item to carry a group, so it takes a short one from the
+        // section table rather than repeating its own label as the heading above it.
+        group = PatchSections.groupForSet(set.id),
         section = PatchSections.forSet(set.id),
         description = set.description
     )
