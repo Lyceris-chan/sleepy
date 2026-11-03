@@ -1,0 +1,53 @@
+0000  CreateFunctionEnvironment r8, 4
+0003  LoadParam r4, 2
+0006  StoreToEnvironment r8, 0, r4
+000a  LoadParam r1, 3
+000d  StoreToEnvironment r8, 1, r1
+0011  LoadParam r2, 6
+0014  LoadParam r3, 7
+0017  StoreToEnvironment r8, 2, r3
+001b  GetGlobalObject r1
+001d  TryGetById r7, r1, 0, "Object"
+0023  GetByIdShort r6, r7, 1, "defineProperty"
+0028  LoadConstString r5, "__esModule"
+002c  NewObjectWithBufferLong r1, 4, 451217
+0036  Call4 r1, r6, r7, r2, r5, r1
+003d  GetByIndex r1, r3, 0
+0041  LoadConstUndefined r0
+0043  Call2 r1, r4, r0, r1
+0048  GetById r7, r1, 2, "MobileUserSettings"
+004e  GetByIndex r1, r3, 1
+0052  Call2 r1, r4, r0, r1
+0057  GetById r9, r1, 3, "UserSettingsSections"
+005d  GetByIndex r1, r3, 2
+0061  Call2 r1, r4, r0, r1
+0066  GetById r1, r1, 4, "UserGuildRoleSubscriptionRelationship"
+006c  StoreToEnvironment r8, 3, r1
+0070  GetByIndex r1, r3, 4
+0074  Call2 r6, r4, r0, r1
+0079  GetById r5, r6, 5, "createRoute"
+007f  NewObjectWithBufferLong r1, 7140, 500207
+0089  CreateClosure r10, r8, 62838
+008e  PutOwnBySlotIdx r1, r10, 0
+0092  GetById r7, r7, 6, "PREMIUM"
+0098  PutOwnBySlotIdx r1, r7, 1
+009c  GetByIndex r7, r3, 6
+00a0  Call2 r7, r4, r0, r7
+00a5  GetById r7, r7, 7, "TicketIcon"
+00ab  PutOwnBySlotIdx r1, r7, 2
+00af  CreateClosure r7, r8, 62839
+00b4  PutOwnBySlotIdx r1, r7, 3
+00b8  NewObjectWithBufferLong r7, 6590, 304475
+00c2  GetById r9, r9, 8, "GUILD_ROLE_SUBSCRIPTIONS"
+00c8  PutOwnBySlotIdx r7, r9, 0
+00cc  CreateClosure r8, r8, 62840
+00d1  PutOwnBySlotIdx r7, r8, 1
+00d5  PutOwnBySlotIdx r1, r7, 4
+00d9  Call2 r1, r5, r6, r1
+00de  GetByIndex r3, r3, 8
+00e2  Call2 r5, r4, r0, r3
+00e7  GetByIdShort r4, r5, 9, "fileFinishedImporting"
+00ec  LoadConstStringLongIndex r3, "modules/user_settings/defs/native/GuildRoleSubscriptionsSetting.tsx"
+00f2  Call2 r3, r4, r5, r3
+00f7  PutByIdStrict r2, r1, 0, "default"
+00fd  Ret r0

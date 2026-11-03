@@ -1,0 +1,95 @@
+0000  GetParentEnvironment r4, 0
+0003  NewObjectWithBufferLong r2, 20455, 3013331
+000d  GetParentEnvironment r6, 1
+0010  LoadFromEnvironment r8, r6, 0
+0014  LoadFromEnvironment r5, r6, 2
+0018  GetByIndex r1, r5, 28
+001c  LoadConstUndefined r0
+001e  Call2 r1, r8, r0, r1
+0023  GetByIdShort r7, r1, 0, "intl"
+0028  GetByIdShort r3, r7, 1, "string"
+002d  GetByIndex r1, r5, 28
+0031  Call2 r1, r8, r0, r1
+0036  GetByIdShort r1, r1, 2, "t"
+003b  GetById r1, r1, 3, "LXw470"
+0041  Call2 r1, r3, r7, r1
+0046  PutOwnBySlotIdx r2, r1, 1
+004a  LoadFromEnvironment r1, r4, 27
+004e  Call1 r1, r1, r0
+0052  PutOwnBySlotIdx r2, r1, 2
+0056  NewArray r1, 1
+005a  DefineOwnInDenseArray r1, r2, 0
+005e  LoadFromEnvironment r2, r4, 17
+0062  JmpFalseLong L237, r2
+0068  GetByIdShort r3, r1, 4, "push"
+006d  NewObjectWithBufferLong r2, 20455, 678002
+0077  GetByIndex r7, r5, 28
+007b  Call2 r7, r8, r0, r7
+0080  GetByIdShort r10, r7, 0, "intl"
+0085  GetByIdShort r9, r10, 1, "string"
+008a  GetByIndex r7, r5, 28
+008e  Call2 r7, r8, r0, r7
+0093  GetByIdShort r7, r7, 2, "t"
+0098  GetById r7, r7, 5, "laViwx"
+009e  Call2 r7, r9, r10, r7
+00a3  PutOwnBySlotIdx r2, r7, 1
+00a7  LoadFromEnvironment r10, r6, 13
+00ab  LoadFromEnvironment r9, r6, 17
+00af  NewObjectWithBufferLong r7, 31563, 275249
+00b9  LoadFromEnvironment r11, r4, 0
+00bd  GetByIdShort r11, r11, 6, "id"
+00c2  PutOwnBySlotIdx r7, r11, 0
+00c6  LoadFromEnvironment r11, r4, 22
+00ca  PutOwnBySlotIdx r7, r11, 1
+00ce  LoadFromEnvironment r11, r4, 11
+00d2  PutOwnBySlotIdx r7, r11, 2
+00d6  LoadFromEnvironment r11, r4, 12
+00da  PutOwnBySlotIdx r7, r11, 3
+00de  Call3 r7, r10, r0, r9, r7
+00e4  PutOwnBySlotIdx r2, r7, 2
+00e8  Call2 r2, r3, r1, r2
+L237:
+00ed  LoadFromEnvironment r2, r4, 18
+00f1  JmpFalseLong L369, r2
+00f7  GetByIdShort r3, r1, 4, "push"
+00fc  NewObjectWithBufferLong r2, 20455, 958042
+0106  GetByIndex r7, r5, 28
+010a  Call2 r7, r8, r0, r7
+010f  GetByIdShort r10, r7, 0, "intl"
+0114  GetByIdShort r9, r10, 1, "string"
+0119  GetByIndex r7, r5, 28
+011d  Call2 r7, r8, r0, r7
+0122  GetByIdShort r7, r7, 2, "t"
+0127  GetByIdLong r7, r7, 7, "chq59f"
+012f  Call2 r7, r9, r10, r7
+0134  PutOwnBySlotIdx r2, r7, 1
+0138  LoadFromEnvironment r9, r6, 13
+013c  LoadFromEnvironment r7, r6, 18
+0140  NewObjectWithBufferLong r6, 31564, 275245
+014a  LoadFromEnvironment r10, r4, 0
+014e  PutOwnBySlotIdx r6, r10, 0
+0152  LoadFromEnvironment r10, r4, 11
+0156  PutOwnBySlotIdx r6, r10, 1
+015a  LoadFromEnvironment r10, r4, 12
+015e  PutOwnBySlotIdx r6, r10, 2
+0162  Call3 r6, r9, r0, r7, r6
+0168  PutOwnBySlotIdx r2, r6, 2
+016c  Call2 r2, r3, r1, r2
+L369:
+0171  GetByIdShort r3, r1, 4, "push"
+0176  NewObjectWithBufferLong r2, 20455, 1479575
+0180  GetByIndex r6, r5, 28
+0184  Call2 r6, r8, r0, r6
+0189  GetByIdShort r7, r6, 0, "intl"
+018e  GetByIdShort r6, r7, 1, "string"
+0193  GetByIndex r5, r5, 28
+0197  Call2 r5, r8, r0, r5
+019c  GetByIdShort r5, r5, 2, "t"
+01a1  GetById r5, r5, 8, "7lZ31J"
+01a7  Call2 r5, r6, r7, r5
+01ac  PutOwnBySlotIdx r2, r5, 1
+01b0  LoadFromEnvironment r4, r4, 28
+01b4  Call1 r4, r4, r0
+01b8  PutOwnBySlotIdx r2, r4, 2
+01bc  Call2 r2, r3, r1, r2
+01c1  Ret r1

@@ -1,0 +1,10 @@
+# Research checkouts and downloaded source material.
+.research/
+downloads/
+
+# Device logs pasted into the workspace.
+Error_in_Discord_*.txt
+
+# Local build output.
+discord/build/
+discord/dist/

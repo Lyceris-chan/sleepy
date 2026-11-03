@@ -1,0 +1,46 @@
+0000  CreateFunctionEnvironment r7, 5
+0004  LoadParam r4, 2
+0008  StoreToEnvironment r7, 0, r4
+000c  LoadParam r5, 3
+0010  StoreToEnvironment r7, 1, r5
+0014  LoadParam r2, 6
+0018  LoadParam r3, 7
+001c  StoreToEnvironment r7, 2, r3
+0020  GetGlobalObject r1
+0024  TryGetById r9, r1, 0, "Object"
+0028  GetByIdShort r8, r9, 1, "defineProperty"
+002c  LoadConstString r6, "__esModule"
+0030  NewObjectWithBufferLong r1, 4, 451217
+0034  Call4 r1, r8, r9, r2, r6, r1
+0038  GetByIndex r1, r3, 0
+003c  LoadConstUndefined r0
+0040  Call2 r1, r5, r0, r1
+0044  StoreToEnvironment r7, 3, r1
+0048  GetByIndex r1, r3, 1
+004c  Call2 r1, r4, r0, r1
+0050  GetByIdShort r1, r1, 2, "jsx"
+0054  StoreToEnvironment r7, 4, r1
+0058  GetByIndex r1, r3, 9
+005c  Call2 r6, r4, r0, r1
+0060  GetById r5, r6, 3, "createPressable"
+0064  NewObjectWithBuffer r1, 7172, 1566
+0068  CreateClosure r8, r7, 62952
+006c  PutOwnBySlotIdx r1, r8, 0
+0070  GetByIndex r8, r3, 10
+0074  Call2 r8, r4, r0, r8
+0078  GetById r8, r8, 4, "NitroWheelIcon"
+007c  PutOwnBySlotIdx r1, r8, 2
+0080  CreateClosure r8, r7, 62953
+0084  PutOwnBySlotIdx r1, r8, 3
+0088  CreateClosure r7, r7, 62954
+008c  PutOwnBySlotIdx r1, r7, 5
+0090  CreateClosure r9, r7, 62294
+0094  DefineOwnById r1, r9, 5, "usePredicate"
+0098  Call2 r1, r5, r6, r1
+009c  GetByIndex r3, r3, 11
+00a0  Call2 r5, r4, r0, r3
+00a4  GetByIdShort r4, r5, 5, "fileFinishedImporting"
+00a8  LoadConstStringLongIndex r3, "modules/user_settings/defs/native/PremiumRestoreSubscriptionSetting.tsx"
+00ac  Call2 r3, r4, r5, r3
+00b0  PutByIdStrict r2, r1, 0, "default"
+00b4  Ret r0

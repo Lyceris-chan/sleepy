@@ -1,0 +1,41 @@
+0000  CreateFunctionEnvironment r8, 2
+0003  LoadParam r4, 2
+0006  StoreToEnvironment r8, 0, r4
+000a  LoadParam r2, 6
+000d  LoadParam r3, 7
+0010  StoreToEnvironment r8, 1, r3
+0014  GetGlobalObject r1
+0016  TryGetById r7, r1, 0, "Object"
+001c  GetByIdShort r6, r7, 1, "defineProperty"
+0021  LoadConstString r5, "__esModule"
+0025  NewObjectWithBufferLong r1, 4, 451217
+002f  Call4 r1, r6, r7, r2, r5, r1
+0036  GetByIndex r1, r3, 0
+003a  LoadConstUndefined r0
+003c  Call2 r1, r4, r0, r1
+0041  GetById r7, r1, 2, "MobileUserSettings"
+0047  GetByIndex r1, r3, 1
+004b  Call2 r1, r4, r0, r1
+0050  GetById r9, r1, 3, "UserSettingsSections"
+0056  GetByIndex r1, r3, 2
+005a  Call2 r6, r4, r0, r1
+005f  GetById r5, r6, 4, "createRoute"
+0065  NewObjectWithBufferLong r1, 6589, 556934
+006f  CreateClosure r10, r8, 64159
+0074  PutOwnBySlotIdx r1, r10, 0
+0078  GetById r7, r7, 5, "PREMIUM"
+007e  PutOwnBySlotIdx r1, r7, 1
+0082  NewObjectWithBufferLong r7, 6590, 304475
+008c  GetById r9, r9, 6, "PROFILE_CUSTOMIZATION_TRY_IT_OUT"
+0092  PutOwnBySlotIdx r7, r9, 0
+0096  CreateClosure r8, r8, 64160
+009b  PutOwnBySlotIdx r7, r8, 1
+009f  PutOwnBySlotIdx r1, r7, 3
+00a3  Call2 r1, r5, r6, r1
+00a8  GetByIndex r3, r3, 5
+00ac  Call2 r5, r4, r0, r3
+00b1  GetByIdShort r4, r5, 7, "fileFinishedImporting"
+00b6  LoadConstStringLongIndex r3, "modules/user_settings/defs/native/PremiumProfileCustomizationTryItOutSetting.tsx"
+00bc  Call2 r3, r4, r5, r3
+00c1  PutByIdStrict r2, r1, 0, "default"
+00c7  Ret r0

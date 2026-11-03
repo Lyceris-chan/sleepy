@@ -1,0 +1,563 @@
+<title>What Changed in Discord</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #f5f5f2;
+    --surface: #ffffff;
+    --surface-2: #eeeFec;
+    --ink: #191b1d;
+    --ink-muted: #5b6165;
+    --ink-faint: #878d90;
+    --rule: #e0e1dd;
+    --rule-strong: #c9cbc6;
+    --accent: #2e6b5e;
+    --accent-soft: #dfeae6;
+    --caution: #8a5424;
+    --caution-soft: #f0e5d8;
+    --radius: 6px;
+    --measure: 66ch;
+    --step--1: 0.8125rem;
+    --step-0: 1rem;
+    --step-1: 1.1875rem;
+    --step-2: 1.5rem;
+    --step-3: 2rem;
+    --step-4: 2.9rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #131517;
+      --surface: #1b1e20;
+      --surface-2: #22262a;
+      --ink: #e7e9e8;
+      --ink-muted: #9ba1a3;
+      --ink-faint: #767c7e;
+      --rule: #2a2e30;
+      --rule-strong: #3b4043;
+      --accent: #6dbfad;
+      --accent-soft: #1e332e;
+      --caution: #d6a271;
+      --caution-soft: #33281c;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #131517;
+    --surface: #1b1e20;
+    --surface-2: #22262a;
+    --ink: #e7e9e8;
+    --ink-muted: #9ba1a3;
+    --ink-faint: #767c7e;
+    --rule: #2a2e30;
+    --rule-strong: #3b4043;
+    --accent: #6dbfad;
+    --accent-soft: #1e332e;
+    --caution: #d6a271;
+    --caution-soft: #33281c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.65;
+    padding-block: 0 clamp(3rem, 8vw, 6rem);
+    padding-inline: clamp(1rem, 4vw, 2rem);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: var(--measure); margin-inline: auto; }
+
+  /* ---------- masthead ---------- */
+
+  header.masthead {
+    padding-block: clamp(2.5rem, 7vw, 4.5rem) clamp(1.5rem, 4vw, 2.5rem);
+    border-bottom: 1px solid var(--rule-strong);
+    margin-bottom: clamp(2rem, 5vw, 3rem);
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: var(--step--1);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.9rem;
+    font-weight: 500;
+  }
+
+  h1 {
+    font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 700;
+    font-size: clamp(2.1rem, 7vw, 3.1rem);
+    line-height: 1.06;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+    margin: 0 0 1.1rem;
+  }
+
+  .standfirst {
+    font-size: var(--step-1);
+    line-height: 1.55;
+    color: var(--ink-muted);
+    max-width: 54ch;
+    margin: 0;
+  }
+
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- the three headline counts ---------- */
+
+  .tally {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: clamp(2rem, 5vw, 2.75rem);
+  }
+
+  .tally div {
+    background: var(--surface);
+    padding: 1.05rem 1.15rem 1.15rem;
+  }
+
+  .tally dt {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 0.4rem;
+  }
+
+  .tally dd {
+    margin: 0;
+    font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 1.45rem;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.015em;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { margin-block: clamp(2.5rem, 6vw, 3.75rem); }
+
+  h2 {
+    font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: var(--step-2);
+    line-height: 1.15;
+    letter-spacing: -0.018em;
+    text-wrap: balance;
+    margin: 0 0 0.6rem;
+  }
+
+  h2 + .lede {
+    color: var(--ink-muted);
+    margin: 0 0 1.6rem;
+    max-width: 56ch;
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- change rows ---------- */
+
+  ul.rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.9rem; }
+
+  ul.rows > li {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 1.05rem 1.2rem 1.1rem;
+    display: grid;
+    grid-template-columns: 5.75rem 1fr;
+    gap: 0.35rem 1.1rem;
+    align-items: start;
+  }
+
+  .chip {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.6875rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    font-weight: 500;
+    padding: 0.22rem 0.5rem;
+    border-radius: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    justify-self: start;
+    white-space: nowrap;
+    margin-top: 0.15rem;
+  }
+
+  .chip.caution { background: var(--caution-soft); color: var(--caution); }
+
+  .row-body { min-width: 0; }
+
+  .row-body b {
+    display: block;
+    font-weight: 600;
+    font-size: var(--step-0);
+    margin-bottom: 0.15rem;
+  }
+
+  .row-body p { margin: 0; color: var(--ink-muted); font-size: 0.9375rem; line-height: 1.6; }
+
+  .row-body code, code.inline {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.85em;
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0.05em 0.34em;
+    color: var(--ink);
+  }
+
+  /* ---------- the honest-limits block ---------- */
+
+  .limits {
+    background: var(--caution-soft);
+    border: 1px solid color-mix(in oklab, var(--caution) 30%, transparent);
+    border-radius: var(--radius);
+    padding: clamp(1.25rem, 4vw, 1.75rem);
+  }
+
+  .limits h2 { color: var(--caution); margin-bottom: 0.75rem; }
+
+  .limits ul { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.6rem; }
+
+  .limits li { color: var(--ink); }
+
+  .limits li strong { font-weight: 600; }
+
+  /* ---------- check-this box ---------- */
+
+  .verify {
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    padding: clamp(1.25rem, 4vw, 1.75rem);
+    background: var(--surface);
+  }
+
+  .verify h2 { font-size: var(--step-1); margin-bottom: 0.9rem; }
+
+  ol.steps { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; }
+
+  ol.steps li { color: var(--ink-muted); }
+  ol.steps li strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- closing ---------- */
+
+  footer {
+    margin-top: clamp(3rem, 8vw, 5rem);
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+  }
+
+  footer p { margin: 0 0 0.5rem; }
+  footer p:last-child { margin-bottom: 0; }
+
+  @media (max-width: 30rem) {
+    ul.rows > li { grid-template-columns: 1fr; gap: 0.6rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Modified Android build</p>
+    <h1>What's different in this Discord</h1>
+    <p class="standfirst">
+      Nothing about how you chat, call or browse has been redesigned. Every change
+      sits behind the scenes — this version <strong>stops reporting on you</strong>,
+      <strong>stops trying to sell you things</strong>, and <strong>doesn't freeze
+      in calls</strong>.
+    </p>
+
+    <dl class="tally">
+      <div><dt>Reporters disabled</dt><dd>~100</dd></div>
+      <div><dt>Ad networks off</dt><dd>11</dd></div>
+      <div><dt>Freeze causes fixed</dt><dd>6</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2>What you'll actually notice</h2>
+    <ul class="rows">
+      <li>
+        <span class="chip">Gone</span>
+        <div class="row-body">
+          <b>No ads, no Nitro popups, no "get more" buttons</b>
+          <p>Tapping where they used to be does nothing, instead of opening a sales page.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Gone</span>
+        <div class="row-body">
+          <b>No Spotify</b>
+          <p>The integration is removed on purpose — see the note below before reporting it.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Gone</span>
+        <div class="row-body">
+          <b>The Shop and Quest areas have disappeared</b>
+          <p>Including the quest panel that used to overlay the app, and the guild shop row in the sidebar.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Better</span>
+        <div class="row-body">
+          <b>Calls are more stable</b>
+          <p>The specific bug where a call dropped but the notification still said you were connected is fixed.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Better</span>
+        <div class="row-body">
+          <b>Lighter on the phone</b>
+          <p>Less happening in the background means better battery life and fewer stutters.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>It stops reporting what you do</h2>
+    <p class="lede">
+      Discord normally sends a steady stream of information about how you use the
+      app — which screens you open, which buttons you press, how long sessions last,
+      how well your device is performing. All of it is switched off.
+    </p>
+    <ul class="rows">
+      <li>
+        <span class="chip">Off</span>
+        <div class="row-body">
+          <b>Usage tracking</b>
+          <p>Roughly a hundred separate places in the app that used to report activity now do nothing at all.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Off</span>
+        <div class="row-body">
+          <b>The crash reporter, at every level</b>
+          <p>Sentry is disabled three times over: the part built into the app, the part inside the JavaScript engine, and the part that would normally start by itself at launch.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Off</span>
+        <div class="row-body">
+          <b>Your user ID in the phone's system log</b>
+          <p>During a call the app used to write your ID — and everyone else's — into the system log every single second. It doesn't any more.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Off</span>
+        <div class="row-body">
+          <b>Telling Discord the app is modified</b>
+          <p>The app no longer flags itself as altered when it connects.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Advertising and attribution</h2>
+    <p class="lede">
+      These are the services apps use to work out who installed them and how to
+      target advertising. Every one is disabled, both in the app and at the network
+      level.
+    </p>
+    <ul class="rows">
+      <li>
+        <span class="chip">Blocked</span>
+        <div class="row-body">
+          <b>AppsFlyer</b>
+          <p>Including its short-link domain, used for tracking which link an install came from.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Blocked</span>
+        <div class="row-body">
+          <b>Google Analytics and Firebase Analytics</b>
+          <p>Firebase's messaging service is deliberately left working — that's what delivers your push notifications.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Removed</span>
+        <div class="row-body">
+          <b>Google's advertising ID</b>
+          <p>The permission is stripped out of the app entirely, so it can't ask for it even if it wanted to.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Blocked</span>
+        <div class="row-body">
+          <b>The rest</b>
+          <p>Adjust · Amplitude · Segment · Braintree's analytics · Google's mobile-ads beacon · PayPal's conversion tracking · the Play Store install referrer.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Shops, quests and Nitro</h2>
+    <p class="lede">
+      Everything that exists to take payment or drive engagement is blocked or
+      hidden. <strong>Nothing is broken by this</strong> — if you already have
+      Nitro, it still works. The app just stops advertising it to you.
+    </p>
+    <ul class="rows">
+      <li>
+        <span class="chip">Blocked</span>
+        <div class="row-body">
+          <b>The Shop</b>
+          <p>Every storefront, price, catalogue and purchase request is refused before it leaves the phone.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Hidden</span>
+        <div class="row-body">
+          <b>Quests</b>
+          <p>The panel that overlaid the app is hidden and quest data is never requested.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Hidden</span>
+        <div class="row-body">
+          <b>Nitro popups, banners and gift buttons</b>
+          <p>The two internal entry points every sales prompt goes through are switched off, so none of them open.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Blocked</span>
+        <div class="row-body">
+          <b>Guild boosts, gifts, wishlists, virtual currency, role subscriptions, referrals and promotions</b>
+          <p>All refused at the network.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Spotify — this one is on purpose</h2>
+    <p class="lede">
+      The Spotify integration is switched off: connecting an account, "Listen
+      Along", the Spotify card on your profile, and the app announcing what you're
+      listening to. <strong>This was a deliberate decision when the build was made.</strong>
+      Please don't report it as something that needs fixing.
+    </p>
+  </section>
+
+  <section>
+    <h2>Privacy</h2>
+    <ul class="rows">
+      <li>
+        <span class="chip">Off</span>
+        <div class="row-body">
+          <b>Your contacts are no longer read</b>
+          <p>The app used to read your address book to suggest friends. It now returns an empty list instead.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Off</span>
+        <div class="row-body">
+          <b>It no longer checks what else you have installed</b>
+          <p>Discord used to probe your phone for around twenty different social and gaming apps.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Closed</span>
+        <div class="row-body">
+          <b>The game-integration service is no longer exposed</b>
+          <p>It used to be reachable by any other app on your phone, with no permission check at all.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>The freeze fixes</h2>
+    <p class="lede">
+      The original problem was a call that froze the phone and then dropped, while
+      the notification still claimed you were connected. Several separate causes
+      turned up.
+    </p>
+    <ul class="rows">
+      <li>
+        <span class="chip">Fixed</span>
+        <div class="row-body">
+          <b>Calls dropping while still showing "connected"</b>
+          <p>When you put the app in the background mid-call, Android was demoting the call from a <em>microphone</em> task to a <em>background data</em> task — which silently cuts your microphone. The app now keeps claiming the microphone. This is the main fix.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Fixed</span>
+        <div class="row-body">
+          <b>The app was making its own freezes worse</b>
+          <p>When it noticed its JavaScript was struggling, it responded by taking a full performance profile of the struggling code, writing it to disk and reading it back — more work, at the worst moment. That's gone.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Fixed</span>
+        <div class="row-body">
+          <b>A timer that ran forever</b>
+          <p>Every video tile had a timer firing every four seconds, doing work whose result was thrown away.</p>
+        </div>
+      </li>
+      <li>
+        <span class="chip">Fixed</span>
+        <div class="row-body">
+          <b>Every network request was doing unnecessary work</b>
+          <p>The app was assembling a copy of all its own request headers — including one that's several kilobytes long — then searching that text 81 times. On every single request. It now looks only at the web address.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <section class="limits">
+    <h2>What has <em>not</em> changed</h2>
+    <ul>
+      <li><strong>Messaging, voice, video, notifications and file uploads all work normally.</strong></li>
+      <li><strong>Push notifications work.</strong> An earlier version broke them; that was fixed.</li>
+      <li><strong>Wishlist and profile decorations were not hidden.</strong> Those screens still work as normal — that piece wasn't finished.</li>
+      <li><strong>A few Nitro elements remain inside the app's compiled code</strong> — some emoji picker decorations. They can't be removed without editing compiled binaries.</li>
+      <li><strong>You can't buy anything.</strong> That's a consequence, not a bug. If you need to make a purchase, use the official Discord app.</li>
+      <li><strong>You are not anonymous.</strong> This build stops the extra reporting; Discord can still identify you from your account, your IP address and normal usage.</li>
+    </ul>
+  </section>
+
+  <section class="verify">
+    <h2>Worth checking after your next call</h2>
+    <ol class="steps">
+      <li><strong>Start a call, then press home.</strong> Wait a minute and come back. If the call is still connected, the main fix is working.</li>
+      <li><strong>Check audio and video still behave</strong> normally in a call.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>If you hit a problem, note what you were doing at the time and pass it on.</p>
+    <p>Built from the official Discord release, signature-verified before modification.</p>
+  </footer>
+
+</div>

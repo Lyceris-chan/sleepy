@@ -1,0 +1,328 @@
+0000  CreateFunctionEnvironment r4, 9
+0003  LoadParam r3, 1
+0006  GetById r15, r3, 0, "navigateToSettings"
+000c  StoreToEnvironment r4, 0, r15
+0010  GetById r10, r3, 1, "navigateToPremium"
+0016  StoreToEnvironment r4, 1, r10
+001a  GetById r19, r3, 2, "navigateToShop"
+0020  GetById r22, r3, 3, "shopButtonRef"
+0026  GetByIdLong r17, r3, 4, "settingsButtonRef"
+002e  GetById r18, r3, 5, "paddingBottom"
+0034  LoadConstUndefined r1
+0036  JStrictNotEqual L60, r18, r1
+003a  LoadConstZero r18
+L60:
+003c  GetParentEnvironment r3, 0
+003f  StoreNPToEnvironment r4, 2, r1
+0043  StoreNPToEnvironment r4, 3, r1
+0047  StoreNPToEnvironment r4, 4, r1
+004b  StoreNPToEnvironment r4, 5, r1
+004f  StoreNPToEnvironment r4, 6, r1
+0053  StoreNPToEnvironment r4, 7, r1
+0057  StoreNPToEnvironment r4, 8, r1
+005b  LoadFromEnvironment r6, r3, 6
+005f  CreateClosureLongIndex r5, r3, 127421
+0066  Call2 r14, r6, r1, r5
+006b  LoadFromEnvironment r12, r3, 0
+006f  LoadFromEnvironment r6, r3, 2
+0073  GetByIndex r5, r6, 16
+0077  Call2 r9, r12, r1, r5
+007c  GetByIdShort r8, r9, 6, "useStateFromStores"
+0081  LoadFromEnvironment r5, r3, 7
+0085  NewArray r7, 1
+0089  DefineOwnInDenseArray r7, r5, 0
+008d  CreateClosureLongIndex r5, r3, 127422
+0094  Call3 r13, r8, r9, r7, r5
+009a  LoadFromEnvironment r7, r3, 1
+009e  GetByIndex r5, r6, 17
+00a2  Call2 r9, r7, r1, r5
+00a7  LoadConstNull r8
+00a9  Eq r2, r13, r8
+00ad  LoadConstUndefined r5
+00af  JmpTrue L183, r2
+00b2  GetByIdShort r5, r13, 7, "id"
+L183:
+00b7  Call2 r11, r9, r1, r5
+00bc  GetByIndex r5, r6, 18
+00c0  Call2 r9, r7, r1, r5
+00c5  NewObjectWithBufferLong r5, 14036, 314546
+00cf  PutOwnBySlotIdx r5, r13, 0
+00d3  PutOwnBySlotIdx r5, r11, 1
+00d7  Call2 r9, r9, r1, r5
+00dc  GetByIdShort r23, r9, 8, "theme"
+00e1  GetById r5, r9, 9, "primaryColor"
+00e7  GetById r13, r9, 10, "secondaryColor"
+00ed  GetByIndex r9, r6, 19
+00f1  Call2 r16, r12, r1, r9
+00f6  GetById r11, r16, 11, "useUserProfileColors"
+00fc  NewObjectWithBufferLong r9, 14030, 313591
+0106  PutOwnBySlotIdx r9, r23, 0
+010a  PutOwnBySlotIdx r9, r5, 1
+010e  PutOwnBySlotIdx r9, r13, 2
+0112  Call2 r11, r11, r16, r9
+0117  GetById r9, r11, 12, "containerBackground"
+011d  GetById r16, r11, 13, "containerBorderColor"
+0123  GetById r11, r11, 14, "gradientSecondaryBackground"
+0129  StoreToEnvironment r4, 2, r11
+012d  GetByIndex r20, r6, 20
+0131  Call2 r21, r12, r1, r20
+0136  GetById r20, r21, 15, "isThemeLight"
+013c  Call2 r20, r20, r21, r23
+0141  JmpFalse L342, r20
+0144  Neq r2, r8, r5
+0148  LoadConstNull r5
+014a  JmpFalse L345, r2
+014d  Neq r2, r8, r13
+0151  LoadConstNull r5
+0153  JmpFalse L345, r2
+L342:
+0156  Mov r5, r9
+L345:
+0159  StoreToEnvironment r4, 3, r5
+015d  LoadFromEnvironment r13, r3, 3
+0161  GetByIdShort r20, r13, 16, "useMemo"
+0166  NewArray r9, 2
+016a  DefineOwnInDenseArray r9, r11, 0
+016e  DefineOwnInDenseArray r9, r5, 1
+0172  CreateClosureLongIndex r5, r4, 127423
+0179  Call3 r32, r20, r13, r5, r9
+017f  LoadFromEnvironment r5, r3, 12
+0183  LoadConstUndefined r34
+0185  Mov r33, r18
+0188  Mov r31, r11
+018b  Mov r30, r16
+018e  Call r11, r5, 5
+0192  GetByIndex r5, r6, 22
+0196  Call2 r9, r12, r1, r5
+019b  GetById r5, r9, 17, "useHasPremiumSubscriptionToDisplay"
+01a1  Call1 r18, r5, r9
+01a5  LoadFromEnvironment r5, r3, 13
+01a9  Call1 r5, r5, r1
+01ad  StoreToEnvironment r4, 4, r5
+01b1  GetByIndex r9, r6, 23
+01b5  Call2 r9, r7, r1, r9
+01ba  Call1 r9, r9, r1
+01be  GetById r20, r9, 18, "showBadge"
+01c4  StoreToEnvironment r4, 5, r20
+01c8  GetById r9, r9, 19, "dismissBadge"
+01ce  StoreToEnvironment r4, 6, r9
+01d2  GetByIndex r16, r6, 24
+01d6  Call2 r21, r12, r1, r16
+01db  GetById r16, r21, 20, "getIsEligibleForQuests"
+01e1  Call1 r21, r16, r21
+01e5  GetByIndex r16, r6, 25
+01e9  Call2 r24, r12, r1, r16
+01ee  GetByIdLong r23, r24, 21, "useHasVibegrationsGuild"
+01f6  LoadConstStringLongIndex r16, "YouBannerDecorations"
+01fc  Call2 r23, r23, r24, r16
+0201  GetByIndex r16, r6, 12
+0205  Call2 r25, r12, r1, r16
+020a  GetById r24, r25, 22, "useTrialOffer"
+0210  LoadFromEnvironment r16, r3, 9
+0214  Call2 r16, r24, r25, r16
+0219  Neq r2, r8, r16
+021d  StoreNPToEnvironment r4, 7, r2
+0221  GetByIdShort r24, r13, 23, "useCallback"
+0226  NewArray r16, 3
+022a  DefineOwnInDenseArray r16, r5, 0
+022e  DefineOwnInDenseArray r16, r15, 1
+0232  DefineOwnInDenseArray r16, r2, 2
+0236  CreateClosureLongIndex r15, r4, 127424
+023d  Call3 r16, r24, r13, r15, r16
+0243  GetByIdShort r24, r13, 23, "useCallback"
+0248  NewArray r15, 1
+024c  DefineOwnInDenseArray r15, r10, 0
+0250  CreateClosureLongIndex r10, r4, 127425
+0257  Call3 r15, r24, r13, r10, r15
+025d  GetByIdShort r24, r13, 23, "useCallback"
+0262  NewArray r10, 2
+0266  DefineOwnInDenseArray r10, r20, 0
+026a  DefineOwnInDenseArray r10, r9, 1
+026e  CreateClosureLongIndex r9, r4, 127426
+0275  Call3 r25, r24, r13, r9, r10
+027b  GetByIdShort r24, r13, 23, "useCallback"
+0280  NewArray r10, 0
+0284  CreateClosureLongIndex r9, r3, 127427
+028b  Call3 r9, r24, r13, r9, r10
+0291  LoadConstNull r10
+0293  JmpFalse L762, r23
+0296  LoadFromEnvironment r26, r3, 10
+029a  GetByIndex r23, r6, 32
+029e  Call2 r24, r7, r1, r23
+02a3  NewObjectWithBufferLong r23, 25591, 313591
+02ad  GetByIndex r27, r6, 33
+02b1  Call2 r27, r12, r1, r27
+02b6  GetById r27, r27, 24, "MagicWandIcon"
+02bc  PutOwnBySlotIdx r23, r27, 0
+02c0  GetByIndex r27, r6, 15
+02c4  Call2 r27, r12, r1, r27
+02c9  GetByIdShort r29, r27, 25, "intl"
+02ce  GetByIdShort r28, r29, 26, "string"
+02d3  GetByIndex r27, r6, 34
+02d7  Call2 r27, r7, r1, r27
+02dc  GetById r27, r27, 27, "ZnvpQR"
+02e2  Call2 r27, r28, r29, r27
+02e7  PutOwnBySlotIdx r23, r27, 1
+02eb  PutOwnBySlotIdx r23, r9, 2
+02ef  LoadConstString r9, "vibegrations"
+02f3  Call4 r10, r26, r1, r24, r23, r9
+L762:
+02fa  NewArray r9, 5
+02fe  DefineOwnInDenseArray r9, r10, 0
+0302  LoadConstNull r10
+0304  JmpFalse L884, r10
+0307  LoadFromEnvironment r24, r3, 10
+030b  GetByIndex r21, r6, 32
+030f  Call2 r23, r7, r1, r21
+0314  NewObjectWithBufferLong r21, 25592, 313595
+031e  GetByIndex r26, r6, 35
+0322  Call2 r26, r12, r1, r26
+0327  GetById r26, r26, 28, "QuestsIcon"
+032d  PutOwnBySlotIdx r21, r26, 0
+0331  GetByIndex r26, r6, 15
+0335  Call2 r26, r12, r1, r26
+033a  GetByIdShort r28, r26, 25, "intl"
+033f  GetByIdShort r27, r28, 26, "string"
+0344  GetByIndex r26, r6, 15
+0348  Call2 r26, r12, r1, r26
+034d  GetByIdShort r26, r26, 29, "t"
+0352  GetById r26, r26, 30, "JALI2K"
+0358  Call2 r26, r27, r28, r26
+035d  PutOwnBySlotIdx r21, r26, 1
+0361  PutOwnBySlotIdx r21, r25, 2
+0365  PutOwnBySlotIdx r21, r20, 3
+0369  LoadConstString r20, "quests"
+036d  Call4 r10, r24, r1, r23, r21, r20
+L884:
+0374  DefineOwnInDenseArray r9, r10, 1
+0378  LoadFromEnvironment r10, r3, 10
+037c  GetByIndex r20, r6, 36
+0380  Call2 r21, r7, r1, r20
+0385  NewObjectWithBufferLong r20, 25593, 314546
+038f  PutOwnBySlotIdx r20, r22, 0
+0393  PutOwnBySlotIdx r20, r19, 1
+0397  LoadConstString r19, "shop"
+039b  Call4 r19, r10, r1, r21, r20, r19
+03a2  DefineOwnInDenseArray r9, r19, 2
+03a6  LoadConstNull r8
+03a8  JmpTrueLong L1091, r18
+03ae  GetByIndex r18, r6, 32
+03b2  Call2 r19, r7, r1, r18
+03b7  NewObjectWithBufferLong r18, 25594, 313595
+03c1  GetByIndex r20, r6, 37
+03c5  Call2 r20, r12, r1, r20
+03ca  GetById r20, r20, 31, "NitroWheelIcon"
+03d0  PutOwnBySlotIdx r18, r20, 0
+03d4  GetByIndex r20, r6, 15
+03d8  Call2 r20, r12, r1, r20
+03dd  GetByIdShort r22, r20, 25, "intl"
+03e2  GetByIdShort r21, r22, 26, "string"
+03e7  GetByIndex r20, r6, 15
+03eb  Call2 r20, r12, r1, r20
+03f0  GetByIdShort r20, r20, 29, "t"
+03f5  GetById r20, r20, 32, "Ipxkog"
+03fb  Call2 r20, r21, r22, r20
+0400  PutOwnBySlotIdx r18, r20, 1
+0404  GetByIndex r20, r6, 15
+0408  Call2 r20, r12, r1, r20
+040d  GetByIdShort r22, r20, 25, "intl"
+0412  GetByIdShort r21, r22, 26, "string"
+0417  GetByIndex r20, r6, 15
+041b  Call2 r20, r12, r1, r20
+0420  GetByIdShort r20, r20, 29, "t"
+0425  GetById r20, r20, 32, "Ipxkog"
+042b  Call2 r20, r21, r22, r20
+0430  PutOwnBySlotIdx r18, r20, 2
+0434  PutOwnBySlotIdx r18, r15, 3
+0438  LoadConstString r15, "nitro"
+043c  Call4 r8, r10, r1, r19, r18, r15
+L1091:
+0443  DefineOwnInDenseArray r9, r8, 3
+0447  GetByIndex r8, r6, 32
+044b  Call2 r15, r7, r1, r8
+0450  NewObjectWithBufferLong r8, 25595, 544703
+045a  PutOwnBySlotIdx r8, r17, 0
+045e  GetByIndex r17, r6, 38
+0462  Call2 r17, r12, r1, r17
+0467  GetById r17, r17, 33, "SettingsIcon"
+046d  PutOwnBySlotIdx r8, r17, 1
+0471  GetByIndex r17, r6, 15
+0475  Call2 r17, r12, r1, r17
+047a  GetByIdShort r19, r17, 25, "intl"
+047f  GetByIdShort r18, r19, 26, "string"
+0484  GetByIndex r17, r6, 15
+0488  Call2 r17, r12, r1, r17
+048d  GetByIdShort r17, r17, 29, "t"
+0492  GetById r17, r17, 34, "3D5yo/"
+0498  Call2 r17, r18, r19, r17
+049d  PutOwnBySlotIdx r8, r17, 2
+04a1  PutOwnBySlotIdx r8, r16, 3
+04a5  PutOwnBySlotIdx r8, r5, 4
+04a9  LoadConstString r5, "settings"
+04ad  Call4 r5, r10, r1, r15, r8, r5
+04b4  DefineOwnInDenseArray r9, r5, 4
+04b8  GetByIdShort r8, r9, 35, "filter"
+04bd  CreateClosureLongIndex r5, r1, 127428
+04c4  Call2 r15, r8, r9, r5
+04c9  LoadFromEnvironment r5, r3, 4
+04cd  NewObjectWithBufferLong r8, 9223, 2371675
+04d7  GetByIdLong r9, r11, 36, "buttonsFloating"
+04df  PutOwnBySlotIdx r8, r9, 0
+04e3  GetByIndex r9, r6, 39
+04e7  Call2 r9, r12, r1, r9
+04ec  GetByIdLong r12, r9, 37, "YouScreenNavIconMeasurer"
+04f4  NewObjectWithBuffer r9, 8485, 52600
+04fa  PutOwnBySlotIdx r9, r15, 0
+04fe  Call4 r9, r10, r1, r12, r9, r14
+0505  PutOwnBySlotIdx r8, r9, 2
+0509  Call3 r12, r10, r1, r5, r8
+050f  GetById r8, r11, 38, "containerFloatingGradient"
+0515  GetByIdShort r14, r8, 39, "color"
+051a  StoreToEnvironment r4, 8, r14
+051e  GetByIdShort r9, r13, 16, "useMemo"
+0523  NewArray r8, 1
+0527  DefineOwnInDenseArray r8, r14, 0
+052b  CreateClosureLongIndex r4, r4, 127429
+0532  Call3 r32, r9, r13, r4, r8
+0538  LoadFromEnvironment r4, r3, 11
+053c  NewObjectWithBufferLong r3, 9223, 2371675
+0546  GetByIdLong r9, r11, 40, "containerFloatingWrap"
+054e  PutOwnBySlotIdx r3, r9, 0
+0552  GetByIndex r6, r6, 40
+0556  Call2 r7, r7, r1, r6
+055b  NewObjectWithBuffer r6, 430, 52600
+0561  GetById r9, r11, 38, "containerFloatingGradient"
+0567  PutOwnBySlotIdx r6, r9, 0
+056b  Mov r33, r6
+056e  CallBuiltin r8, 46, 3
+0572  LoadConstString r8, "none"
+0576  DefineOwnById r6, r8, 0, "pointerEvents"
+057c  Call3 r7, r10, r1, r7, r6
+0582  NewArray r6, 2
+0586  DefineOwnInDenseArray r6, r7, 0
+058a  NewObjectWithBufferLong r7, 9231, 314546
+0594  GetByIdLong r8, r11, 41, "containerFloating"
+059c  PutOwnBySlotIdx r7, r8, 0
+05a0  NewObjectWithBufferLong r8, 12240, 2005538
+05aa  GetById r9, r11, 42, "endcap"
+05b0  PutOwnBySlotIdx r8, r9, 0
+05b4  Call3 r9, r10, r1, r5, r8
+05ba  NewArray r8, 3
+05be  DefineOwnInDenseArray r8, r9, 0
+05c2  NewObjectWithBufferLong r9, 9231, 314546
+05cc  GetByIdLong r13, r11, 43, "containerFloatingContent"
+05d4  PutOwnBySlotIdx r9, r13, 0
+05d8  PutOwnBySlotIdx r9, r12, 1
+05dc  Call3 r9, r10, r1, r5, r9
+05e2  DefineOwnInDenseArray r8, r9, 1
+05e6  NewObjectWithBufferLong r9, 12240, 2005538
+05f0  GetById r11, r11, 42, "endcap"
+05f6  PutOwnBySlotIdx r9, r11, 0
+05fa  Call3 r9, r10, r1, r5, r9
+0600  DefineOwnInDenseArray r8, r9, 2
+0604  PutOwnBySlotIdx r7, r8, 1
+0608  Call3 r7, r4, r1, r5, r7
+060e  DefineOwnInDenseArray r6, r7, 1
+0612  PutOwnBySlotIdx r3, r6, 2
+0616  Call3 r3, r4, r1, r5, r3
+061c  Ret r3

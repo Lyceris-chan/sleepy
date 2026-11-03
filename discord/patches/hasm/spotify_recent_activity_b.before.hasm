@@ -1,0 +1,55 @@
+0000  GetParentEnvironment r3, 1
+0003  CreateEnvironment r5, r3, 1
+000a  LoadParam r7, 1
+000d  StoreToEnvironment r5, 0, r7
+0011  LoadFromEnvironment r8, r3, 0
+0015  LoadFromEnvironment r4, r3, 2
+0019  GetByIndex r3, r4, 10
+001d  LoadConstUndefined r1
+001f  Call2 r6, r8, r1, r3
+0024  GetById r3, r6, 0, "isEntryLive"
+002a  Call2 r6, r3, r6, r7
+002f  Not r3, r6
+0032  JmpTrueLong L211, r6
+0038  GetParentEnvironment r6, 0
+003b  GetByIndex r9, r4, 11
+003f  Call2 r10, r8, r1, r9
+0044  GetById r9, r10, 1, "isListenedSessionEntry"
+004a  Call2 r9, r9, r10, r7
+004f  JmpTrue L154, r9
+0052  GetByIndex r9, r4, 11
+0056  Call2 r10, r8, r1, r9
+005b  GetById r9, r10, 2, "isWatchedMediaEntry"
+0061  Call2 r9, r9, r10, r7
+0066  JmpTrue L127, r9
+0069  GetByIndex r4, r4, 11
+006d  Call2 r8, r8, r1, r4
+0072  GetById r4, r8, 3, "isRecentActivityEntry"
+0078  Call2 r4, r4, r8, r7
+007d  Jmp L152
+L127:
+007f  LoadFromEnvironment r10, r6, 1
+0083  GetById r9, r10, 4, "some"
+0089  CreateClosureLongIndex r8, r5, 142675
+0090  Call2 r8, r9, r10, r8
+0095  Not r4, r8
+L152:
+0098  Jmp L208
+L154:
+009a  GetById r7, r7, 5, "extra"
+00a0  GetById r7, r7, 6, "entries"
+00a6  GetByIdShort r7, r7, 7, "length"
+00ab  LoadConstZero r0
+00ad  Greater r1, r7, r0
+00b1  JmpFalse L205, r1
+00b4  LoadFromEnvironment r7, r6, 1
+00b8  GetById r6, r7, 4, "some"
+00be  CreateClosureLongIndex r5, r5, 142674
+00c5  Call2 r5, r6, r7, r5
+00ca  Not r1, r5
+L205:
+00cd  Mov r4, r1
+L208:
+00d0  Mov r3, r4
+L211:
+00d3  Ret r3

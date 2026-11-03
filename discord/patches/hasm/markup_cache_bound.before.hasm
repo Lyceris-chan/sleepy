@@ -1,0 +1,79 @@
+0000  CreateFunctionEnvironment r3, 8
+0003  LoadParam r6, 2
+0006  StoreToEnvironment r3, 0, r6
+000a  LoadParam r8, 3
+000d  StoreToEnvironment r3, 1, r8
+0011  LoadParam r4, 6
+0014  LoadParam r5, 7
+0017  StoreToEnvironment r3, 2, r5
+001b  GetGlobalObject r7
+001d  TryGetById r11, r7, 0, "Object"
+0023  GetByIdShort r10, r11, 1, "defineProperty"
+0028  LoadConstString r9, "__esModule"
+002c  NewObjectWithBufferLong r7, 4, 551076
+0036  Call4 r7, r10, r11, r4, r9, r7
+003d  GetByIndex r7, r5, 0
+0041  LoadConstUndefined r1
+0043  Call2 r7, r6, r1, r7
+0048  GetById r7, r7, 2, "MessageTypes"
+004e  StoreToEnvironment r3, 3, r7
+0052  NewObjectWithBufferLong r9, 2472, 603310
+005c  GetByIndex r7, r5, 1
+0060  Call2 r7, r8, r1, r7
+0065  GetById r7, r7, 3, "Millis"
+006b  GetById r7, r7, 4, "MINUTE"
+0071  LoadConstUInt8 r0, 15
+0074  Mul r0, r0, r7
+0078  PutOwnBySlotIdx r9, r0, 1
+007c  GetByIndex r7, r5, 2
+0080  Call2 r7, r8, r1, r7
+0085  CreateThisForNew r10, r7, 5
+0089  Mov r15, r10
+008c  Mov r14, r9
+008f  Construct r7, r7, 2
+0093  SelectObject r7, r10, r7
+0097  StoreToEnvironment r3, 4, r7
+009b  GetByIndex r7, r5, 2
+009f  Call2 r7, r8, r1, r7
+00a4  CreateThisForNew r10, r7, 5
+00a8  Mov r15, r10
+00ab  Mov r14, r9
+00ae  Construct r7, r7, 2
+00b2  SelectObject r7, r10, r7
+00b6  StoreToEnvironment r3, 5, r7
+00ba  GetByIndex r7, r5, 2
+00be  Call2 r11, r8, r1, r7
+00c3  NewObject r7
+00c5  Mov r14, r7
+00c8  Mov r13, r9
+00cb  CallBuiltin r10, 46, 3
+00cf  LoadConstFalse r2
+00d1  DefineOwnById r7, r2, 0, "updateAgeOnGet"
+00d7  CreateThisForNew r10, r11, 5
+00db  Mov r15, r10
+00de  Mov r14, r7
+00e1  Construct r7, r11, 2
+00e5  SelectObject r7, r10, r7
+00e9  StoreToEnvironment r3, 6, r7
+00ed  GetByIndex r7, r5, 2
+00f1  Call2 r7, r8, r1, r7
+00f6  CreateThisForNew r8, r7, 5
+00fa  Mov r15, r8
+00fd  Mov r14, r9
+0100  Construct r7, r7, 2
+0104  SelectObject r7, r8, r7
+0108  StoreToEnvironment r3, 7, r7
+010c  GetByIndex r5, r5, 9
+0110  Call2 r7, r6, r1, r5
+0115  GetByIdShort r6, r7, 6, "fileFinishedImporting"
+011a  LoadConstStringLongIndex r5, "modules/messages/native/renderer/MarkupParsers.tsx"
+0120  Call2 r5, r6, r7, r5
+0125  CreateClosure r5, r3, 47596
+012a  PutByIdStrict r4, r5, 1, "parseEmbedTitleMarkup"
+0130  CreateClosure r5, r3, 47597
+0135  PutByIdStrictLong r4, r5, 2, "parseEmbedTitleMarkupWithoutLinks"
+013d  CreateClosure r5, r3, 47598
+0142  PutByIdStrict r4, r5, 3, "parseEmbedDescriptionMarkup"
+0148  CreateClosure r3, r3, 47599
+014d  PutByIdStrictLong r4, r3, 4, "parseMessageMarkup"
+0155  Ret r1

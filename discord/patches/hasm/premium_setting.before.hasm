@@ -1,0 +1,60 @@
+0000  CreateFunctionEnvironment r8, 7
+0003  LoadParam r4, 2
+0006  StoreToEnvironment r8, 0, r4
+000a  LoadParam r5, 3
+000d  StoreToEnvironment r8, 1, r5
+0011  LoadParam r2, 6
+0014  LoadParam r3, 7
+0017  StoreToEnvironment r8, 2, r3
+001b  GetGlobalObject r1
+001d  TryGetById r9, r1, 0, "Object"
+0023  GetByIdShort r7, r9, 1, "defineProperty"
+0028  LoadConstString r6, "__esModule"
+002c  NewObjectWithBufferLong r1, 4, 551076
+0036  Call4 r1, r7, r9, r2, r6, r1
+003d  GetByIndex r6, r3, 0
+0041  LoadConstUndefined r0
+0043  LoadParam r1, 4
+0046  Call2 r1, r1, r0, r6
+004b  StoreToEnvironment r8, 3, r1
+004f  GetByIndex r1, r3, 1
+0053  Call2 r1, r5, r0, r1
+0058  StoreToEnvironment r8, 4, r1
+005c  GetByIndex r1, r3, 2
+0060  Call2 r1, r5, r0, r1
+0065  StoreToEnvironment r8, 5, r1
+0069  GetByIndex r1, r3, 3
+006d  Call2 r1, r4, r0, r1
+0072  GetById r9, r1, 2, "UserSettingsSections"
+0078  GetByIndex r1, r3, 4
+007c  Call2 r1, r4, r0, r1
+0081  GetByIdShort r1, r1, 3, "jsx"
+0086  StoreToEnvironment r8, 6, r1
+008a  GetByIndex r1, r3, 10
+008e  Call2 r6, r4, r0, r1
+0093  GetById r5, r6, 4, "createRoute"
+0099  NewObjectWithBufferLong r1, 7462, 551085
+00a3  CreateClosureLongIndex r7, r8, 69688
+00aa  PutOwnBySlotIdx r1, r7, 0
+00ae  GetByIndex r7, r3, 11
+00b2  Call2 r7, r4, r0, r7
+00b7  GetById r7, r7, 5, "NitroWheelIcon"
+00bd  PutOwnBySlotIdx r1, r7, 2
+00c1  CreateClosureLongIndex r7, r8, 69689
+00c8  PutOwnBySlotIdx r1, r7, 3
+00cc  CreateClosureLongIndex r7, r8, 69690
+00d3  PutOwnBySlotIdx r1, r7, 4
+00d7  NewObjectWithBufferLong r7, 7095, 275111
+00e1  GetById r9, r9, 6, "PREMIUM"
+00e7  PutOwnBySlotIdx r7, r9, 0
+00eb  CreateClosureLongIndex r8, r8, 69691
+00f2  PutOwnBySlotIdx r7, r8, 1
+00f6  PutOwnBySlotIdx r1, r7, 5
+00fa  Call2 r1, r5, r6, r1
+00ff  GetByIndex r3, r3, 13
+0103  Call2 r5, r4, r0, r3
+0108  GetByIdShort r4, r5, 7, "fileFinishedImporting"
+010d  LoadConstStringLongIndex r3, "modules/user_settings/defs/native/PremiumSetting.tsx"
+0113  Call2 r3, r4, r5, r3
+0118  PutByIdStrict r2, r1, 0, "default"
+011e  Ret r0

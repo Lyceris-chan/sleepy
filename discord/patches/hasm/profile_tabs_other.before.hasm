@@ -1,0 +1,130 @@
+0000  GetParentEnvironment r5, 0
+0003  NewObjectWithBufferLong r3, 20455, 3013331
+000d  GetParentEnvironment r6, 1
+0010  LoadFromEnvironment r10, r6, 0
+0014  LoadFromEnvironment r7, r6, 2
+0018  GetByIndex r2, r7, 30
+001c  LoadConstUndefined r0
+001e  Call2 r2, r10, r0, r2
+0023  GetByIdShort r8, r2, 0, "intl"
+0028  GetByIdShort r4, r8, 1, "string"
+002d  GetByIndex r2, r7, 30
+0031  Call2 r2, r10, r0, r2
+0036  GetByIdShort r2, r2, 2, "t"
+003b  GetById r2, r2, 3, "LXw470"
+0041  Call2 r2, r4, r8, r2
+0046  PutOwnBySlotIdx r3, r2, 1
+004a  LoadFromEnvironment r2, r5, 39
+004e  Call1 r2, r2, r0
+0052  PutOwnBySlotIdx r3, r2, 2
+0056  NewArray r2, 1
+005a  DefineOwnInDenseArray r2, r3, 0
+005e  LoadFromEnvironment r3, r5, 25
+0062  JmpFalseLong L237, r3
+0068  GetByIdShort r4, r2, 4, "push"
+006d  NewObjectWithBufferLong r3, 20455, 678002
+0077  GetByIndex r8, r7, 30
+007b  Call2 r8, r10, r0, r8
+0080  GetByIdShort r11, r8, 0, "intl"
+0085  GetByIdShort r9, r11, 1, "string"
+008a  GetByIndex r8, r7, 30
+008e  Call2 r8, r10, r0, r8
+0093  GetByIdShort r8, r8, 2, "t"
+0098  GetById r8, r8, 5, "laViwx"
+009e  Call2 r8, r9, r11, r8
+00a3  PutOwnBySlotIdx r3, r8, 1
+00a7  LoadFromEnvironment r11, r6, 19
+00ab  LoadFromEnvironment r9, r6, 28
+00af  NewObjectWithBufferLong r8, 30355, 275249
+00b9  LoadFromEnvironment r12, r5, 0
+00bd  GetByIdShort r12, r12, 6, "id"
+00c2  PutOwnBySlotIdx r8, r12, 0
+00c6  LoadFromEnvironment r1, r5, 36
+00ca  PutOwnBySlotIdx r8, r1, 1
+00ce  LoadFromEnvironment r1, r5, 11
+00d2  PutOwnBySlotIdx r8, r1, 2
+00d6  LoadFromEnvironment r12, r5, 21
+00da  PutOwnBySlotIdx r8, r12, 3
+00de  Call3 r8, r11, r0, r9, r8
+00e4  PutOwnBySlotIdx r3, r8, 2
+00e8  Call2 r3, r4, r2, r3
+L237:
+00ed  LoadFromEnvironment r3, r5, 26
+00f1  JmpFalse L254, r3
+00f4  LoadFromEnvironment r4, r5, 10
+00f8  LoadConstNull r1
+00fa  Neq r3, r1, r4
+L254:
+00fe  JmpFalseLong L414, r3
+0104  GetByIdShort r4, r2, 4, "push"
+0109  NewObjectWithBufferLong r3, 20455, 958042
+0113  GetByIndex r8, r7, 30
+0117  Call2 r8, r10, r0, r8
+011c  GetByIdShort r11, r8, 0, "intl"
+0121  GetByIdShort r9, r11, 1, "string"
+0126  GetByIndex r8, r7, 30
+012a  Call2 r8, r10, r0, r8
+012f  GetByIdShort r8, r8, 2, "t"
+0134  GetByIdLong r8, r8, 7, "chq59f"
+013c  Call2 r8, r9, r11, r8
+0141  PutOwnBySlotIdx r3, r8, 1
+0145  LoadFromEnvironment r9, r6, 19
+0149  LoadFromEnvironment r8, r6, 29
+014d  NewObjectWithBufferLong r6, 30356, 551326
+0157  LoadFromEnvironment r11, r5, 0
+015b  PutOwnBySlotIdx r6, r11, 0
+015f  LoadFromEnvironment r11, r5, 10
+0163  PutOwnBySlotIdx r6, r11, 1
+0167  LoadFromEnvironment r11, r5, 2
+016b  PutOwnBySlotIdx r6, r11, 2
+016f  LoadFromEnvironment r12, r5, 1
+0173  LoadConstNull r1
+0175  Eq r1, r12, r1
+0179  LoadConstUndefined r11
+017b  JmpTrue L387, r1
+017e  GetByIdShort r11, r12, 6, "id"
+L387:
+0183  PutOwnBySlotIdx r6, r11, 3
+0187  LoadFromEnvironment r11, r5, 21
+018b  PutOwnBySlotIdx r6, r11, 4
+018f  Call3 r6, r9, r0, r8, r6
+0195  PutOwnBySlotIdx r3, r6, 2
+0199  Call2 r3, r4, r2, r3
+L414:
+019e  LoadFromEnvironment r1, r5, 24
+01a2  JmpFalseLong L576, r1
+01a8  GetByIdShort r4, r2, 4, "push"
+01ad  NewObjectWithBufferLong r3, 30357, 1444396
+01b7  GetByIndex r6, r7, 30
+01bb  Call2 r6, r10, r0, r6
+01c0  GetByIdShort r9, r6, 0, "intl"
+01c5  GetByIdShort r8, r9, 1, "string"
+01ca  GetByIndex r6, r7, 30
+01ce  Call2 r6, r10, r0, r6
+01d3  GetByIdShort r6, r6, 2, "t"
+01d8  GetById r6, r6, 8, "7lZ31J"
+01de  Call2 r6, r8, r9, r6
+01e3  PutOwnBySlotIdx r3, r6, 1
+01e7  LoadFromEnvironment r6, r5, 40
+01eb  Call1 r6, r6, r0
+01ef  PutOwnBySlotIdx r3, r6, 2
+01f3  LoadFromEnvironment r6, r5, 27
+01f7  LoadConstUndefined r5
+01f9  JmpFalse L567, r6
+01fc  NewObjectWithBuffer r6, 24162, 57065
+0202  GetByIndex r8, r7, 30
+0206  Call2 r8, r10, r0, r8
+020b  GetByIdShort r9, r8, 0, "intl"
+0210  GetByIdShort r8, r9, 1, "string"
+0215  GetByIndex r7, r7, 30
+0219  Call2 r7, r10, r0, r7
+021e  GetByIdShort r7, r7, 2, "t"
+0223  GetByIdLong r7, r7, 9, "ceMCll"
+022b  Call2 r7, r8, r9, r7
+0230  PutOwnBySlotIdx r6, r7, 0
+0234  Mov r5, r6
+L567:
+0237  PutOwnBySlotIdx r3, r5, 3
+023b  Call2 r3, r4, r2, r3
+L576:
+0240  Ret r2

@@ -1,0 +1,25 @@
+0000  LoadConstUInt8 r4, 1
+0003  LoadConstInt r2, -1
+0009  LoadParam r5, 1
+000c  Mov r1, r4
+000f  Mov r0, r2
+0012  JmpFalse L27, r5
+0015  LoadConstUInt8 r1, 2
+0018  Mov r0, r4
+L27:
+001b  LoadParam r6, 2
+001e  NewObjectWithBufferLong r5, 21399, 275245
+0028  PutOwnBySlotIdx r5, r0, 0
+002c  Mov r0, r1
+002f  Mov r3, r2
+0032  JmpFalse L60, r6
+0035  AddN r0, r1, r4
+0039  Mov r3, r1
+L60:
+003c  LoadParam r6, 3
+003f  PutOwnBySlotIdx r5, r3, 1
+0043  JmpFalse L73, r6
+0046  Mov r2, r2
+L73:
+0049  PutOwnBySlotIdx r5, r2, 2
+004d  Ret r5

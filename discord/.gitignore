@@ -1,0 +1,22 @@
+# Build artefacts and large binaries: everything here is reproducible from
+# patches/ + scripts/ + the toolchain, and the APKs are far over git's limits.
+build/
+dist/
+reference/legacy/
+reference/logs/
+
+# The portable toolchain is downloaded, not committed. The scripts that drive
+# it stay in the repository.
+tools/*
+!tools/*.py
+!tools/*.sh
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Toolchain state
+tools/framework/
+
+# Webhook credential — never commit
+.webhook
