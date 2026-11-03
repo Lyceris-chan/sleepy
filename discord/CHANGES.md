@@ -27,6 +27,12 @@ uploads are unchanged.
 - **The Shop and Quest areas are gone** from the app.
 - **Calls are more stable.** The specific bug where a call would drop but the
   notification still said you were connected is fixed.
+- **Camera failures no longer take the call down.** A failing media task is
+  contained, and the reason is written to logcat under `DiscordCoroutines`.
+- **Performance experiments match the previous build.** Fresco, Hermes, chat
+  mosaic, per-screen jank and the RMLE mounting mode use the same arms as the
+  349.5 build. The three new October experiments stay at Discord's defaults.
+  See [`reference/EXPERIMENTS_3541.md`](reference/EXPERIMENTS_3541.md).
 - **Background work is lower.** Analytics, jank recording, the permanent
   logcat child, and several startup loads no longer run, which can reduce
   battery use and stutter.
@@ -93,6 +99,10 @@ Everything that exists to take payment or drive engagement is blocked or hidden:
 - **Guild boosts, gifts, wishlists, virtual currency, role subscriptions,
   referral programmes and promotions** — all blocked.
 - **The guild shop row** in the channel sidebar is hidden.
+- **New 354.1 sales prompts** — the Nitro-locked toast, premium try-it-out
+  section and popup, referral sheet, guild-profile tag upsell, Orbs Arcade
+  section and Hexagon campaign surfaces are hidden.
+- **New 354.1 billing paths and PayPal's analytics logger** are blocked.
 
 If you already have Nitro, it still works. The app stops advertising it and
 stops opening the store surfaces.

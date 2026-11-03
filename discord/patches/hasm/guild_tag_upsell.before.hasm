@@ -1,0 +1,70 @@
+0000  GetParentEnvironment r2, 0
+0003  LoadParam r5, 2
+0006  LoadConstUndefined r1
+0008  JStrictNotEqual L29, r5, r1
+000c  LoadFromEnvironment r4, r2, 1
+0010  LoadFromEnvironment r3, r2, 2
+0014  GetByIndex r3, r3, 6
+0018  Call2 r5, r4, r1, r3
+L29:
+001d  LoadParam r10, 1
+0020  LoadFromEnvironment r4, r2, 0
+0024  LoadFromEnvironment r3, r2, 2
+0028  GetByIndex r6, r3, 7
+002c  Call2 r9, r4, r1, r6
+0031  GetById r8, r9, 0, "useStateFromStoresArray"
+0037  LoadFromEnvironment r6, r2, 4
+003b  NewArray r7, 2
+003f  DefineOwnInDenseArray r7, r6, 0
+0043  LoadFromEnvironment r6, r2, 5
+0047  DefineOwnInDenseArray r7, r6, 1
+004b  CreateClosureLongIndex r6, r2, 107174
+0052  Call3 r6, r8, r9, r7, r6
+0058  GetByIndex r3, r3, 7
+005c  Call2 r8, r4, r1, r3
+0061  GetByIdShort r7, r8, 1, "useStateFromStores"
+0066  LoadFromEnvironment r3, r2, 6
+006a  NewArray r4, 2
+006e  DefineOwnInDenseArray r4, r3, 0
+0072  LoadFromEnvironment r3, r2, 8
+0076  DefineOwnInDenseArray r4, r3, 1
+007a  CreateClosureLongIndex r3, r2, 107175
+0081  Call3 r4, r7, r8, r4, r3
+0087  LoadFromEnvironment r8, r2, 3
+008b  GetByIdShort r7, r8, 2, "useEffect"
+0090  NewArray r3, 0
+0094  CreateClosureLongIndex r2, r2, 107176
+009b  Call3 r2, r7, r8, r2, r3
+00a1  GetByIdShort r2, r6, 3, "length"
+00a6  LoadConstZero r0
+00a8  Greater r1, r2, r0
+00ac  GetById r3, r5, 4, "useConfig"
+00b2  JmpFalse L187, r1
+00b5  Mov r7, r10
+00b8  JmpTrue L216, r4
+L187:
+00bb  GetGlobalObject r2
+00bd  TryGetById r2, r2, 5, "HermesInternal"
+00c3  GetByIdShort r9, r2, 6, "concat"
+00c8  LoadConstStringLongIndex r8, "-Disabled"
+00ce  LoadConstString r2, ""
+00d2  Call3 r7, r9, r2, r10, r8
+L216:
+00d8  NewObjectWithBuffer r2, 478, 57065
+00de  PutOwnBySlotIdx r2, r7, 0
+00e2  Call2 r2, r3, r5, r2
+00e7  GetByIdShort r3, r2, 7, "enabled"
+00ec  GetById r5, r2, 8, "ignoreSubscriptionPlatform"
+00f2  NewObjectWithBufferLong r2, 21097, 275111
+00fc  PutOwnBySlotIdx r2, r6, 0
+0100  JmpFalse L262, r3
+0103  Mov r3, r1
+L262:
+0106  JmpFalse L274, r3
+0109  JmpTrue L271, r4
+010c  Mov r4, r5
+L271:
+010f  Mov r3, r4
+L274:
+0112  PutOwnBySlotIdx r2, r3, 1
+0116  Ret r2

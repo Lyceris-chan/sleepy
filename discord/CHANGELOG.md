@@ -15,7 +15,7 @@ Write entries for the reader, not for the author:
 - Use `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`.
   Omit a heading when it has no entries.
 
-## [354.1] - 2026-11-03
+## [354.1] - 2026-11-04
 
 ### Added
 
@@ -46,6 +46,13 @@ Write entries for the reader, not for the author:
 - **Smali targets follow 354.1's obfuscated dex.** Patches that used to name a
   class now find it by method descriptor or a distinctive string, and a target
   that no longer exists is reported as retired instead of failing the build.
+- **The native experiment arms are pinned again.** RMLE mounting mode 3 and the
+  Fresco, Hermes, chat mosaic, and per-screen jank arms match the 349.5 build;
+  the three new 2026-10 experiments stay at stock. See
+  [`reference/EXPERIMENTS_3541.md`](reference/EXPERIMENTS_3541.md).
+- **New 354.1 promotion surfaces are hidden**: the Nitro-locked toast,
+  guild-profile tag upsell, premium try-it-out section/upsell/modal, referral
+  action sheet, Orbs Arcade section, and Hexagon campaign surfaces.
 
 ### Fixed
 
@@ -60,9 +67,16 @@ Write entries for the reader, not for the author:
   null while their React callbacks still settle.
 - **The permanent logcat child process does not start.**
 - **TelemetryRing's append and init are no-ops.**
+- **New 354.1 billing paths and the PayPal SDK analytics logger are blocked.**
+  The Orbs Arcade endpoints are blocked as well as gated off. See
+  [`reference/TELEMETRY_3541.md`](reference/TELEMETRY_3541.md).
 - **The media engine scope survives a failing child.** It now uses a
   supervisor plus a coroutine exception handler, so a camera failure no longer
   cancels all media calls or reaches the process crash handler.
+- **Unhandled coroutine exceptions are logged as `DiscordCoroutines`.** The
+  media scope still contains the failure, but it is no longer invisible.
+- **Incoming calls draw without waiting for the caller's avatar.** The image
+  fetch no longer runs on the interface thread; the caller's name still appears.
 
 ### Removed
 

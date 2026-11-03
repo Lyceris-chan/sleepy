@@ -1396,6 +1396,15 @@ def patch_js(base):
         # modules/guild_tag/native/VoiceGuildTag.tsx - 354.1 only ships the
         # chiplet, which is the part that draws.
         "72648": "VoiceGuildTagChiplet",
+        # --- 354.1 Hexagon campaign (2026-09-hexagon-campaign-client).
+        # Its two experiment gates share their tiny bodies with unrelated
+        # config readers, so the components are stubbed instead. Each name is
+        # campaign-specific; the general theme carousel and font picker are
+        # deliberately untouched.
+        "71084": "HexagonCampaignAppIconSection",
+        "68830": "UserProfileHexagonCampaignDisplayNameStyleEditButton",
+        "68826": "HexagonCampaignDisplayNameStylePromo",
+        "69911": "HexagonCampaignSheet",
     }
     # Hooks whose callers iterate the result. See EMPTY_ARRAY_HASM.
     EMPTY_ARRAY_TARGETS = {
@@ -1938,7 +1947,13 @@ def patch_js_feature_removal(base):
         # and PremiumGuildBoostingSetting.tsx.
         ("17026", "Settings: Nitro / Manage Nitro row", "premium_setting"),
         ("17032", "Settings: Manage Plan row", "manage_plan"),
+        ("17034", "Settings: Manage Subscriptions row", "manage_subs"),
         ("17039", "Settings: Server Boost row", "guild_boosting"),
+        # The guild-tag upsell is returned as `{creatableGuilds,
+        # isUpsellVisible}`. `r0` is the constant zero in this body and is not
+        # written again, so putting slot 1 from it keeps the guild list while
+        # forcing `isUpsellVisible` false. Byte-neutral.
+        ("64286", "Profile: guild-tag upsell hidden", "guild_tag_upsell"),
         # --- Billing / Nitro / boost / gifting settings rows. Their backends
         # are already dead in this build (the storefront, collectibles and
         # subscription endpoints are 204'd), so every one of these rows
@@ -2209,6 +2224,69 @@ def patch_js_extra(base):
                 "null",
                 "Hide activity cards in the Appearance preview",
             ),
+            (
+                "showNitroLockedToast",
+                ["getNitroLockedMessage", "presentError"],
+                1,
+                "noop",
+                "Hide the Nitro-locked toast",
+            ),
+            (
+                "GuildProfileCreateTagUpsell",
+                ["useGuildTagCreationUpsell", "GuildProfileCreateTagUpsell"],
+                1,
+                "null",
+                "Hide the guild-profile tag upsell",
+            ),
+            (
+                "UserProfilePremiumTryItOutSection",
+                ["UserProfilePremiumTryItOutSection", "onPreviewPremium"],
+                1,
+                "null",
+                "Hide the premium try-it-out section",
+            ),
+            (
+                "UserProfilePremiumTryItOutUpsell",
+                ["UserProfilePremiumTryItOutUpsell", "isVisible"],
+                1,
+                "null",
+                "Hide the premium try-it-out upsell",
+            ),
+            (
+                "PremiumTryItOutModal",
+                ["PremiumUpsellTypes", "PremiumTryItOutModal"],
+                1,
+                "null",
+                "Hide the premium try-it-out modal",
+            ),
+            (
+                "openPremiumTryItOutModal",
+                ["TrackUserProfileEditActions", "openPremiumTryItOutModal"],
+                1,
+                "noop",
+                "Do not open the premium try-it-out modal",
+            ),
+            (
+                "ReferralProgramEntryPointActionSheet",
+                ["ReferralProgramEntryPointActionSheet", "ContentDismissActionType"],
+                1,
+                "null",
+                "Hide the referral-program action sheet",
+            ),
+            (
+                "OrbsArcadeQuestHomeSection",
+                ["ORBS_ARCADE_GAME_TILE_MAX_WIDTH", "OrbsArcadeQuestHomeSection"],
+                1,
+                "null",
+                "Hide the Orbs Arcade quest-home section",
+            ),
+            (
+                "HexagonCampaignQuestHomeHeader",
+                ["HEXAGON_CAMPAIGN_AD_CONTENT_ID", "HexagonCampaignQuestHomeHeader"],
+                0,
+                "null",
+                "Hide the sponsored Hexagon campaign header",
+            ),
         ]
     if DISCORD_QUIET_SUPER_REACTIONS:
         work.append(
@@ -2436,13 +2514,21 @@ def patch_js_extra(base):
                 fail += 1
                 continue
             chk = run("decompile", "--function", fid, tmp).stdout
-            want = {
-                "null": "return null;",
-                "false": "return false;",
-                "true": "return true;",
-                "noop": "debugger;",
-            }[kind]
-            if want not in chk:
+            if kind == "noop":
+                # `LoadConstUndefined; Ret` decompiles to an empty body (or a
+                # bare `debugger;`). Either is the intended no-op shape.
+                body = chk.split("{", 1)[-1].rsplit("}", 1)[0]
+                took = all(
+                    line.strip() in ("", "debugger;")
+                    for line in body.split("\n")
+                )
+            else:
+                took = {
+                    "null": "return null;",
+                    "false": "return false;",
+                    "true": "return true;",
+                }[kind] in chk
+            if not took:
                 print(f"  [FAIL] {label}: stub did not take")
                 fail += 1
                 os.remove(tmp)
@@ -2784,12 +2870,21 @@ def patch_incoming_call_nonblocking(base):
         fail += 1
         return
     s = rd(p)
+    # 354.1 renamed the suspend helper to `r` and changed its first parameter
+    # from a String to the activity. The callers still take its result as a
+    # Bitmap; returning null without suspending is the same completion.
     marker = (
-        ".method private final fetchImage("
-        "Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
+        ".method public static final r("
+        "Lcom/discord/notifications/renderer/IncomingCallActivity;"
+        "Ljava/lang/String;Lb10/j;)Ljava/lang/Object;"
     )
     if marker not in s:
-        print("  [SKIP] fetchImage not found (shape changed?)")
+        marker = (
+            ".method private final fetchImage("
+            "Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
+        )
+    if marker not in s:
+        print("  [SKIP] incoming-call image fetch not found (shape changed?)")
         return
     a = s.index(marker)
     e = s.index(".end method", a) + len(".end method")
@@ -2797,15 +2892,15 @@ def patch_incoming_call_nonblocking(base):
         print("  [OK] incoming-call image fetch already non-blocking")
         return
     wr(p, s[:a] + f"""{marker}
-    .locals 0
+    .locals 1
 
     # Patch: no network wait. Returning null without suspending is a valid
     # completion; the caller casts it to Bitmap (null casts fine) and clears
     # the ImageView with it. Removes the Fresco init + network round-trip that
     # `runBlocking` on the main thread was waiting for.
-    const/4 p1, 0x0
+    const/4 v0, 0x0
 
-    return-object p1
+    return-object v0
 .end method""" + s[e:])
     ok += 1
     print(
@@ -3993,6 +4088,47 @@ MEDIA_SCOPE_INJECTION_P1 = (
 )
 
 
+def patch_coroutine_exception_logging(base):
+    """Log the exceptions the media scope's handler consumes."""
+    global fail
+    handler = sfile(base, "j40/b.smali")
+    if not os.path.exists(handler):
+        print("  [FAIL] j40/b.smali missing - cannot log coroutine exceptions")
+        fail += 1
+        return
+    h = rd(handler)
+    hmarker = ".method public final l0(Ljava/lang/Throwable;Lz00/h;)V"
+    if "Patch: log unhandled coroutine exceptions" in h:
+        return
+    start = h.find(hmarker)
+    if start < 0:
+        print("  [FAIL] coroutine handler l0 not found")
+        fail += 1
+        return
+    # The method already declares its register count. Insert after that
+    # directive so the method header stays in canonical smali order.
+    directive = re.search(
+        r"(?m)^[ \t]*\.(?:locals|registers)[ \t]+\d+[ \t]*\n",
+        h[start + len(hmarker):],
+    )
+    if not directive:
+        print("  [FAIL] coroutine handler has no register directive")
+        fail += 1
+        return
+    cut = start + len(hmarker) + directive.end()
+    block = (
+        "\n    # Patch: log unhandled coroutine exceptions.\n"
+        '    const-string v0, "DiscordCoroutines"\n\n'
+        '    const-string v1, "unhandled coroutine exception"\n\n'
+        "    invoke-static {v0, v1, p1}, Landroid/util/Log;->e("
+        "Ljava/lang/String;Ljava/lang/String;"
+        "Ljava/lang/Throwable;)I\n"
+    )
+    h = h[:cut] + block + h[cut:]
+    wr(handler, h)
+    print("  [OK] unhandled coroutine exceptions log as DiscordCoroutines")
+
+
 def patch_media_scope_supervisor(base):
     """Give the media engine a supervisor scope and an exception handler.
 
@@ -4009,6 +4145,7 @@ def patch_media_scope_supervisor(base):
     """
     print("=== MEDIA SCOPE (supervisor + handler) ===")
     global ok, fail
+    patch_coroutine_exception_logging(base)
     path = sfile(base, "com/discord/media/engine/MediaEngineModule.smali")
     if not os.path.exists(path):
         print("  [FAIL] MediaEngineModule.smali missing")
@@ -4514,6 +4651,102 @@ def patch_call_path_overhead(base):
             print(f"  [SKIP] {label}: target removed in 354.1")
             continue
         noop(target, marker, label, ret=ret, retval=retval)
+
+
+def patch_3541_experiments(base):
+    """Pin the native experiment arms 354.1 moved out of NativeExperiments.
+
+    354.1 removes `com.discord.native_experiments.NativeExperiments` and
+    resolves the same experiments through `me.l`'s lazy fields, whose
+    initialisers are the `me.j` switch. Pinning that switch restores the arms
+    the 349.5 suite selected: RMLE treatment 3 (the accumulated-raw-props,
+    props-reconciliation and pull-model mounting mode), Fresco 1 (the 70%
+    cache-reduction arm), Hermes 1, ChatMosaic 1 (shared pool), and
+    JankPerScreen 0 (CONTROL, which turns per-screen jank tracking off).
+    """
+    global ok, fail
+    path = sfile(base, "me/j.smali")
+    if not os.path.exists(path):
+        return False
+    s = rd(path)
+    if "Patch: 354.1 experiment pins" in s:
+        print("  [OK] 354.1 native experiments already pinned")
+        return True
+    marker = ".method public final invoke()Ljava/lang/Object;"
+    if marker not in s:
+        print("  [SKIP] 354.1 experiment switch (me/j invoke not found)")
+        return True
+    start = s.index(marker)
+    end = s.index(".end method", start)
+    body = s[start:end]
+    required = (
+        "iget v0, p0, Lme/j;->d:I",
+        "iget-object v5, p0, Lme/j;->e:Lme/l;",
+        "    packed-switch v0, :pswitch_data_0",
+    )
+    missing = [line for line in required if line not in body]
+    if missing:
+        print(
+            "  [SKIP] 354.1 experiment switch shape changed: "
+            + "; ".join(missing)
+        )
+        return True
+
+    dispatch = """    # Patch: 354.1 experiment pins. Case 0 is the RMLE mounting mode;
+    # 1-4 are Hermes, Fresco, ChatMosaic and JankPerScreen.
+    sparse-switch v0, :pinned_switch_data
+
+    packed-switch v0, :pswitch_data_0"""
+    body = body.replace(
+        "    packed-switch v0, :pswitch_data_0", dispatch, 1
+    )
+
+    pinned = """
+    :pinned_rmle
+    const/4 v0, 0x3
+    invoke-static {v0}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+    move-result-object v0
+    return-object v0
+
+    :pinned_hermes
+    sget-object v0, Lme/d;->c:Lme/e;
+    return-object v0
+
+    :pinned_fresco
+    const/4 v0, 0x1
+    const/16 v1, 0xc
+    invoke-static {v0, v1}, Lme/c;->a(II)Lme/c;
+    move-result-object v0
+    return-object v0
+
+    :pinned_chatmosaic
+    new-instance v0, Lme/b;
+    const/4 v1, 0x1
+    invoke-direct {v0, v1, v1}, Lme/b;-><init>(IZ)V
+    return-object v0
+
+    :pinned_jank
+    sget-object v0, Lme/g;->b:Lme/h;
+    return-object v0
+
+    :pinned_switch_data
+    .sparse-switch
+        0x0 -> :pinned_rmle
+        0x1 -> :pinned_hermes
+        0x2 -> :pinned_fresco
+        0x3 -> :pinned_chatmosaic
+        0x4 -> :pinned_jank
+    .end sparse-switch
+
+    :pswitch_data_0"""
+    body = body.replace("    :pswitch_data_0", pinned, 1)
+    wr(path, s[:start] + body + s[end:])
+    ok += 1
+    print(
+        "  [OK] 354.1 experiments pinned: RMLE 3, Fresco 1, Hermes 1, "
+        "ChatMosaic 1, JankPerScreen CONTROL"
+    )
+    return True
 
 
 def main():
@@ -5369,8 +5602,9 @@ def main():
     # patch_js_body_edits(base)
 
     print("=== PERF EXPERIMENTS ===")
+    pinned = patch_3541_experiments(base)
     p = sfile(base, "com/discord/native_experiments/NativeExperiments.smali")
-    if os.path.exists(p):
+    if not pinned and os.path.exists(p):
         s = rd(p)
         # Every experiment NativeExperiments exposes, not just the first
         # three. Treatment 1 is the fast/cheap arm for Fresco, Hermes and
@@ -5449,7 +5683,7 @@ def main():
             print("  [SKIP] mountingMode experiment (marker not found)")
 
         wr(p, s)
-    else:
+    elif not pinned:
         print("  [SKIP] NativeExperiments.smali missing")
 
     print("=== FCM / NOTIFICATIONS ===")

@@ -56,9 +56,13 @@ HOST_BLOCKLIST = [
     "qualtrics.com",
     # Datadog APM
     "datadog.discord.tools",
-    # PayPal conversion beacon and the FraudNet script the checkout webview loads
+    # PayPal conversion beacon and the FraudNet script the checkout webview
+    # loads. The SDK's own analytics logger is a full path under
+    # www.paypal.com, not a separate host, so match that path narrowly rather
+    # than blocking the payment site.
     "b.stats.paypal.com",
     "c.paypal.com",
+    "www.paypal.com/xoplatform/logger",
     # Google Mobile Ads attribution beacon. Reachable only if the ads path
     # were live (it is stubbed), but the host string is still in the dex.
     "pagead2.googlesyndication.com",
@@ -123,6 +127,15 @@ API_BLOCKLIST = [
     # billing / monetisation
     "/users/@me/billing",
     "/billing",
+    # 354.1 spellings that the older segment rules miss. `/purchase` covers
+    # `/purchases`; `/store` covers `/store-layout` and `/store-terms`; the
+    # remaining four are new checkout/perk surfaces in this bundle.
+    "/purchase",
+    "/store",
+    "/authorize-payment",
+    "/app-store-consent",
+    "/reactivation-offers",
+    "/activate-perk",
     # Play Store in-app purchases
     "/google-play/",
     # store listings and price tiers
@@ -152,6 +165,11 @@ API_BLOCKLIST = [
     "/creator-monetization",
     "/role-subscriptions",
     "/virtual-currency",
+    # Orbs Arcade enrollment/reset/claim endpoints. The feature is already
+    # gated off by `useVirtualCurrencyMobileEnabled = {enabled:false}`, but the
+    # three paths are new in 354.1 and only the claim path happens to match
+    # `/reward`. Block the family rather than rely on the gate.
+    "/orbs-arcade",
     "/outbound-promotions",
     "/partner-perks",
     "/program-rewards",

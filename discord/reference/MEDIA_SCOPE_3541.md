@@ -55,6 +55,14 @@ All four classes (`i40/t1`, `i40/e1`, `j40/b`, `i40/z`) are checked on disk
 before anything is written. `v4` is dead in the constructor at the insertion
 point, and `v1` is dead in `cd/o`; neither live value is touched.
 
+The handler also logs the throwable it consumes, under the tag
+`DiscordCoroutines`. A contained failure is therefore visible rather than
+silent:
+
+```bash
+adb logcat -s DiscordCoroutines
+```
+
 ## What this does not fix
 
 - Native aborts (`SIGABRT`, JNI CHECK failures) and Rust panics are outside

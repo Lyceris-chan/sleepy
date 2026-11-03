@@ -139,6 +139,13 @@ The upstream APK is authentic Discord if the signer is
 `CN=Jason Citron, O=Hammer and Chisel`. A patched build shows the custom
 key from `build/signing.keystore` instead — that is expected.
 
+## X
+
+X is not patched by this repository. For the current X build
+(12.39.0-prod.01), use the maintained Morphe-compatible **Piko NewX** bundle:
+<https://github.com/crimera/piko-newx/releases>. The legacy X bundle is at
+<https://github.com/crimera/piko/releases>.
+
 ## Known limits
 
 - Hermes function IDs change with every Discord release, so the whole target set
@@ -159,6 +166,9 @@ key from `build/signing.keystore` instead — that is expected.
 - Two 349.5 body edits are retired for 354.1: the Spotify activity filter and
   the floating-nav Quests button. Their old targets no longer contain the code
   they edited. Re-derive them against the new bundle before re-enabling.
+- The three new 2026-10 experiments stay at stock. Their treatment values are
+  not documented in the APK and they need a device pass; see
+  [`reference/EXPERIMENTS_3541.md`](reference/EXPERIMENTS_3541.md).
 
 ## Documentation
 
