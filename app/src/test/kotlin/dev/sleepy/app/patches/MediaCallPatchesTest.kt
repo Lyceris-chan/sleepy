@@ -46,12 +46,59 @@ class MediaCallPatchesTest {
         const val THUMBNAIL_DESCRIPTOR = "La7/b;"
         const val THUMBNAIL_CASE = ":pswitch_19"
 
+        const val NATIVE_CAPTURER_OBSERVER =
+            "co/discord/media_engine/NativeCapturerObserver.smali"
+
         const val FOREGROUND = "androidx/core/view/i1.smali"
         const val FOREGROUND_DESCRIPTOR = "Landroidx/core/view/i1;"
         const val FOREGROUND_MIC_GATE = "    if-eqz v16, :cond_a8"
         const val FOREGROUND_CAMERA_GATE = "    if-eqz v16, :cond_c8"
 
         val MEDIA_PATHS = setOf(MODULE, CREATE_CONNECTION, TEARDOWN, THUMBNAIL)
+    }
+
+    @Test
+    fun everyReplacementThatHoldsAMonitorHasACatchAll() {
+        val monitored = DiscordNativePatches.ALL
+            .flatMap { it.smaliPatches }
+            .filter { it.replacementBody?.contains("monitor-enter") == true }
+
+        assertTrue(
+            "the camera reconfigure replacement is the one that holds a monitor",
+            monitored.any { it.smaliPath == NATIVE_CAPTURER_OBSERVER }
+        )
+        for (patch in monitored) {
+            val body = requireNotNull(patch.replacementBody)
+            assertTrue(
+                "${patch.title} holds a monitor, so every instruction in its try block must be " +
+                    "covered by a catch-all; otherwise ART's verifier rejects the whole class",
+                body.contains(".catchall")
+            )
+        }
+    }
+
+    @Test
+    fun theCameraReconfigureStillSwallowsCameraFailures() {
+        val patch = DiscordNativePatches.ALL
+            .flatMap { it.smaliPatches }
+            .single {
+                it.smaliPath == NATIVE_CAPTURER_OBSERVER &&
+                    it.methodSignature ==
+                    ".method public declared-synchronized reconfigure(III)V"
+            }
+        val body = requireNotNull(patch.replacementBody)
+        assertTrue(
+            "a camera failure must still be logged and swallowed",
+            body.contains(".catch Ljava/lang/Exception;")
+        )
+        assertTrue(
+            "the catch-all is what releases the monitor for non-Exception throwables",
+            body.contains(".catchall {:try_start_0 .. :try_end_0} :catchall_0")
+        )
+        assertTrue(
+            "the catch-all must rethrow after releasing the monitor",
+            body.contains("throw v2")
+        )
     }
 
     @Test

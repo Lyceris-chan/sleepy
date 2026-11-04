@@ -5,6 +5,17 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.14.1] - 2026-11-04
+
+### Fixed
+
+- **Discord no longer crashes on launch after the camera fix.** The synchronized `NativeCapturerObserver.reconfigure` replacement holds a monitor, so its try block must be covered by a catch-all; without one ART's verifier rejects the class and the app aborts while loading the native engine. The replacement now has the catch-all that releases the monitor and rethrows non-Exception failures, while camera exceptions are still logged and swallowed.
+- **Embed and link cards and reply previews stay visible when Reaction chips and animation is on.** The `createMessageContent` body leaves `renderEmbeds` and `renderReplies` at Discord's values, so a post with an embed renders and a reply shows what it answers; reaction chips, gift cards, activity invites and emoji/GIF animation stay off.
+
+### Changed
+
+- **Message cards and animation is now Reaction chips and animation.** The label and description name only what the switch hides.
+
 ## [3.14.0] - 2026-11-04
 
 ### Added

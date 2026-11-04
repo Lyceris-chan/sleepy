@@ -1512,6 +1512,12 @@ object DiscordNativePatches {
     :goto_thumbnail_done
     .catchall {:try_start_thumbnail .. :try_end_thumbnail} :catch_thumbnail"""
             ),
+            // The method is declared synchronized and holds p0's monitor explicitly, so every
+            // instruction in the try block must be covered by a catch-all. Without it ART's
+            // verifier rejects the whole class with "expected to be within a catch-all for an
+            // instruction where a monitor is held", and the app aborts while loading the native
+            // engine. The typed catch swallows camera failures; the catch-all releases the
+            // monitor and rethrows anything that is not an Exception.
             SmaliPatch(
                 title = "A camera reconfigure cannot end the call",
                 explanation = "Catches any failure from starting the camera or changing its capture format, logs it under MediaEngineCB, and returns normally. The call into this method comes from the native video engine; an exception crossing back through JNI took the connection down with it, so a camera the device refused ended the call instead of only leaving the video off.",
@@ -1566,7 +1572,15 @@ object DiscordNativePatches {
 
     return-void
 
+    :catchall_0
+    move-exception v2
+
+    monitor-exit p0
+
+    throw v2
+
     .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_0} :catch_0
+    .catchall {:try_start_0 .. :try_end_0} :catchall_0
 .end method"""
             ),
             SmaliPatch(

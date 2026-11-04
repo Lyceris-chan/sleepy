@@ -799,10 +799,11 @@ object DiscordHermesFunctionCatalog {
             "destination warning. Ported from Reseam's Skip masked link warnings patch."),
         entry(52649, "Answers true from isLinkTrusted, so a masked link opens without the " +
             "destination warning. Ported from Reseam's Skip masked link warnings patch."),
-        entry(47120, "Rebuilds createMessageContent with reaction chips, reply previews, embed " +
-            "and link cards and activity invites turned off, and with custom emoji and GIFs not " +
-            "animating. The option reads at the top of the function are forced false in place; " +
-            "the rest of the renderer is unchanged."),
+        entry(47120, "Rebuilds createMessageContent with reaction chips, gift cards and activity " +
+            "invites turned off, and with custom emoji and GIFs not animating. Embed and link " +
+            "cards and reply previews stay on, so a message still shows what it answers. The " +
+            "option reads at the top of the function are forced false in place; the rest of the " +
+            "renderer is unchanged."),
         entry(52317, "Returns null where SuperReactionLocalImageAnimation used to draw, so Super " +
             "Reaction decorations do not loop."),
         entry(56346, "Answers false from useIsMessageSwipeActionsEnabled, so swiping a message no " +
@@ -1436,10 +1437,11 @@ object DiscordHermesFunctionCatalog {
         Feature(
             slug = "message_card_clutter",
             group = CHAT_GROUP,
-            label = "Message cards and animation",
-            description = "Hides reaction chips, reply previews, link and embed cards, gift cards " +
-                "and activity invites in messages, and stops custom emoji and GIFs animating. One " +
-                "switch for the message-card clutter the Reseam bundle spreads across several.",
+            label = "Reaction chips and animation",
+            description = "Hides reaction chips, gift cards and activity invites in messages, and " +
+                "stops custom emoji and GIFs animating. Link and embed cards and reply previews " +
+                "stay visible, and a message still shows which message it replies to. One switch " +
+                "for the message-card clutter the Reseam bundle spreads across several.",
             functionIds = listOf(47120)
         ),
         Feature(
