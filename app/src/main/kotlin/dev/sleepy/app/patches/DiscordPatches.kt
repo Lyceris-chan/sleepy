@@ -9,7 +9,7 @@ import dev.sleepy.app.model.SmaliPatch
 /**
  * Bytecode and Hermes JavaScript modifications for Discord (Alpha/Release).
  *
- * Transcribed from the recorded change set for Discord 349.5 Alpha and retargeted at 353.2.0.
+ * Transcribed from the recorded change set for Discord 349.5 Alpha and retargeted at 354.1.
  * Every entry here corresponds to a symbol in it.
  *
  * This object is the **core** subset, not the whole recorded change set. The remaining smali
@@ -18,7 +18,7 @@ import dev.sleepy.app.model.SmaliPatch
  * names—and are applied by `BinaryXmlEditor`, which edits the compiled document rather than
  * the text form, which is not available to an on-device patcher. The resource table is rebuilt
  * by `ResourceTableMerger` for the same reason. Hermes function ids are per-bundle and shift on
- * every Discord release, so the ids that follow are tied to the 353.2.0 build the pipeline is
+ * every Discord release, so the ids that follow are tied to the 354.1 build the pipeline is
  * pointed at.
  *
  * Stubs telemetry and Sentry crash reporters, and locks the on-device Hermes JS bundle.
@@ -182,7 +182,7 @@ object DiscordPatches {
      * Each entry corresponds to one membership of the recorded change set's tables and names the
      * function and the value its stub returns. The pipeline does **not** apply these entries
      * directly: a Hermes function id is only meaningful for the bundle it was taken from, and
-     * these ids are pinned to Discord 353.2.0. What runs is [DiscordHermesBundlePatch], whose
+     * these ids are pinned to Discord 354.1. What runs is [DiscordHermesBundlePatch], whose
      * entries were written for that release's bundle. They are applied only when the target
      * bundle's byte length matches the bundle the entries were written for.
      *
