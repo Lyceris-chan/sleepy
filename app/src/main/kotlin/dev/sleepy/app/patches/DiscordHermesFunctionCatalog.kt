@@ -782,6 +782,9 @@ object DiscordHermesFunctionCatalog {
         entry(115638, "Rebuilds the profile section tab list so it builds Main and Activity only, " +
             "with no Board and no Wishlist tab. The tab is one element of a list, not a function " +
             "that can return false, so the body is edited rather than stubbed."),
+        entry(116092, "Removes the Typing Indicator row from Settings. The row's entry in the " +
+            "section list is nulled, so the list's own filter drops it; the stored setting and " +
+            "the editor behind it are unchanged."),
         entry(118774, "Stops QuestFetchManager installing the recurring interval that refetched " +
             "quests forever, which against already-blocked endpoints was pure timer and network " +
             "churn."),
@@ -1443,6 +1446,15 @@ object DiscordHermesFunctionCatalog {
                 "stay visible, and a message still shows which message it replies to. One switch " +
                 "for the message-card clutter the Reseam bundle spreads across several.",
             functionIds = listOf(47120)
+        ),
+        Feature(
+            slug = "typing_indicator_setting",
+            group = CHAT_GROUP,
+            label = "Typing Indicator setting",
+            description = "Removes the Typing Indicator row from Settings, so the custom typing " +
+                "indicator editor is no longer reachable from there. A value already stored on " +
+                "the account is unchanged.",
+            functionIds = listOf(116092)
         ),
         Feature(
             slug = "replies_without_pings",

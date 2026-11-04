@@ -72,7 +72,7 @@ Search at the top of the screen filters the whole list, including permissions, b
   A declaration the patch removes from every build it makes is listed as well, but its row shows that it is removed and gives the reason instead of offering a switch, because there is nothing left for a switch to control. The list comes with sleepy, for the exact builds this version supports, and you can check it against the build—sleepy downloads the build and shows any difference in full rather than summarizing it.
 - **Clone app** gives the patched APK its own package name, so it installs next to the original app instead of replacing it.
 
-One switch often stands for several changes: the 416 JavaScript changes are grouped into the 74 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
+One switch often stands for several changes: the 417 JavaScript changes are grouped into the 75 features they add up to, such as gift buttons, guild tags or quests, so you see what each one does rather than one row per rewritten function. The functions behind a switch are listed in its technical panel.
 
 ## Install and use sleepy
 

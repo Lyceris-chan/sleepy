@@ -1996,10 +1996,10 @@ object DiscordNativePatches {
      * browser with a plain ACTION_VIEW. Both paths ship already, so this set only decides which
      * one a link takes.
      *
-     * The exported constants stop reading the stored choice, and the in-app entry point itself
-     * is re-pointed at the external-browser call, so a stale stored choice or a caller that
-     * passes the in-app browser explicitly still leaves the app. This build already falls back
-     * to Chrome when there is no stored choice, so no default-value edit is needed.
+     * The exported constants stop reading the stored choice, the fallback reports Chrome rather
+     * than the in-app browser, and the in-app entry point itself is re-pointed at the
+     * external-browser call. A stale stored choice or a caller that passes the in-app browser
+     * explicitly therefore still leaves the app, and Settings reports Chrome as the choice.
      *
      * `openTrackedCustomTab` is left alone: its callback is `Function1<Boolean, Unit>` where the
      * external call wants `Function1<Unit, Unit>`, and the erased generics would throw when the
@@ -2034,6 +2034,17 @@ object DiscordNativePatches {
     sget-object v2, Lt6/a;->a:Lt6/a;
 
     invoke-virtual {v2, v0, p1, v1}, Lt6/a;->d(Landroid/content/Context;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V"""
+            ),
+            SmaliPatch(
+                title = "Defaulting the browser setting to Chrome",
+                explanation = "When no stored choice is read, the module used to report the in-app " +
+                    "browser as selected whenever Chrome was installed. The fallback now reports " +
+                    "Chrome, so Settings shows the external browser as the current choice. The " +
+                    "separate in-app entry-point edit still keeps a stale or explicit in-app choice " +
+                    "from opening a Custom Tab.",
+                smaliPath = "com/discord/browser_manager/BrowserManagerModule.smali",
+                anchor = "    :cond_2c\n    if-eqz v0, :cond_2f",
+                replacement = "    :cond_2c\n    if-eqz v0, :cond_2f\n\n    const/4 v1, 0x2"
             )
         )
     )

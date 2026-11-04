@@ -5,6 +5,18 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0] - 2026-11-04
+
+### Added
+
+- **Typing Indicator setting** — removes the Typing Indicator row from Settings. The row is filtered out of the overview list; a value already stored on the account and the editor behind it are unchanged, but Settings no longer offers either.
+- **The Web Browser setting reports Chrome** — the external-browser set now changes the module's fallback from the in-app browser to Chrome, so Settings shows the external browser as the current choice. The in-app entry point still hands links to the external browser, including when a stale or explicit in-app choice is passed.
+
+### Changed
+
+- **The Discord JavaScript set is 417 entries over 75 features.** The new entry is the Settings-overview function that builds the section list; seven option reads remain in the message-card body, with embeds and replies left at Discord's values.
+- **The external-browser set is three native edits**, up from two: the stored-key read, the Chrome fallback and the in-app entry point.
+
 ## [3.14.1] - 2026-11-04
 
 ### Fixed

@@ -71,15 +71,19 @@ class PatchingPipelineHarnessTest {
             "discord_native_log_noise",
             "discord_native_audit",
             "discord_native_okhttp_cache",
+            "discord_native_interceptors",
             "discord_native_js_polls",
             "discord_native_systrace",
             "discord_native_crash_logcat",
+            "discord_native_startup_class_load",
             "discord_native_privacy",
             "discord_native_resource_monitors",
             "discord_native_call_path",
             "discord_native_media",
+            "discord_native_camera_log",
             "discord_native_foreground_service",
             "discord_native_experiments",
+            "discord_native_external_browser",
             "discord_native_blocklist"
         )
 

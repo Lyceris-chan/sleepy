@@ -17,12 +17,13 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The external-browser routing edits, applied to the real 353.2.0 build and read back.
+ * The external-browser routing edits, applied to the real 354.1 build and read back.
  *
- * 353.2.0 already falls back to Chrome when the stored browser choice is absent, so the set is
- * two edits: make the exported constants stop reading the stored in-app choice, and route
- * `openInAppURL` through the external-browser call. This checks both against the build's own
- * disassembly and applies them with the pipeline's engine.
+ * The set is three edits: make the exported constants stop reading the stored in-app choice,
+ * report Chrome when no choice is read, and route `openInAppURL` through the external-browser
+ * call. 354.1 otherwise reports the in-app browser as selected whenever Chrome is installed, so
+ * the fallback edit is what makes Settings show the external browser. This checks all three
+ * against the build's own disassembly and applies them with the pipeline's engine.
  */
 class BrowserManagerExternalBrowserTest {
 
@@ -57,9 +58,9 @@ class BrowserManagerExternalBrowserTest {
         val patches = DiscordNativePatches.EXTERNAL_BROWSER.smaliPatches
             .filter { it.smaliPath == BROWSER_MODULE }
         assertEquals(
-            "discord_native_external_browser must hold the key read and the re-pointed " +
-                "in-app call",
-            2,
+            "discord_native_external_browser must hold the key read, the Chrome fallback and " +
+                "the re-pointed in-app call",
+            3,
             patches.size
         )
         assertEquals(
@@ -93,6 +94,13 @@ class BrowserManagerExternalBrowserTest {
         assertFalse("the getter must stop reading the stored choice", after.contains(STORED_KEY_READ))
         assertTrue("the getter must read the ignored key", after.contains(IGNORED_KEY_READ))
         assertTrue("the app must still be able to save a choice", after.contains(STORED_KEY_WRITE))
+        val fallback = after.substringAfter("\n    :cond_2c\n").take(200)
+        val chromeFallback = fallback.indexOf("const/4 v1, 0x2")
+        val fallbackJump = fallback.indexOf("goto :goto_")
+        assertTrue(
+            "the fallback must report Chrome before the goto",
+            chromeFallback >= 0 && fallbackJump > chromeFallback
+        )
         assertFalse(
             "openInAppURL must no longer render a Custom Tab",
             after.contains(CUSTOM_TABS_CALL)
