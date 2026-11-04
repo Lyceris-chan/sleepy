@@ -58,6 +58,31 @@ integer into a UI-manager cache is exactly the kind of change that renders
 wrongly rather than failing loudly, so both stay at the server default until a
 device pass exists.
 
+## Additional JS-side experiments
+
+The bundle also carries these default-off client experiments. They are not
+pinned: each needs a device pass before it can be called an improvement.
+
+| Experiment | Effect | Recommendation |
+| --- | --- | --- |
+| `2026-10-android-stop-and-pause-video` | Media viewer playback controls | Test |
+| `2026-10-media-viewer-entrance-jank` | Media viewer entrance animation | Test |
+| `2026-10-media-viewer-improvements` | Media viewer layout/behaviour | Test |
+| `2026-10-media-viewer-video-perf-android` | Media viewer video path | Test |
+| `2026-10-guilds-render-experiment` | Guild list rendering | Test |
+| `2026-10-mobile-timestamp-updating` | Timestamp refresh path | Test |
+| `2026-10-mobile-keyboard-preload` | Keyboard preload (`disablePreload`) | Test; may raise startup cost |
+| `2026-10-mobile-media-playback` | Mobile media playback | Test |
+| `2026-10-users-list-impl` | User-list implementation (`fast` → `legend`) | UI gamble |
+| `2026-10-android-nitro-fetch` | Network path (`react_native` → `nitro_fetch`) | Network gamble |
+| `2026-10-android-call-wifi-lock` | Wi-Fi lock during calls | Leave off; increases battery draw |
+
+The shop/Nitro/orbs marketing experiments are deliberately left off, including
+recurring referral reminders, Nitro home badges, shop marketing fatigue,
+collectibles marketing cache and promotions, fractional Nitro pricing, improved
+shop loading, Orbs Arcade, Hexagon campaign, and both server-tag upsells.
+`2026-01-less-personalized-ads` is older and the quest ads are already removed.
+
 ## React Compiler
 
 `DISCORD_REACT_COMPILER` remains opt-in and off by default. Forcing
