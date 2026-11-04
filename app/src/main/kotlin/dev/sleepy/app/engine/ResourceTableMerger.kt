@@ -257,7 +257,13 @@ object ResourceTableMerger {
                 val merged = entries.getOrPut(key) { LinkedHashMap() }
                 for ((index, entryBytes) in byIndex) {
                     if (index in omissionSlots.getOrNull(sourceIndex)?.get(key).orEmpty()) continue
-                    if (merged.containsKey(index)) {
+                    val canonical = canonicalEntry(entryBytes, source)
+                    val previous = merged[index]
+                    if (previous != null) {
+                        // Density splits can carry the same entry at the same slot: an
+                        // xhdpi/xxhdpi pair often refers to one shared file. Identical values
+                        // are one resource, not a conflict; only a different value is refused.
+                        if (previous.canonical == canonical) continue
                         return Result.Refused(
                             ("the tables disagree about resource 0x%08x: two of them carry an " +
                                 "entry ").format(
@@ -271,7 +277,8 @@ object ResourceTableMerger {
                         bytes = rewrite(entryBytes, source.keyDelta, source.stringDelta),
                         source = entryBytes,
                         keyDelta = source.keyDelta,
-                        stringDelta = source.stringDelta
+                        stringDelta = source.stringDelta,
+                        canonical = canonical
                     )
                 }
                 // A type and configuration whose every entry was left out carries nothing, and an
@@ -524,6 +531,12 @@ object ResourceTableMerger {
     ) {
         var keyDelta: Int = 0
         var stringDelta: Int = 0
+
+        /** Entry names, resolved once for the duplicate-slot comparison. */
+        val keyNames: List<String> by lazy { readPool(keyStrings.chunk) }
+
+        /** String values, resolved once for the duplicate-slot comparison. */
+        val strings: List<String> by lazy { readPool(globalPool.chunk) }
     }
 
     /**
@@ -538,7 +551,8 @@ object ResourceTableMerger {
         val bytes: ByteArray,
         val source: ByteArray,
         val keyDelta: Int,
-        val stringDelta: Int
+        val stringDelta: Int,
+        val canonical: String
     )
 
     /**
@@ -865,6 +879,46 @@ object ResourceTableMerger {
      * rewritten through the same [valueOffsets] a simple entry's is, which is what puts the write
      * at the `Res_value` inside each map rather than at the map's name.
      */
+    /**
+     * An entry's resolved identity: its key name and every value with string-pool references
+     * replaced by the string itself.
+     *
+     * Two split tables can carry the same resource at the same slot while naming it through
+     * different pool indexes. Comparing the raw bytes would call those a conflict; comparing the
+     * resolved value keeps the merge from refusing a harmless overlap.
+     */
+    private fun canonicalEntry(entry: ByteArray, source: TableSource): String {
+        val keyIndex = u32(entry, 4)
+        val key = source.keyNames.getOrNull(keyIndex) ?: "#$keyIndex"
+        val out = StringBuilder(key)
+        if (u16(entry, 2) and ENTRY_COMPLEX == 0) {
+            appendCanonicalValue(out, entry, ENTRY_HEADER_SIZE, source)
+        } else {
+            val count = u32(entry, 12)
+            for (i in 0 until count) {
+                val at = MAP_ENTRY_HEADER_SIZE + i * MAP_SIZE
+                out.append('|').append(u32(entry, at)).append('=')
+                appendCanonicalValue(out, entry, at + MAP_VALUE_OFFSET, source)
+            }
+        }
+        return out.toString()
+    }
+
+    private fun appendCanonicalValue(
+        out: StringBuilder,
+        entry: ByteArray,
+        at: Int,
+        source: TableSource
+    ) {
+        val type = entry[at + VALUE_TYPE_OFFSET].toInt() and 0xFF
+        val data = u32(entry, at + VALUE_DATA_OFFSET)
+        if (type == TYPE_STRING) {
+            out.append("s:").append(source.strings.getOrNull(data) ?: "#$data")
+        } else {
+            out.append(type).append(':').append(data)
+        }
+    }
+
     private fun rewrite(entry: ByteArray, keyDelta: Int, stringDelta: Int): ByteArray {
         val out = entry.copyOf()
         putU32(out, 4, u32(out, 4) + keyDelta)

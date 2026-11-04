@@ -26,7 +26,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * The Discord patch payloads applied to the shipped 353.2.0 build.
+ * The Discord patch payloads applied to the shipped 354.1 build.
  *
  * Dynamic name resolution and surgical DEX patching run against the real base split: the native
  * patch set has to find every anchor it names, the Hermes patches have to write the functions
@@ -42,20 +42,20 @@ class DiscordPayloadIntegrationTest {
      * 353.2.0 bundle, transcribed from `hermes-decomp dump --kind functions`.
      */
     private val LOCATED_TARGETS = mapOf(
-        88367 to intArrayOf(44438835, 544),
-        24953 to intArrayOf(29330430, 288),
-        24820 to intArrayOf(29320249, 54),
-        24816 to intArrayOf(29319804, 87),
-        24831 to intArrayOf(29322857, 43),
-        21184 to intArrayOf(28824195, 345),
-        71544 to intArrayOf(39364485, 257),
-        43081 to intArrayOf(31673532, 292),
-        73795 to intArrayOf(39984498, 34),
-        73801 to intArrayOf(39985517, 298),
-        53824 to intArrayOf(33923307, 446),
-        52696 to intArrayOf(33582315, 82),
-        52196 to intArrayOf(33472878, 107),
-        50823 to intArrayOf(33149835, 468)
+        81313 to intArrayOf(38771337, 539),
+        25713 to intArrayOf(29088155, 286),
+        25580 to intArrayOf(29077974, 54),
+        25576 to intArrayOf(29077530, 87),
+        25591 to intArrayOf(29080579, 43),
+        22017 to intArrayOf(28590337, 345),
+        67877 to intArrayOf(35949533, 257),
+        43388 to intArrayOf(31215121, 292),
+        69718 to intArrayOf(36300128, 34),
+        69721 to intArrayOf(36300174, 387),
+        53085 to intArrayOf(32835946, 221),
+        52267 to intArrayOf(32639866, 82),
+        51876 to intArrayOf(32573422, 107),
+        50684 to intArrayOf(32346872, 220)
     )
 
     @Test

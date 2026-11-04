@@ -42,7 +42,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * Tooling: runs the pipeline's steps over the local Discord 353.2.0 fixtures and writes the
+ * Tooling: runs the pipeline's steps over the local Discord 354.1 fixtures and writes the
  * resulting APK to a file for comparison with the recorded build.
  *
  * This class is not a unit test. It reproduces `PatchingPipeline.execute` with the two steps that
@@ -54,7 +54,7 @@ class PatchingPipelineHarnessTest {
 
     private companion object {
         /**
-         * `sources.json` -> `sources[] -> discord_353200 -> patch_ids`, in the order it declares
+         * `sources.json` -> `sources[] -> discord_354201 -> patch_ids`, in the order it declares
          * them. The order is not what the pipeline runs them in—`PatchViewModel.startPatch`
          * passes the *catalog's* order ([PatchItemCatalog.all]), which is what this reproduces—
          * but the membership is this list and nothing else.
@@ -84,15 +84,15 @@ class PatchingPipelineHarnessTest {
         )
 
         /**
-         * `sources.json` -> `discord_353200 -> splits`, as the local files its URLs name: the
-         * ABI split first, then the density and language splits, in the declared order. The
-         * x86_64 and armeabi-v7a splits that sit beside them are *not* merged, because the source
-         * does not list them.
+         * `sources.json` -> `discord_354201 -> splits`, as the local files its URLs name: the
+         * ABI split first, then the density splits and the language split, in the declared order.
+         * The x86_64 and armeabi-v7a splits that sit beside them are *not* merged, because the
+         * source does not list them.
          */
         val SOURCE_SPLITS = listOf(
             "config.arm64_v8a.apk",
             "config.hdpi.apk",
-            "config.de.apk",
+            "config.xxhdpi.apk",
             "config.en.apk"
         )
 
@@ -137,7 +137,7 @@ class PatchingPipelineHarnessTest {
     }
 
     @Test
-    fun buildsTheDiscordAlpha3512ApkTheWayPatchingPipelineDoes() = runBlocking {
+    fun buildsTheDiscordAlpha3541ApkTheWayPatchingPipelineDoes() = runBlocking {
         val extracted = ComparisonApks.discordExtracted
         val baseApk = File(extracted, "base.apk")
         val splits = SOURCE_SPLITS.map { File(extracted, it) }

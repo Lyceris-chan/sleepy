@@ -22,7 +22,7 @@ import dev.sleepy.app.model.TargetWrittenGenerator
  * One stock interceptor is shared by every OkHttp client this set concerns. Its body is replaced
  * with one that matches the request URL against [DiscordBlocklistRules] and answers a match with
  * a synthetic HTTP 204 — a dropped response would make the client retry without a limit — so the
- * request is never sent. 353.2.0 registers that interceptor on OkHttp's network list through two
+ * request is never sent. 354.1 registers that interceptor on OkHttp's network list through two
  * clients; [DiscordNativePatches.INTERCEPTORS] moves those registrations to the application list,
  * where answering without calling `proceed` is legal.
  *
@@ -31,6 +31,10 @@ import dev.sleepy.app.model.TargetWrittenGenerator
  * response carries the build's own empty `Headers` and zero-length `ResponseBody` instances,
  * because callers dereference the headers without a null check and the React Native bridge
  * reports a null body as a failed request.
+ *
+ * The Request URL field is declared as `Object` in 354.1 because R8 merged unrelated classes into
+ * the Request class. The generated body reads the field at its declared type and casts it to the
+ * URL type; reading it as the URL type directly would fail at runtime.
  */
 object DiscordBlocklistPatch {
 

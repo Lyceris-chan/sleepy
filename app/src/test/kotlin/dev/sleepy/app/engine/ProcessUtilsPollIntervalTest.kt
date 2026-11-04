@@ -17,7 +17,7 @@ import org.junit.Test
  * tick made three React Native calls - `getCurrentCpuUsagePercent`, `getCumulativeCpuUsage` and
  * `getCurrentMemoryUsageKb` - and two of those read fields the app's own resource sampler kept
  * current. The patch set stops that sampler in the native `DeviceResourceUsageManager.start()`,
- * so the fields no longer change, and the feature that stubs the poll callback (`86445`) already
+ * so the fields no longer change, and the feature that stubs the poll callback (`81440`) already
  * removed the work inside the tick. The timer itself kept waking the JavaScript thread every
  * second, for a callback that returned immediately.
  *
@@ -30,7 +30,7 @@ class ProcessUtilsPollIntervalTest {
 
     private companion object {
         /** The module factory that creates the ProcessUtils instance and starts the timer. */
-        const val FUNCTION_ID = 1379
+        const val FUNCTION_ID = 1372
         const val BODY_SIZE = 699
 
         /** LoadConstInt r0's 4-byte immediate, relative to the function's first byte. */
@@ -41,7 +41,7 @@ class ProcessUtilsPollIntervalTest {
         const val PATCHED_INTERVAL_MS = 3_600_000
 
         /** The callback the timer invokes; the same feature stubs its body. */
-        const val CALLBACK_ID = 88493
+        const val CALLBACK_ID = 81440
         const val FEATURE_SLUG = "performance_metrics"
     }
 

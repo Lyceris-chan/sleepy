@@ -27,26 +27,24 @@ object ComparisonApks {
     private fun external(relative: String, default: String): File =
         if (fixturesRoot != null) File(fixturesRoot, relative) else File(default)
 
-    /** The directory the Discord 353.2.0 base split and its splits were extracted into. */
+    /** The directory the Discord 354.1 base split and its splits were extracted into. */
     val discordExtracted: File = external(
         "discord/extracted",
-        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha353200/apk/extracted"
+        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/3541-final/apk/extracted"
     )
 
-    /** The Discord 353.2.0 base split. */
+    /** The Discord 354.1 base split. */
     val discordBaseApk: File = File(discordExtracted, "base.apk")
 
     /**
-     * The recorded build's decompiled tree for Discord 349.5.
+     * The decompiled tree for the Discord 354.1 build.
      *
-     * The tree the blocklist patch reads its class names from. It stays at 349.5 because it is
-     * read as a *shape* - which classes exist and what they look like - and re-decompiling it
-     * for a new build is a step of its own. A class the tree does not have is a skip with the
-     * reason stated, never a guess.
+     * The blocklist patch reads class names and field shapes from it. A class the tree does not
+     * have is a skip with the reason stated, never a guess.
      */
     val discordDecompiledBase: File = external(
         "discord/decompiled/base",
-        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/alpha3495/decompiled/base"
+        "/home/sleepy/Documents/antigravity/quirky-noether/discord/build/3541-final/decompiled/base"
     )
 
     /** The recorded build's Hermes disassembler. */

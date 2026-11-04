@@ -24,7 +24,7 @@ import org.junit.Test
  * other half: on the build the table was extracted from, *nothing* may be skipped.
  *
  * What it cannot check is whether a replacement does what its table entry says. There is no
- * recorded build of the patched 353.2.0 bundle to compare against, and the earlier suite's
+ * recorded build of the patched 354.1 bundle to compare against, and the earlier suite's
  * function-for-function comparison is gone with it. The check that survives is structural and
  * still catches the failure that matters most - a body that is not valid bytecode, which is how
  * a truncated replacement would ship - so a real disassembler reads every patched function back.
@@ -54,16 +54,16 @@ class HermesBundleApplicationTest {
     /**
      * The functions whose replacements do not fit where the bodies they replace are.
      *
-     * Six are longer than the body they replace, which no in-place write can hold: 8346 inserts
-     * the cache clamp into the middle of the function, the four settings rows append a
-     * `usePredicate` property, and 34451 clamps the pixel budget to a wider constant. Five share
-     * a body with another entry - 32481 with 32480, 65890 with 65889, 75050 with 75038,
-     * 42009 with 42008, whose two compiler variants were compiled to identical code and
-     * deduplicated, and 57031 with 57030 - and a shared region can hold only one replacement, so
-     * the lower function id keeps it and the other is relocated beside it.
+     * Seven are longer than the body they replace, which no in-place write can hold: 8685
+     * inserts the markup-cache clamp into the middle of the function, the four settings rows
+     * append a `usePredicate` property, 36805 clamps the pixel budget to a wider constant, and
+     * 17034 edits the Manage Subscriptions route that 354.1 no longer wraps in a predicate. Two
+     * share a body with another entry - 64334 with 64333 and 71882 with 71873, whose compiler
+     * variants were deduplicated - and a shared region can hold only one replacement, so the
+     * lower function id keeps it and the other is relocated beside it.
      */
     private val relocated =
-        listOf(8464, 16275, 16281, 16288, 17189, 33516, 36065, 36070, 42845, 67337, 76816, 57031, 78160)
+        listOf(8685, 17026, 17032, 17039, 17970, 36805, 64334, 17034, 71882)
 
     @Test
     fun everyEntryAppliesToTheBuildTheTableNames() {

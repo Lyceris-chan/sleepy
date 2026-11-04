@@ -14,7 +14,7 @@ import org.junit.Test
 /**
  * The archive rebuilt from the real Discord base and its splits verifies as an APK.
  *
- * The merge and repack are the last steps before signing, and they run over the shipped 353.2.0
+ * The merge and repack are the last steps before signing, and they run over the shipped 354.1
  * build: the result has to carry the density split's resources, align every stored entry the way
  * the platform's loader requires, and pass an independent alignment check.
  */
@@ -113,15 +113,14 @@ class MergedDiscordApkTest {
                 merged.libraries + merged.resources,
                 gained.size
             )
-            // The repack always leaves out two things the base carries, and both are entries no
-            // rebuilt archive may hold rather than files this merge lost: Discord's own JS patch
-            // file, superseded by the "locked bundle" patch, and `stamp-cert-sha256`, the Play
-            // source stamp, which describes the signed build this one was derived from—a
+            // The repack always leaves out one thing the base carries: `stamp-cert-sha256`, the
+            // Play source stamp, which describes the signed build this one was derived from—a
             // provenance an APK signed with a key of our own does not have, and one the recorded
-            // build does not carry either. Nothing else may go missing.
+            // build does not carry either. Nothing else may go missing. 354.1 does not ship
+            // Discord's own JS patch file, which the repack also drops when a base carries it.
             assertEquals(
                 "only the artifacts the repack drops may leave the archive",
-                setOf("assets/index.android.bundle.patch", "stamp-cert-sha256"),
+                setOf("stamp-cert-sha256"),
                 lost
             )
             assertEquals(

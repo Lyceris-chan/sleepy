@@ -19,7 +19,7 @@ class PatchItemContentTest {
         val patched = DiscordHermesBundlePatch.PATCHES.map { it.functionId }
         assertEquals(
             "the table is the fixed set of functions this release patches",
-            625,
+            416,
             patched.size
         )
         assertEquals(
@@ -121,7 +121,7 @@ class PatchItemContentTest {
     @Test
     fun everyItemHasAKeyThatDoesNotDependOnItsPosition() {
         val items = DiscordHermesFunctionCatalog.items()
-        assertEquals(73, items.size)
+        assertEquals(74, items.size)
         assertEquals(
             "two items that share a key are one item as far as a saved selection is concerned",
             items.size,
@@ -155,9 +155,9 @@ class PatchItemContentTest {
     @Test
     fun everyBlocklistEntryHasADescription() {
         val rules = DiscordBlocklistRules.ALL
-        assertEquals("the two tables are the recorded set's 20 host and 61 API rules", 81, rules.size)
-        assertEquals(20, DiscordBlocklistRules.HOST_RULES.size)
-        assertEquals(61, DiscordBlocklistRules.API_RULES.size)
+        assertEquals("the two tables are the 354.1 set's 22 host and 68 API rules", 90, rules.size)
+        assertEquals(22, DiscordBlocklistRules.HOST_RULES.size)
+        assertEquals(68, DiscordBlocklistRules.API_RULES.size)
         assertEquals(
             "a rule with no description is a switch whose effect the user cannot know",
             emptyList<String>(),

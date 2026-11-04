@@ -5,6 +5,21 @@ This file documents all notable changes to this project.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Nine network blocklist rules for 354.1.** The PayPal SDK analytics logger at `www.paypal.com/xoplatform/logger` and Discord's `/error-reporting-proxy` tunnel join the host rules, and `/purchase`, `/store`, `/authorize-payment`, `/app-store-consent`, `/reactivation-offers`, `/activate-perk` and `/orbs-arcade` join the API paths.
+
+### Changed
+
+- **The Discord JavaScript set is 416 entries over 74 features.** The table was re-pointed to 354.1; 13 entries whose targets are gone are retired, duplicate aliases are collapsed to the live target, and 13 entries were added or re-derived for surfaces the build changed, including the premium try-it-out funnel, referral sheet, Orbs Arcade and Hexagon campaign.
+- **The native Discord set is 115 edits**, up from 108. Every edit applies to 354.1 with no skips; removed targets are retired, class moves are retargeted, the production Sentry DSN uses the `error-reporting-proxy` URL, and the media scope now has both a supervisor and a logging exception handler.
+- **Discord support moves to 354.1** (version code 354201, published as `354.1 - Alpha`). The source manifest, the bundle verification workflow and the docs name tracker build 354201; the 353.2.0 source is no longer offered.
+- **The network blocklist is 22 host rules and 68 API paths**, up from 20 and 61. The new `/purchase` and `/store` rules make the older `/purchases`, `/storefront`, `/store/` and `/store-listing` rules redundant while they are on, and the patch list marks those rows as already covered.
+- **The 354.1 source carries no German split.** The tracker publishes no `config.de` for 354201, so the source merges the ARM64, hdpi, xxhdpi and English splits; German falls back to the base APK's strings.
+- **The generated blocklist interceptor reads 354.1's Request URL field at its declared type.** R8 merged unrelated classes into the Request class, so the field is declared as `Object`; the interceptor reads that type and casts to the URL type instead of reading the field as the URL type.
+
 ## [3.13.1] - 2026-10-29
 
 ### Fixed

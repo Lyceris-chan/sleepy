@@ -86,6 +86,25 @@ class DiscordBlocklistPatchTest {
                 "${names.chainType}->${names.chainRequestField}:${names.requestType}"
             )
         )
+
+        // 354.1 declares the Request URL field as Object because R8 merged unrelated classes
+        // into the Request class. The body has to read the declared type and cast it; reading
+        // the field as the URL type directly names a field this build does not carry.
+        assertEquals(
+            "354.1 declares the Request URL field as Object",
+            "Ljava/lang/Object;",
+            names.requestUrlFieldType.toString()
+        )
+        assertTrue(
+            "the generated body must read ${names.requestUrlField}:${names.requestUrlFieldType}",
+            generated.contains(
+                "${names.requestType}->${names.requestUrlField}:${names.requestUrlFieldType}"
+            )
+        )
+        assertTrue(
+            "the generated body must cast the request URL to ${names.requestUrlType}",
+            generated.contains("check-cast v1, ${names.requestUrlType}")
+        )
         assertTrue(
             "the generated body must proceed through ${names.chainProceedMethod}",
             generated.contains(
@@ -207,7 +226,7 @@ class DiscordBlocklistPatchTest {
     }
 
     private companion object {
-        /** The Discord 353.2.0 base split, which lives outside the repository. */
+        /** The Discord 354.1 base split, which lives outside the repository. */
         val BASE_APK = ComparisonApks.discordBaseApk
 
         /** Types every Android build carries, so they are not in the APK's own class index. */

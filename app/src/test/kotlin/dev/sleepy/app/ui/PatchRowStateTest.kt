@@ -48,13 +48,13 @@ class PatchRowStateTest {
         assertEquals("nothing selected is off", TriState.NONE, off.single { it.label == ADS }.triState)
         assertEquals(
             "every item of the set is under some section",
-            73,
+            74,
             off.sumOf { it.itemCount }
         )
         assertTrue("nothing is on", off.all { it.selectedItemCount == 0 })
 
         val everything = PatchSelection().setEnabled(hermesItems, true)
-        assertEquals(73, sectionsOf(hermes, everything).sumOf { it.selectedItemCount })
+        assertEquals(74, sectionsOf(hermes, everything).sumOf { it.selectedItemCount })
         assertTrue(
             "everything on is on in every section",
             sectionsOf(hermes, everything).all { it.triState == TriState.ALL }
@@ -80,7 +80,7 @@ class PatchRowStateTest {
             TriState.NONE,
             partial.single { it.label == ADS }.triState
         )
-        assertEquals(73, partial.sumOf { it.itemCount })
+        assertEquals(74, partial.sumOf { it.itemCount })
 
         assertEquals(
             "an id that names nothing selects nothing rather than everything",
@@ -238,7 +238,7 @@ class PatchRowStateTest {
             "a section has to head rows: an empty one is a heading with no switch behind it",
             sections.all { it.rows.isNotEmpty() }
         )
-        assertEquals(73, sections.sumOf { it.rows.size })
+        assertEquals(74, sections.sumOf { it.rows.size })
         assertEquals(
             "the rows of a section are exactly the items filed under it",
             hermesItems.map { it.section to it.key }.toSet(),
@@ -262,7 +262,7 @@ class PatchRowStateTest {
         )
         assertEquals(
             "every rule row is a rule the coverage table evaluated, so none lost its graying",
-            81,
+            90,
             network.rows.drop(2).size
         )
 
@@ -320,8 +320,16 @@ class PatchRowStateTest {
             liveAgain.enabled
         )
         assertEquals(
-            "the other three redundancies are untouched",
-            listOf("/users/@me/activities/statistics", "/users/@me/billing", "/guilds/premium"),
+            "the other seven redundancies are untouched",
+            listOf(
+                "/users/@me/activities/statistics",
+                "/storefront",
+                "/users/@me/billing",
+                "/store/",
+                "/purchases",
+                "/guilds/premium",
+                "/store-listing"
+            ),
             rebuilt.filter { it.inertKind == InertKind.COVERED }.map { it.label }
         )
 
@@ -329,7 +337,7 @@ class PatchRowStateTest {
         assertEquals(
             "only the rule that was switched off left the selection; the graying moved and " +
                 "nothing else",
-            80,
+            89,
             withoutQuest.selected(blocklistItems).size
         )
         assertTrue(
@@ -343,8 +351,8 @@ class PatchRowStateTest {
         val network = networkSection(PatchSelection())
         val gates = network.rows.take(2)
 
-        assertEquals("the gates are not items and are not counted as any", 81, network.itemCount)
-        assertEquals(83, network.rows.size)
+        assertEquals("the gates are not items and are not counted as any", 90, network.itemCount)
+        assertEquals(92, network.rows.size)
         assertEquals(0, network.selectedItemCount)
         gates.forEach { gate ->
             assertEquals(InertKind.REQUIRED, gate.inertKind)

@@ -32,9 +32,9 @@ class PatchSelectionTest {
             source = PatchItemCatalog
         )
 
-        assertEquals("both sets in full", 73 + 81, selection.keys.size)
-        assertEquals(73, selection.selected(hermesItems).size)
-        assertEquals(81, selection.selected(blocklistItems).size)
+        assertEquals("both sets in full", 74 + 90, selection.keys.size)
+        assertEquals(74, selection.selected(hermesItems).size)
+        assertEquals(90, selection.selected(blocklistItems).size)
 
         val untouched = PatchRegistry.all
             .filter {
@@ -87,12 +87,12 @@ class PatchSelectionTest {
     fun aSetSwitchSelectsAndDeselectsEveryItemOfTheSet() {
         var selection = PatchSelection()
         selection = selection.setEnabled(hermesItems, true)
-        assertEquals(73, selection.selected(hermesItems).size)
+        assertEquals(74, selection.selected(hermesItems).size)
 
         selection = selection.toggle(hermesItems.first())
         assertEquals(
             "the set switch is not the last item state",
-            72,
+            73,
             selection.selected(hermesItems).size
         )
 
@@ -102,7 +102,7 @@ class PatchSelectionTest {
         selection = selection.setEnabled(hermesItems, true)
         assertEquals(
             "switching the set back on restores the whole set",
-            73,
+            74,
             selection.selected(hermesItems).size
         )
     }
@@ -238,14 +238,27 @@ class PatchSelectionTest {
                 "here means the recorded tables moved",
             listOf(
                 "/users/@me/activities/statistics",
+                "/storefront",
                 "/quest-home",
                 "/users/@me/billing",
-                "/guilds/premium"
+                "/store/",
+                "/purchases",
+                "/guilds/premium",
+                "/store-listing"
             ),
             covered.map { it.rule.pattern }
         )
         assertEquals(
-            listOf("/activities/statistics", "/quest", "/billing", "/premium"),
+            listOf(
+                "/activities/statistics",
+                "/store",
+                "/quest",
+                "/billing",
+                "/store",
+                "/purchase",
+                "/premium",
+                "/store"
+            ),
             covered.map { it.coveredBy!!.pattern }
         )
         assertTrue(
@@ -257,7 +270,7 @@ class PatchSelectionTest {
     @Test
     fun theGatesAreLockedWhileEveryRuleIsASwitch() {
         val rows = DiscordBlocklistPatch.rows(PatchSelection())
-        assertEquals("the two gates, then every rule", 2 + 81, rows.size)
+        assertEquals("the two gates, then every rule", 2 + 90, rows.size)
 
         val gates = rows.filterIsInstance<BlocklistGateRow>()
         assertEquals(listOf("/api/", "/external/"), gates.map { it.gate.pattern })
@@ -267,7 +280,7 @@ class PatchSelectionTest {
         }
 
         val ruleRows = rows.filterIsInstance<BlocklistRuleRow>()
-        assertEquals(81, ruleRows.size)
+        assertEquals(90, ruleRows.size)
         assertTrue(
             "with nothing switched on there is nothing to be covered by",
             ruleRows.all { it.switchable }

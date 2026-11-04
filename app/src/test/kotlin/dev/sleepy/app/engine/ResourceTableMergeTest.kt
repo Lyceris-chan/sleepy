@@ -28,11 +28,13 @@ class ResourceTableMergeTest {
     private val baseApk = ComparisonApks.discordBaseApk
 
     /**
-     * The configuration splits, in the order the source lists them: the ABI split carries no
-     * resource table, so the density and the two language splits are what this merges.
+     * The configuration splits this merge can take, in the order the source lists them: the ABI
+     * split carries no resource table. Both density splits are included because 354.1's hdpi and
+     * xxhdpi tables overlap in 26 entries that resolve to the same value; the merge treats that
+     * as one resource rather than a collision.
      */
     private val splitApks =
-        listOf("config.hdpi.apk", "config.de.apk", "config.en.apk").map { File(extracted, it) }
+        listOf("config.hdpi.apk", "config.xxhdpi.apk", "config.en.apk").map { File(extracted, it) }
 
     private fun tableOf(apk: File): ByteArray = entryOf(apk, "resources.arsc")
 
@@ -299,21 +301,28 @@ class ResourceTableMergeTest {
     }
 
     /**
-     * Two tables carrying an entry at the same index under the same configuration is not something
-     * this merge can reconcile: one of them has to lose. The merge returns a refusal instead.
+     * Two tables can carry the same entry at the same index under the same configuration when
+     * they resolve to the same value, as the hdpi and xxhdpi splits do. That is one resource, not
+     * a collision: the merge keeps it once instead of refusing the whole table.
      *
-     * Merging a table with itself asks for exactly that.
+     * Merging a table with itself is the simplest form of that overlap.
      */
     @Test
-    fun refusesWhenTwoTablesClaimTheSameEntry() {
+    fun acceptsIdenticalEntriesFromTwoTables() {
         val base = tableOf(baseApk)
         val result = ResourceTableMerger.merge(base, listOf(base))
         assertTrue(
-            "a collision must be refused, not resolved",
-            result is ResourceTableMerger.Result.Refused
+            "an identical duplicate must be merged, not refused: " +
+                (result as? ResourceTableMerger.Result.Refused)?.reason,
+            result is ResourceTableMerger.Result.Merged
         )
-        val reason = (result as ResourceTableMerger.Result.Refused).reason
-        assertTrue("the refusal must say what collided: $reason", reason.contains("same index"))
+        val merged = result as ResourceTableMerger.Result.Merged
+        assertEquals("the duplicate table must be counted", 2, merged.sourceCount)
+        assertEquals(
+            "an identical duplicate must not change the entry count",
+            ResourceTableMerger.slotsOf(base)!!.size,
+            ResourceTableMerger.slotsOf(merged.table)!!.size
+        )
     }
 
     /**
@@ -374,7 +383,7 @@ class ResourceTableMergeTest {
      * The checks above compare the table against its sources. This adds a check the merger cannot
      * make about itself: that an independent reader accepts the table, that the density split's
      * file entries are visible with the configurations and paths they had, and that the strings
-     * the two language splits carry are reachable.
+     * the language split carries are reachable.
      */
     @Test
     fun aapt2ReadsTheMergedTableAndTheSplitResourcesAreInIt() {
@@ -415,10 +424,10 @@ class ResourceTableMergeTest {
                 !dump.contains("res/drawable-xhdpi/")
             )
 
-            // The two language splits, by an entry each one carries and the base does not.
-            assertTrue("the German strings are missing", dump.contains("(de) \"Nach oben\""))
+            // The language split, by an entry it carries and the base does not carry under that
+            // configuration. 354.1 ships no German split, so the English one is the check.
             assertTrue(
-                "the English strings are missing",
+                "the English split's strings are missing",
                 dump.contains("(en-rGB) \"Navigate up\"")
             )
 

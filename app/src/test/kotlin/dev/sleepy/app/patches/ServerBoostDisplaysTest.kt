@@ -61,7 +61,7 @@ class ServerBoostDisplaysTest {
 
     @Test
     fun theCoachmarksMovedOutOfTheGuildUpsellSwitch() {
-        val coachmarks = setOf(77991, 77992, 77995, 77996)
+        val coachmarks = setOf(72749, 72751)
         assertTrue(
             "the boost coachmarks belong to the boost display switch",
             feature.functionIds.containsAll(coachmarks)

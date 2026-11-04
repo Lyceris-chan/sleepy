@@ -4,13 +4,12 @@ import dev.sleepy.app.model.PatchSet
 import dev.sleepy.app.model.SmaliPatch
 
 /**
- * Native (smali/DEX) modifications for Discord 353.2.0.
+ * Native (smali/DEX) modifications for Discord 354.1.
  *
- * Every entry is a call the recorded 349.5 change set makes, re-pointed at this build. All 47
- * class paths survived unchanged, but four kinds of name inside them moved: five
- * experiment-lambda signatures, `FrameMetricsAggregator.bindTo` and `enableTracking`, two
- * coroutine classes, and the obfuscated okhttp cache type. Each is read out of the build's own
- * smali here rather than carried.
+ * Every entry is a call the recorded change set makes, re-pointed at this build. Obfuscated
+ * class names, method signatures and branch labels move between releases, so every anchor below
+ * is read out of 354.1's own smali rather than carried over from the previous build. A target
+ * this build no longer has is retired and says so.
  *
  * Manifest edits, resource-table changes and bundled-file deletions are applied elsewhere in the
  * pipeline because a DEX edit cannot make them. The recorded edits that are off by default stay
@@ -42,7 +41,7 @@ object DiscordNativePatches {
                 title = "Blanking the production Sentry DSN in BuildConfig",
                 explanation = "Removes the production Sentry endpoint hard-coded in the generated BuildConfig.",
                 smaliPath = "u5/b.smali",
-                anchor = "\"https://70545531dfe34835bf4dd0996821e8b6@o64374.ingest.sentry.io/5992375\"",
+                anchor = "\"https://70545531dfe34835bf4dd0996821e8b6@discord.com/error-reporting-proxy/android/5992375\"",
                 replacement = "\"\""
             ),
             SmaliPatch(
@@ -63,7 +62,7 @@ object DiscordNativePatches {
                 title = "Blanking the production Sentry DSN in ClientInfo",
                 explanation = "Removes the production Sentry endpoint from the client-info table.",
                 smaliPath = "com/discord/client_info/react/ClientInfoModule.smali",
-                anchor = "\"https://70545531dfe34835bf4dd0996821e8b6@o64374.ingest.sentry.io/5992375\"",
+                anchor = "\"https://70545531dfe34835bf4dd0996821e8b6@discord.com/error-reporting-proxy/android/5992375\"",
                 replacement = "\"\""
             ),
             SmaliPatch(
@@ -97,8 +96,8 @@ object DiscordNativePatches {
             ),
             SmaliPatch(
                 title = "Disabling the Sentry breadcrumb facade directly",
-                explanation = "Stubs the SDK method that every breadcrumb goes through, which also covers the three view call sites that reach the SDK without consulting the app's own crash-reporting switch.",
-                smaliPath = "io/sentry/d4.smali",
+                explanation = "Stubs the SDK method every breadcrumb goes through, which also covers the crash-reporting and view call sites that reach the SDK without consulting the app's own crash-reporting switch.",
+                smaliPath = "io/sentry/e4.smali",
                 methodSignature = ".method public static a(Lio/sentry/e;)V",
                 replacementBody = """.method public static a(Lio/sentry/e;)V
     .locals 0
@@ -144,32 +143,32 @@ object DiscordNativePatches {
                 title = "Disabling deep-link attribution at startup",
                 explanation = "Removes the AppsFlyer subscription, init and start calls from the startup task, so the attribution SDK is never initialized and incoming links are not resolved against it.",
                 smaliPath = "d6/a.smali",
-                anchor = """    :cond_54
-    new-instance v4, Lxa/c;
+                anchor = """    :cond_53
+    new-instance v4, Lxa/b;
 
+    .line 85
     .line 86
-    .line 87
     invoke-direct {v4}, Ljava/lang/Object;-><init>()V
 
+    .line 87
     .line 88
     .line 89
-    .line 90
     invoke-virtual {v0, v4}, Lcom/appsflyer/AppsFlyerLib;->subscribeForDeepLink(Lcom/appsflyer/deeplink/DeepLinkListener;)V
 
+    .line 90
     .line 91
     .line 92
-    .line 93
     const-string v4, "GtHaVQcNmvxMT8zPNShJWJ"
 
+    .line 93
     .line 94
-    .line 95
     invoke-virtual {v0, v4, v1, v3}, Lcom/appsflyer/AppsFlyerLib;->init(Ljava/lang/String;Lcom/appsflyer/AppsFlyerConversionListener;Landroid/content/Context;)Lcom/appsflyer/AppsFlyerLib;
 
+    .line 95
     .line 96
     .line 97
-    .line 98
     invoke-virtual {v0, v3}, Lcom/appsflyer/AppsFlyerLib;->start(Landroid/content/Context;)V""",
-                replacement = """    :cond_54
+                replacement = """    :cond_53
     # Patch: no AppsFlyer deep-link subscription, init or start."""
             )
         )
@@ -178,7 +177,7 @@ object DiscordNativePatches {
     /**
      * Stops the per-touch event logger from recording gestures.
      *
-     * 353.2.0 already gates its JavaScript stall report on a 1000 ms threshold after subtracting
+     * 354.1 already gates its JavaScript stall report on a 1000 ms threshold after subtracting
      * the same 500 ms grace the old edit added, so there is no remaining short-gap report to
      * suppress; only the touch logger still needs the change.
      */
@@ -399,48 +398,21 @@ object DiscordNativePatches {
     )
 
     /**
-     * Stubs the debug-level logging entry points that walk the stack on every call. Error,
-     * warning and info logging is kept for diagnostics.
+     * Retired: 354.1 no longer has a debug-only native log facade.
+     *
+     * The class this set stubbed, `yc/a`, still exists, but its three methods now carry the
+     * app's error, info and warning lines - there is no debug entry point left to silence
+     * without dropping diagnostics too. The JavaScript debug logger is stubbed by the Discord
+     * JavaScript set, so the native half is retired rather than guessed at.
      */
     val LOG_NOISE = PatchSet(
         id = "discord_native_log_noise",
         label = "Quieter debug logging",
-        description = "Stubs the debug-level logging entry points, which walk the stack on every call to derive a tag. Error, warning and info logging is kept for diagnostics.",
-        smaliPatches = listOf(
-            SmaliPatch(
-                title = "Silencing the Java log facade (a)",
-                explanation = "Removes the first of the app's three Java log entry points, so its tag and message never reach the log tree.",
-                smaliPath = "yc/a.smali",
-                methodSignature = ".method public static a(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V",
-                replacementBody = """.method public static a(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
-    .locals 0
-    # Patch: no-op.
-    return-void
-.end method"""
-            ),
-            SmaliPatch(
-                title = "Silencing the Java log facade (b)",
-                explanation = "Removes the second Java log entry point, which writes through the same tree.",
-                smaliPath = "yc/a.smali",
-                methodSignature = ".method public static b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V",
-                replacementBody = """.method public static b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
-    .locals 0
-    # Patch: no-op.
-    return-void
-.end method"""
-            ),
-            SmaliPatch(
-                title = "Silencing the Java log facade (c)",
-                explanation = "Removes the third Java log entry point. With all three gone the app's Timber facade is silent.",
-                smaliPath = "yc/a.smali",
-                methodSignature = ".method public static c(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V",
-                replacementBody = """.method public static c(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V
-    .locals 0
-    # Patch: no-op.
-    return-void
-.end method"""
-            )
-        )
+        description = "Retired in 354.1: this build has no debug-only native log facade. Its " +
+            "remaining facade carries error, warning and info lines, so this set makes no " +
+            "native edit and does not silence them. The JavaScript debug logger is stubbed by " +
+            "the Discord JavaScript set.",
+        smaliPatches = emptyList()
     )
 
     /**
@@ -500,22 +472,22 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Adding the shared cache field",
                 explanation = "Declares the static field that holds the one disk cache this process opens.",
-                smaliPath = "nx/a.smali",
-                anchor = """.class public abstract Lnx/a;
+                smaliPath = "i4/r.smali",
+                anchor = """.class public abstract Li4/r;
 .super Ljava/lang/Object;
 .source "SourceFile"""",
-                replacement = """.class public abstract Lnx/a;
+                replacement = """.class public abstract Li4/r;
 .super Ljava/lang/Object;
 .source "SourceFile"
 
 # Patch: one disk cache shared by every React Native OkHttp client.
-.field public static f:Lm50/f;"""
+.field public static j:Lk50/f;"""
             ),
             SmaliPatch(
                 title = "Reusing the existing disk cache",
                 explanation = "Opens the http-cache directory once and stores the Cache in a static field, so later clients reuse the open journal instead of creating a second cache over the same files.",
-                smaliPath = "nx/a.smali",
-                anchor = """    new-instance p0, Lm50/f;
+                smaliPath = "i4/r.smali",
+                anchor = """    new-instance p0, Lk50/f;
 
     .line 38
     .line 39
@@ -526,28 +498,28 @@ object DiscordNativePatches {
     int-to-long v2, v2
 
     .line 42
-    invoke-direct {p0, v1, v2, v3}, Lm50/f;-><init>(Ljava/io/File;J)V
+    invoke-direct {p0, v1, v2, v3}, Lk50/f;-><init>(Ljava/io/File;J)V
 
     .line 43
     .line 44
     .line 45
-    iput-object p0, v0, Lm50/b0;->k:Lm50/f;""",
-                replacement = """    sget-object p0, Lnx/a;->f:Lm50/f;
+    iput-object p0, v0, Lk50/c0;->k:Lk50/f;""",
+                replacement = """    sget-object p0, Li4/r;->j:Lk50/f;
 
-    if-eqz p0, :cache_ready
+    if-eqz p0, :cache_ready_shared
 
-    new-instance p0, Lm50/f;
+    new-instance p0, Lk50/f;
 
     const/high16 v2, 0xa00000
 
     int-to-long v2, v2
 
-    invoke-direct {p0, v1, v2, v3}, Lm50/f;-><init>(Ljava/io/File;J)V
+    invoke-direct {p0, v1, v2, v3}, Lk50/f;-><init>(Ljava/io/File;J)V
 
-    sput-object p0, Lnx/a;->f:Lm50/f;
+    sput-object p0, Li4/r;->j:Lk50/f;
 
-    :cache_ready
-    iput-object p0, v0, Lm50/b0;->k:Lm50/f;"""
+    :cache_ready_shared
+    iput-object p0, v0, Lk50/c0;->k:Lk50/f;"""
             )
         )
     )
@@ -565,15 +537,15 @@ object DiscordNativePatches {
                 title = "Registering the main client's interceptor on the application list",
                 explanation = "Moves the request-stat interceptor from the network list to the application list, where the blocklist may answer a request without proceeding.",
                 smaliPath = "jc/l.smali",
-                anchor = "    iget-object v5, v2, Lm50/b0;->d:Ljava/util/ArrayList;",
-                replacement = "    iget-object v5, v2, Lm50/b0;->c:Ljava/util/ArrayList;"
+                anchor = "    iget-object v5, v2, Lk50/c0;->d:Ljava/util/ArrayList;",
+                replacement = "    iget-object v5, v2, Lk50/c0;->c:Ljava/util/ArrayList;"
             ),
             SmaliPatch(
                 title = "Registering the second client's interceptor on the application list",
                 explanation = "The same move for the second client that installs the same resource-usage interceptor, so a blocked request through it also short-circuits legally.",
-                smaliPath = "j60/e.smali",
-                anchor = "    iget-object p1, p1, Lm50/b0;->d:Ljava/util/ArrayList;",
-                replacement = "    iget-object p1, p1, Lm50/b0;->c:Ljava/util/ArrayList;"
+                smaliPath = "io/sentry/clientreport/a.smali",
+                anchor = "    iget-object p1, p1, Lk50/c0;->d:Ljava/util/ArrayList;",
+                replacement = "    iget-object p1, p1, Lk50/c0;->c:Ljava/util/ArrayList;"
             )
         )
     )
@@ -603,17 +575,17 @@ object DiscordNativePatches {
 .end method"""
             ),
             SmaliPatch(
-                title = "Zeroing media player byte counts",
-                explanation = "Reads zero instead of the recorded media-player byte count when the resource-usage map is built, so the JavaScript poll is answered with a zero.",
-                smaliPath = "og/b.smali",
-                anchor = "    sget-wide v18, Log/d;->b:J",
+                title = "Zeroing download byte counts",
+                explanation = "Reads zero instead of the recorded download byte count when the resource-usage map is built, so the JavaScript poll is answered with a zero.",
+                smaliPath = "ng/b.smali",
+                anchor = "    sget-wide v18, Lng/d;->b:J",
                 replacement = "    const-wide/16 v18, 0x0"
             ),
             SmaliPatch(
                 title = "Zeroing socket byte counts",
                 explanation = "Reads zero instead of the recorded socket byte count when the resource-usage map is built, so the JavaScript poll is answered with a zero.",
-                smaliPath = "og/b.smali",
-                anchor = "    sget-wide v0, Log/d;->a:J",
+                smaliPath = "ng/b.smali",
+                anchor = "    sget-wide v0, Lng/d;->a:J",
                 replacement = "    const-wide/16 v0, 0x0"
             ),
             SmaliPatch(
@@ -779,19 +751,17 @@ object DiscordNativePatches {
     /**
      * Takes the jank recorder's startup work out of the launch path.
      *
-     * 353.2.0's `MainApplication` still runs the recorder's one-time setup, hands it an
+     * 354.1's `MainApplication` still runs the recorder's one-time setup, hands it an
      * executor and feeds it Discord's per-screen experiment before the first frame. The
      * recorder is only a diagnostics source and the per-screen experiment is the treatment
-     * this patch set wants off, so the setup branch is skipped, the recording runnable becomes
-     * a no-op, the experiment flag is forced false, and the launch metric named after the
-     * removed call is dropped.
+     * this patch set wants off, so the setup branch is skipped, the experiment flag is forced
+     * false, and the launch metric named after the removed call is dropped.
      */
     val STARTUP_CLASS_LOAD = PatchSet(
         id = "discord_native_startup_class_load",
         label = "Less startup work",
-        description = "Skips the jank recorder's one-time setup and its background runnable, " +
-            "forces per-screen jank tracking off, and removes the launch metric that named the " +
-            "removed recorder call.",
+        description = "Skips the jank recorder's one-time setup, forces per-screen jank " +
+            "tracking off, and removes the launch metric that named the removed recorder call.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Not reading the jank recorder's instance",
@@ -807,18 +777,6 @@ object DiscordNativePatches {
     const/4 v0, 0x1
 
     goto :goto_cf"""
-            ),
-            SmaliPatch(
-                title = "Not initializing the jank recorder",
-                explanation = "Replaces the jank session recorder's background setup with a " +
-                    "no-op, so it neither scans the stored jank sessions nor starts recording.",
-                smaliPath = "rc/f.smali",
-                methodSignature = ".method public final run()V",
-                replacementBody = """.method public final run()V
-    .locals 0
-    # Patch: no-op.
-    return-void
-.end method"""
             ),
             SmaliPatch(
                 title = "Not setting the jank recorder's experiment flag",
@@ -842,7 +800,7 @@ object DiscordNativePatches {
 
     .line 209
     .line 210
-    invoke-static {v0}, Lai/m;->b(Ljava/lang/String;)V""",
+    invoke-static {v0}, Lzh/l;->b(Ljava/lang/String;)V""",
                 replacement = """    :goto_cf
     # Patch: the launch metric names work this build no longer does."""
             )
@@ -909,7 +867,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Forcing accumulated raw-props updates on",
                 explanation = "Answers React Native's feature-flag provider with true so Discord's server experiment can no longer turn batched property updates off.",
-                smaliPath = "pl/c.smali",
+                smaliPath = "ol/c.smali",
                 methodSignature = ".method public final enableAccumulatedUpdatesInRawPropsAndroid()Z",
                 replacementBody = """.method public final enableAccumulatedUpdatesInRawPropsAndroid()Z
     .locals 1
@@ -920,7 +878,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Forcing the pull model for property updates",
                 explanation = "Answers React Native's feature-flag provider with true so Discord's server experiment can no longer switch the push model back on.",
-                smaliPath = "pl/c.smali",
+                smaliPath = "ol/c.smali",
                 methodSignature = ".method public final usePullModelOnAndroid()Z",
                 replacementBody = """.method public final usePullModelOnAndroid()Z
     .locals 1
@@ -991,9 +949,9 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Skipping the emoji font load",
                 explanation = "Skips the font load AndroidX Startup posts half a second after the first activity resumes, which asks the Google Fonts provider for a font this build never draws with. The initializer still runs, so the singleton stays built and callers that read it keep working.",
-                smaliPath = "e60/a.smali",
-                methodSignature = ".method public final run()V",
-                replacementBody = """.method public final run()V
+                smaliPath = "t2/j.smali",
+                methodSignature = ".method public final onResume(Landroidx/lifecycle/v;)V",
+                replacementBody = """.method public final onResume(Landroidx/lifecycle/v;)V
     .locals 0
     # Patch: no-op.
     return-void
@@ -1015,12 +973,12 @@ object DiscordNativePatches {
 
     /**
      * Removes the profiler dump and parse that runs when the JavaScript thread has
-     * stalled, the Rust panic reporter and per-transaction tracing.
+     * stalled and the Rust panic reporter.
      */
     val CALL_PATH = PatchSet(
         id = "discord_native_call_path",
         label = "Lighter call overhead",
-        description = "Removes the profiler dump and parse that runs precisely when the JavaScript thread has stalled, the JavaScript-callable profiler switch, the Rust panic reporter the native layer calls over JNI, per-transaction tracing, and the per-video-tile statistics timer.",
+        description = "Removes the profiler dump and parse that runs precisely when the JavaScript thread has stalled, the JavaScript-callable profiler switch, the Rust panic reporter the native layer calls over JNI, and the per-video-tile statistics timer.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Dropping the profiler dump on JavaScript stalls",
@@ -1055,17 +1013,6 @@ object DiscordNativePatches {
     # Patch: stub.
     const-string v0, ""
     return-object v0
-.end method"""
-            ),
-            SmaliPatch(
-                title = "Dropping performance transactions",
-                explanation = "Replaces the performance tracer's start with a no-op, so it neither registers a React marker listener nor opens a Sentry transaction.",
-                smaliPath = "com/discord/crash_reporting/q.smali",
-                methodSignature = ".method public final d()V",
-                replacementBody = """.method public final d()V
-    .locals 0
-    # Patch: no-op.
-    return-void
 .end method"""
             ),
             SmaliPatch(
@@ -1106,12 +1053,11 @@ object DiscordNativePatches {
     )
 
     /**
-     * Fixes the video renderer's UI-thread stall and logs the media callback failures that
-     * were dropped.
+     * Fixes the video renderer's UI-thread stall, supervises both media coroutine scopes and
+     * logs the media callback failures that were dropped.
      *
-     * 353.2.0 replaced the media connection map and the coroutine scope construction the
-     * 351-series edits targeted, so the connection-registration and supervisor-scope edits
-     * no longer have a target; the renderer and callback paths below still do.
+     * 354.1 moved the connection map to `cd/p0` and `cd/w0` and builds both scopes from
+     * `i40`; the edits below are re-pointed at those classes.
      */
     val MEDIA = PatchSet(
         id = "discord_native_media",
@@ -1121,10 +1067,12 @@ object DiscordNativePatches {
             "been released, surfaces media callback failures in logcat under MediaEngineCB " +
             "instead of sending them to the crash reporter, replaces a connection that is " +
             "registered twice instead of throwing, tears down every connection without " +
-            "concurrent modification, keeps the media engine's coroutine scope alive after a " +
-            "failed operation, contains a failed screen-share thumbnail, bounds the UI-thread " +
-            "surface-release waits that can freeze a backgrounded call, and keeps a camera " +
-            "reconfigure failure from escaping into the native connection.",
+            "concurrent modification, puts a supervisor job and an exception handler in both " +
+            "media coroutine scopes and logs what the handler consumes, answers the " +
+            "incoming-call renderer without a blocking image fetch, contains a failed " +
+            "screen-share thumbnail, bounds the UI-thread surface-release waits that can freeze " +
+            "a backgrounded call, and keeps a camera reconfigure failure from escaping into the " +
+            "native connection.",
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Stopping video tiles from freezing the interface",
@@ -1149,7 +1097,7 @@ object DiscordNativePatches {
 
     .line 7
     .line 8
-    iget-object v2, v0, Lfd/c;->i:Ldx/a;
+    iget-object v2, v0, Lfd/c;->i:Lbx/a;
 
     if-nez v2, :egl_create
 
@@ -1183,132 +1131,130 @@ object DiscordNativePatches {
     invoke-static {p2, p1, v0}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V"""
             ),
             SmaliPatch(
-                title = "Logging media callback failures (speaking callback)",
-                explanation = "Replaces the speaking-callback failure's crash report with the same MediaEngineCB log line.",
-                smaliPath = "a2/d.smali",
-                anchor = "    invoke-static {v2, v0}, Lcom/discord/crash_reporting/CrashReporting;->c(Ljava/lang/Throwable;Z)V",
-                replacement = """    # Patch: surface the swallowed failure instead of reporting it.
-    # This method has only `this` as a parameter, so there is no p1: use
-    # the crash-reporting object and message locals, both dead here.
-    const-string v1, "MediaEngineCB"
-
-    const-string v3, "media engine native callback threw"
-
-    invoke-static {v1, v3, v2}, Lyc/a;->b(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)V"""
-            ),
-            SmaliPatch(
                 title = "Keeping the media engine alive after one failure",
-                explanation = "Puts a supervisor job in the media engine's coroutine scope. With the plain job CoroutineScope installs, one failed operation cancels the scope itself and every later create, stop or device call becomes a no-op; under a supervisor the remaining children keep running.",
+                explanation = "Puts a supervisor job and an exception handler in the media engine's coroutine scope. With the plain job CoroutineScope installs, one failed operation cancels the scope itself and every later create, stop or device call becomes a no-op; under a supervisor the remaining children keep running, and the handler consumes the failure instead of letting it reach the process handler.",
                 smaliPath = "com/discord/media/engine/MediaEngineModule.smali",
-                anchor = "    invoke-direct {v3, v2}, Lk40/w0;-><init>(Ljava/util/concurrent/Executor;)V",
-                replacement = """    invoke-direct {v3, v2}, Lk40/w0;-><init>(Ljava/util/concurrent/Executor;)V
+                anchor = "    invoke-direct {v3, v2}, Li40/w0;-><init>(Ljava/util/concurrent/Executor;)V",
+                replacement = """    invoke-direct {v3, v2}, Li40/w0;-><init>(Ljava/util/concurrent/Executor;)V
 
-    # Patch: give the media engine a SupervisorJob. CoroutineScope() below
-    # installs a plain Job when the context has none, and a plain Job cancels
-    # every child - and every later launch - on the first failure. k40/t1 is
-    # SupervisorJobImpl, built from k40/e1's constructor the same way
-    # MainScope() does in k40/z.c().
-    new-instance v2, Lk40/t1;
+    # Patch: supervised media scope. A plain Job cancelled every media call on
+    # the first failure and rethrew it to the process handler; the supervisor
+    # keeps siblings alive and j40/b consumes the exception.
+    new-instance v4, Li40/t1;
 
-    invoke-direct {v2}, Lk40/e1;-><init>()V
+    invoke-direct {v4}, Li40/e1;-><init>()V
 
-    invoke-interface {v3, v2}, Lb10/h;->B(Lb10/h;)Lb10/h;
+    invoke-interface {v3, v4}, Lz00/h;->V(Lz00/h;)Lz00/h;
+
+    move-result-object v3
+
+    new-instance v4, Lj40/b;
+
+    invoke-direct {v4}, Lj40/b;-><init>()V
+
+    invoke-interface {v3, v4}, Lz00/h;->V(Lz00/h;)Lz00/h;
 
     move-result-object v3"""
             ),
             SmaliPatch(
                 title = "Registering a reconnecting call instead of throwing",
                 explanation = "Replaces the duplicate-connection checks in createVoiceConnection. A call that reconnects while the previous connection with the same id is still registered used to throw IllegalStateException, which cancelled the media engine's scope and every later call with it. The new connection now replaces the old entry, the displaced connection is disposed, and an instance that is already registered under another id is removed first so it cannot be disposed twice.",
-                smaliPath = "cd/q0.smali",
-                anchor = """    iget-object p1, p1, Lcd/b1;->a:Ljava/util/LinkedHashMap;
+                smaliPath = "cd/p0.smali",
+                anchor = """    iget-object p1, p1, Lg5/d;->e:Ljava/lang/Object;
 
     .line 89
     .line 90
-    iget v1, p0, Lcd/q0;->i:I
+    check-cast p1, Ljava/util/LinkedHashMap;
 
     .line 91
     .line 92
-    invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+    iget v1, p0, Lcd/p0;->i:I
 
     .line 93
     .line 94
+    invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
     .line 95
+    .line 96
+    .line 97
     move-result-object v2
 
-    .line 96
+    .line 98
     invoke-interface {p1, v2}, Ljava/util/Map;->containsKey(Ljava/lang/Object;)Z
 
-    .line 97
-    .line 98
     .line 99
+    .line 100
+    .line 101
     move-result v2
 
-    .line 100
-    const-string v3, "Check failed."
-
-    .line 101
     .line 102
-    if-nez v2, :cond_7d
+    const-string v3, "Check failed."
 
     .line 103
     .line 104
-    invoke-virtual {p1, v0}, Ljava/util/LinkedHashMap;->containsValue(Ljava/lang/Object;)Z
+    if-nez v2, :cond_7f
 
     .line 105
     .line 106
+    invoke-virtual {p1, v0}, Ljava/util/LinkedHashMap;->containsValue(Ljava/lang/Object;)Z
+
     .line 107
+    .line 108
+    .line 109
     move-result v2
 
-    .line 108
-    if-nez v2, :cond_77
-
-    .line 109
     .line 110
-    invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+    if-nez v2, :cond_79
 
     .line 111
     .line 112
+    invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
+
     .line 113
+    .line 114
+    .line 115
     move-result-object v1
 
-    .line 114
+    .line 116
     invoke-interface {p1, v1, v0}, Ljava/util/Map;->put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
 
-    .line 115
-    .line 116
     .line 117
-    sget-object p1, Lw00/a0;->a:Lw00/a0;
-
     .line 118
     .line 119
-    return-object p1
+    sget-object p1, Lu00/a0;->a:Lu00/a0;
 
     .line 120
-    :cond_77
-    new-instance p1, Ljava/lang/IllegalStateException;
-
     .line 121
+    return-object p1
+
     .line 122
-    invoke-direct {p1, v3}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+    :cond_79
+    new-instance p1, Ljava/lang/IllegalStateException;
 
     .line 123
     .line 124
+    invoke-direct {p1, v3}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
     .line 125
+    .line 126
+    .line 127
     throw p1
 
-    .line 126
-    :cond_7d
-    new-instance p1, Ljava/lang/IllegalStateException;
-
-    .line 127
     .line 128
-    invoke-direct {p1, v3}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+    :cond_7f
+    new-instance p1, Ljava/lang/IllegalStateException;
 
     .line 129
     .line 130
+    invoke-direct {p1, v3}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
     .line 131
+    .line 132
+    .line 133
     throw p1""",
-                replacement = """    iget-object p1, p1, Lcd/b1;->a:Ljava/util/LinkedHashMap;
+                replacement = """    iget-object p1, p1, Lg5/d;->e:Ljava/lang/Object;
+
+    check-cast p1, Ljava/util/LinkedHashMap;
 
     # Patch: a reconnect can register a connection id that is still present,
     # or re-register the same NativeConnection object. Replace instead of
@@ -1347,7 +1293,7 @@ object DiscordNativePatches {
     goto :goto_dup
 
     :cond_dup_done
-    iget v1, p0, Lcd/q0;->i:I
+    iget v1, p0, Lcd/p0;->i:I
 
     invoke-static {v1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
 
@@ -1368,61 +1314,63 @@ object DiscordNativePatches {
     invoke-virtual {v2}, Lcom/discord/native/engine/NativeConnection;->dispose()V
 
     :cond_no_old
-    sget-object p1, Lw00/a0;->a:Lw00/a0;
+    sget-object p1, Lu00/a0;->a:Lu00/a0;
 
     return-object p1"""
             ),
             SmaliPatch(
                 title = "Tearing down every call connection",
                 explanation = "Takes a snapshot of the connection ids before the media engine disposes them. The old loop removed entries from the live key set while iterating it, so a second connection made the iterator throw ConcurrentModificationException, abandon teardown and leave the native engine and the remaining connections alive.",
-                smaliPath = "cd/x0.smali",
-                anchor = """    invoke-virtual {v2}, Ljava/util/LinkedHashMap;->keySet()Ljava/util/Set;
-
-    .line 158
+                smaliPath = "cd/w0.smali",
+                anchor = """    .line 158
     .line 159
+    invoke-virtual {v2}, Ljava/util/LinkedHashMap;->keySet()Ljava/util/Set;
+
     .line 160
+    .line 161
+    .line 162
     move-result-object v3
 
-    .line 161
+    .line 163
     invoke-interface {v3}, Ljava/lang/Iterable;->iterator()Ljava/util/Iterator;
 
-    .line 162
-    .line 163
     .line 164
+    .line 165
+    .line 166
     move-result-object v3
 
-    .line 165
-    :cond_a4
-    :goto_a4
+    .line 167
+    :cond_a6
+    :goto_a6
     invoke-interface {v3}, Ljava/util/Iterator;->hasNext()Z
 
-    .line 166
-    .line 167
     .line 168
+    .line 169
+    .line 170
     move-result v4
 
-    .line 169
-    if-eqz v4, :cond_c9
-
-    .line 170
     .line 171
-    invoke-interface {v3}, Ljava/util/Iterator;->next()Ljava/lang/Object;
+    if-eqz v4, :cond_cd
 
     .line 172
     .line 173
+    invoke-interface {v3}, Ljava/util/Iterator;->next()Ljava/lang/Object;
+
     .line 174
+    .line 175
+    .line 176
     move-result-object v4
 
-    .line 175
-    check-cast v4, Ljava/lang/Number;
-
-    .line 176
     .line 177
-    invoke-virtual {v4}, Ljava/lang/Number;->intValue()I
+    check-cast v4, Ljava/lang/Number;
 
     .line 178
     .line 179
+    invoke-virtual {v4}, Ljava/lang/Number;->intValue()I
+
     .line 180
+    .line 181
+    .line 182
     move-result v4""",
                 replacement = """    invoke-virtual {v2}, Ljava/util/LinkedHashMap;->keySet()Ljava/util/Set;
 
@@ -1438,11 +1386,11 @@ object DiscordNativePatches {
 
     const/4 p0, 0x0
 
-    :cond_a4
-    :goto_a4
+    :cond_a6
+    :goto_a6
     array-length v5, v3
 
-    if-ge p0, v5, :cond_c9
+    if-ge p0, v5, :cond_cd
 
     aget-object v5, v3, p0
 
@@ -1490,76 +1438,78 @@ object DiscordNativePatches {
                 title = "Containing screen-share thumbnail failures",
                 explanation = "Wraps one screen-share thumbnail coroutine in a catch-all. It compresses a bitmap and invokes a JavaScript callback; a recycled bitmap, a failed compression or a throwing callback escaped the coroutine as an uncaught exception, which ends the process while the call is sharing its screen. A failure now ends the thumbnail attempt normally, without touching the call.",
                 smaliPath = "a7/b.smali",
-                switchCaseLabel = ":pswitch_969",
-                switchCaseBody = """    :pswitch_969
-    :try_start_thumbnail
-    sget-object v0, Lc10/a;->d:Lc10/a;
+                anchor = """    invoke-static {v2, v1}, Ljk/l;->q(Landroid/graphics/Bitmap;Lb10/c;)Ljava/lang/Object;
 
-    iget v2, v1, La7/b;->e:I
-
-    const/4 v8, 0x1
-
-    if-eqz v2, :cond_thumbnail_first
-
-    if-ne v2, v8, :cond_thumbnail_bad_state
-
-    invoke-static/range {p1 .. p1}, Lxk/a;->R(Ljava/lang/Object;)V
-
-    move-object/from16 v2, p1
-
-    goto :goto_thumbnail_result
-
-    :cond_thumbnail_bad_state
-    new-instance v0, Ljava/lang/IllegalStateException;
-
-    const-string v2, "call to 'resume' before 'invoke' with coroutine"
-
-    invoke-direct {v0, v2}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
-
-    throw v0
-
-    :cond_thumbnail_first
-    invoke-static/range {p1 .. p1}, Lxk/a;->R(Ljava/lang/Object;)V
-
-    sget-object v2, Lcd/p;->j:Ljava/util/Set;
-
-    iget-object v2, v1, La7/b;->i:Ljava/lang/Object;
-
-    check-cast v2, Landroid/graphics/Bitmap;
-
-    iput v8, v1, La7/b;->e:I
-
-    invoke-static {v2, v1}, Lkv/d;->r(Landroid/graphics/Bitmap;Ld10/c;)Ljava/lang/Object;
-
+    .line 2448
+    .line 2449
+    .line 2450
     move-result-object v2
 
-    if-ne v2, v0, :cond_thumbnail_resume
+    .line 2451
+    if-ne v2, v0, :cond_995
 
-    goto :goto_thumbnail_suspended
+    .line 2452
+    .line 2453
+    goto :goto_9a0
 
-    :cond_thumbnail_resume
-    :goto_thumbnail_result
+    .line 2454
+    :cond_995
+    :goto_995
     check-cast v2, Ljava/lang/String;
 
+    .line 2455
+    .line 2456
     iget-object v0, v1, La7/b;->v:Ljava/lang/Object;
 
-    check-cast v0, Laf/g;
+    .line 2457
+    .line 2458
+    check-cast v0, Laf/h;
 
-    invoke-virtual {v0, v2}, Laf/g;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
+    .line 2459
+    .line 2460
+    invoke-virtual {v0, v2}, Laf/h;->invoke(Ljava/lang/Object;)Ljava/lang/Object;""",
+                replacement = """:try_start_thumbnail
+    invoke-static {v2, v1}, Ljk/l;->q(Landroid/graphics/Bitmap;Lb10/c;)Ljava/lang/Object;
 
-    sget-object v0, Lw00/a0;->a:Lw00/a0;
+    .line 2448
+    .line 2449
+    .line 2450
+    move-result-object v2
 
-    :goto_thumbnail_suspended
+    .line 2451
+    if-ne v2, v0, :cond_995
+
+    .line 2452
+    .line 2453
+    goto :goto_9a0
+
+    .line 2454
+    :cond_995
+    :goto_995
+    check-cast v2, Ljava/lang/String;
+
+    .line 2455
+    .line 2456
+    iget-object v0, v1, La7/b;->v:Ljava/lang/Object;
+
+    .line 2457
+    .line 2458
+    check-cast v0, Laf/h;
+
+    .line 2459
+    .line 2460
+    invoke-virtual {v0, v2}, Laf/h;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
     :try_end_thumbnail
-    return-object v0
+    goto :goto_thumbnail_done
 
     :catch_thumbnail
     move-exception v0
 
-    sget-object v0, Lw00/a0;->a:Lw00/a0;
+    sget-object v0, Lu00/a0;->a:Lu00/a0;
 
     return-object v0
 
+    :goto_thumbnail_done
     .catchall {:try_start_thumbnail .. :try_end_thumbnail} :catch_thumbnail"""
             ),
             SmaliPatch(
@@ -1717,6 +1667,63 @@ object DiscordNativePatches {
     .catch Ljava/lang/Exception; {:try_start_init .. :try_end_init} :catch_init
 .end method"""
             ),
+            SmaliPatch(
+                title = "Keeping the media engine's internal scope alive after one failure",
+                explanation = "Puts the same supervisor job and exception handler in the media engine's own coroutine scope. One failed transport operation no longer cancels every later launch in that scope, and the handler logs what it consumes under DiscordCoroutines.",
+                smaliPath = "cd/o.smali",
+                anchor = "    invoke-static {p1}, Li40/z;->b(Lz00/h;)Ln40/d;",
+                replacement = """    # Patch: supervised media scope (see MediaEngineModule).
+    new-instance v1, Li40/t1;
+
+    invoke-direct {v1}, Li40/e1;-><init>()V
+
+    invoke-interface {p1, v1}, Lz00/h;->V(Lz00/h;)Lz00/h;
+
+    move-result-object p1
+
+    new-instance v1, Lj40/b;
+
+    invoke-direct {v1}, Lj40/b;-><init>()V
+
+    invoke-interface {p1, v1}, Lz00/h;->V(Lz00/h;)Lz00/h;
+
+    move-result-object p1
+
+    invoke-static {p1}, Li40/z;->b(Lz00/h;)Ln40/d;"""
+            ),
+            SmaliPatch(
+                title = "Logging unhandled coroutine exceptions",
+                explanation = "Writes the exceptions the media scope's handler consumes to logcat under DiscordCoroutines. Stock's handler swallows them, so a failed media operation left no trace outside the crash reporter this set already disables.",
+                smaliPath = "j40/b.smali",
+                anchor = """.method public final l0(Ljava/lang/Throwable;Lz00/h;)V
+    .registers 5""",
+                replacement = """.method public final l0(Ljava/lang/Throwable;Lz00/h;)V
+    .registers 5
+
+    # Patch: log unhandled coroutine exceptions.
+    const-string v0, "DiscordCoroutines"
+
+    const-string v1, "unhandled coroutine exception"
+
+    invoke-static {v0, v1, p1}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;)I"""
+            ),
+            SmaliPatch(
+                title = "Answering the incoming-call renderer without an image fetch",
+                explanation = "Returns from the incoming-call image fetch without suspending. The caller casts the null result to a Bitmap and clears the ImageView with it, so the notification still shows the caller's name, but the UI thread no longer waits behind Fresco initialization, a network round-trip and a runBlocking bridge while a call is arriving.",
+                smaliPath = "com/discord/notifications/renderer/IncomingCallActivity.smali",
+                methodSignature = ".method public static final r(Lcom/discord/notifications/renderer/IncomingCallActivity;Ljava/lang/String;Lb10/j;)Ljava/lang/Object;",
+                replacementBody = """.method public static final r(Lcom/discord/notifications/renderer/IncomingCallActivity;Ljava/lang/String;Lb10/j;)Ljava/lang/Object;
+    .locals 1
+
+    # Patch: no network wait. Returning null without suspending is a valid
+    # completion; the caller casts it to Bitmap (null casts fine) and clears
+    # the ImageView with it. Removes the Fresco init + network round-trip that
+    # `runBlocking` on the main thread was waiting for.
+    const/4 v0, 0x0
+
+    return-object v0
+.end method"""
+            ),
         )
     )
 
@@ -1812,7 +1819,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Keeping the microphone type while backgrounded",
                 explanation = "Drops the window-foreground test from the microphone branch of the service-type chain, so a call that outlives the window is promoted with its microphone type. The app's permission checks stay in front of it, and the widened catches below make the OS refuse a type by falling through to the next candidate instead of aborting the promotion. The final fallback type is untouched.",
-                smaliPath = "androidx/core/view/f1.smali",
+                smaliPath = "androidx/core/view/i1.smali",
                 anchor = "    if-eqz v16, :cond_a8",
                 replacement = """    # Patch: the microphone type stays in the chain while backgrounded.
     nop"""
@@ -1820,7 +1827,7 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Keeping the camera type while backgrounded",
                 explanation = "Drops the same window-foreground test from the camera branch, so screen sharing and video keep their camera type after the app is backgrounded.",
-                smaliPath = "androidx/core/view/f1.smali",
+                smaliPath = "androidx/core/view/i1.smali",
                 anchor = "    if-eqz v16, :cond_c8",
                 replacement = """    # Patch: the camera type stays in the chain while backgrounded.
     nop"""
@@ -1828,21 +1835,21 @@ object DiscordNativePatches {
             SmaliPatch(
                 title = "Falling through to the next service type (first attempt)",
                 explanation = "Catches any refusal around the first service-type attempt, not just the security exception, so a failed type falls through instead of aborting the promotion.",
-                smaliPath = "androidx/core/view/f1.smali",
+                smaliPath = "androidx/core/view/i1.smali",
                 anchor = "    .catch Ljava/lang/SecurityException; {:try_start_148 .. :try_end_174} :catch_193",
                 replacement = "    .catch Ljava/lang/Exception; {:try_start_148 .. :try_end_174} :catch_193"
             ),
             SmaliPatch(
                 title = "Falling through to the next service type (second attempt)",
                 explanation = "Catches any refusal around the second service-type attempt so it falls through to the third.",
-                smaliPath = "androidx/core/view/f1.smali",
+                smaliPath = "androidx/core/view/i1.smali",
                 anchor = "    .catch Ljava/lang/SecurityException; {:try_start_176 .. :try_end_185} :catch_190",
                 replacement = "    .catch Ljava/lang/Exception; {:try_start_176 .. :try_end_185} :catch_190"
             ),
             SmaliPatch(
                 title = "Falling through to the next service type (third attempt)",
                 explanation = "Catches any refusal around the third service-type attempt so it reaches the aggregate failure path instead of escaping as a security exception.",
-                smaliPath = "androidx/core/view/f1.smali",
+                smaliPath = "androidx/core/view/i1.smali",
                 anchor = "    .catch Ljava/lang/SecurityException; {:try_start_186 .. :try_end_18d} :catch_18e",
                 replacement = "    .catch Ljava/lang/Exception; {:try_start_186 .. :try_end_18d} :catch_18e"
             )
@@ -1864,10 +1871,10 @@ object DiscordNativePatches {
         smaliPatches = listOf(
             SmaliPatch(
                 title = "Enabling accumulated raw-props updates",
-                explanation = "Pins the RMLE experiment to treatment 2, the level that enables React Native's accumulated raw-props updates without the pull-model change in treatment 3. The app's feature-flag bridge reads a value of 2 or more as enabled.",
+                explanation = "Pins the RMLE experiment to treatment 3, the arm 354.1's standalone suite verified: accumulated raw-props updates, raw-props reconciliation and the pull model. The property-update flag the privacy set forces on agrees with this arm.",
                 smaliPath = "me/j.smali",
                 anchor = "    const-string v1, \"2026-01-android-rmle\"",
-                replacement = """    const/4 v0, 0x2
+                replacement = """    const/4 v0, 0x3
 
     goto/16 :goto_19
 
@@ -2008,7 +2015,7 @@ object DiscordNativePatches {
                     "link still opens in your browser when something else selects the in-app tab - a " +
                     "stale setting, or a deep link that passes its own choice.",
                 smaliPath = "com/discord/browser_manager/BrowserManagerModule.smali",
-                anchor = "    invoke-static {v0, p2, v2}, Lt6/a;->c(Landroid/content/ContextWrapper;Landroid/net/Uri;Laf/i;)V",
+                anchor = "    invoke-static {v0, p2, v2}, Lt6/a;->c(Landroid/content/ContextWrapper;Landroid/net/Uri;Laf/k;)V",
                 replacement = """    # Patch: hand the URL to the external-browser path instead of a Custom Tab.
     sget-object v2, Lt6/a;->a:Lt6/a;
 

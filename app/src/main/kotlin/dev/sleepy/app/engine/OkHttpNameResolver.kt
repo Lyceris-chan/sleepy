@@ -105,7 +105,7 @@ sealed interface OkHttpResolution {
  * 6. The stock resource-usage interceptor is the class with a Chain-to-Response method whose body
  *    calls a static helper with `(Chain, <stats>) -> Response`.
  *
- * 353.2.0 obfuscates OkHttp completely; there is no `Lokhttp3/...` descriptor to anchor on. This
+ * 354.1 obfuscates OkHttp completely; there is no `Lokhttp3/...` descriptor to anchor on. This
  * is the shape-based resolution that replaces the old hardcoded names.
  */
 object OkHttpNameResolver {

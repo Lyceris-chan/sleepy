@@ -33,21 +33,21 @@ class MediaCallPatchesTest {
         const val MODULE = "com/discord/media/engine/MediaEngineModule.smali"
         const val MODULE_DESCRIPTOR = "Lcom/discord/media/engine/MediaEngineModule;"
 
-        const val CREATE_CONNECTION = "cd/q0.smali"
-        const val CREATE_CONNECTION_DESCRIPTOR = "Lcd/q0;"
+        const val CREATE_CONNECTION = "cd/p0.smali"
+        const val CREATE_CONNECTION_DESCRIPTOR = "Lcd/p0;"
 
-        const val TEARDOWN = "cd/x0.smali"
-        const val TEARDOWN_DESCRIPTOR = "Lcd/x0;"
+        const val TEARDOWN = "cd/w0.smali"
+        const val TEARDOWN_DESCRIPTOR = "Lcd/w0;"
 
-        const val STREAM = "cd/s0.smali"
-        const val STREAM_DESCRIPTOR = "Lcd/s0;"
+        const val STREAM = "cd/r0.smali"
+        const val STREAM_DESCRIPTOR = "Lcd/r0;"
 
         const val THUMBNAIL = "a7/b.smali"
         const val THUMBNAIL_DESCRIPTOR = "La7/b;"
-        const val THUMBNAIL_CASE = ":pswitch_969"
+        const val THUMBNAIL_CASE = ":pswitch_19"
 
-        const val FOREGROUND = "androidx/core/view/f1.smali"
-        const val FOREGROUND_DESCRIPTOR = "Landroidx/core/view/f1;"
+        const val FOREGROUND = "androidx/core/view/i1.smali"
+        const val FOREGROUND_DESCRIPTOR = "Landroidx/core/view/i1;"
         const val FOREGROUND_MIC_GATE = "    if-eqz v16, :cond_a8"
         const val FOREGROUND_CAMERA_GATE = "    if-eqz v16, :cond_c8"
 
@@ -122,7 +122,7 @@ class MediaCallPatchesTest {
         )
         assertFalse(
             "stock media scope has no supervisor",
-            stock.getValue(MODULE).contains("Lk40/t1;")
+            stock.getValue(MODULE).contains("Li40/t1;")
         )
         assertTrue(
             "stock foreground chain gates the microphone on the window",
@@ -139,7 +139,7 @@ class MediaCallPatchesTest {
         assertTrue(
             "the stock thumbnail case compresses the bitmap",
             stock.getValue(THUMBNAIL)
-                .contains("Lkv/d;->r(Landroid/graphics/Bitmap;Ld10/c;)Ljava/lang/Object;")
+                .contains("Ljk/l;->q(Landroid/graphics/Bitmap;Lb10/c;)Ljava/lang/Object;")
         )
         assertEquals(
             "the stock class has four catch-alls",
@@ -191,7 +191,7 @@ class MediaCallPatchesTest {
         // createConnection coroutine the edit above changes.
         assertTrue(
             "createOwnStreamConnectionWithOptions must still launch the stream coroutine",
-            after.getValue(MODULE).contains("Lcd/s0;")
+            after.getValue(MODULE).contains("Lcd/r0;")
         )
         assertTrue(
             "the stream coroutine must register through createConnection",
@@ -232,13 +232,13 @@ class MediaCallPatchesTest {
         )
         assertTrue(
             "the compression is still performed",
-            thumbnail.contains("Lkv/d;->r(Landroid/graphics/Bitmap;Ld10/c;)Ljava/lang/Object;")
+            thumbnail.contains("Ljk/l;->q(Landroid/graphics/Bitmap;Lb10/c;)Ljava/lang/Object;")
         )
         assertTrue(
             "the thumbnail still invokes the JavaScript callback",
-            thumbnail.contains("Laf/g;->invoke(Ljava/lang/Object;)Ljava/lang/Object;")
+            thumbnail.contains("Laf/h;->invoke(Ljava/lang/Object;)Ljava/lang/Object;")
         )
-        val compression = thumbnail.indexOf("Lkv/d;->r(Landroid/graphics/Bitmap;Ld10/c;)")
+        val compression = thumbnail.indexOf("Ljk/l;->q(Landroid/graphics/Bitmap;Lb10/c;)")
         val suspensionCheck = thumbnail.indexOf("if-ne v2, v0", compression)
         assertTrue(
             "the suspension result must still be branched on immediately after the compression",
@@ -248,18 +248,18 @@ class MediaCallPatchesTest {
 
         // Supervisor: the scope context carries k40/t1 before CoroutineScope() sees it.
         val module = after.getValue(MODULE)
-        assertTrue("the scope gets a SupervisorJob", module.contains("Lk40/t1;"))
+        assertTrue("the scope gets a SupervisorJob", module.contains("Li40/t1;"))
         assertTrue(
             "the supervisor is built from e1's constructor",
-            module.contains("invoke-direct {v2}, Lk40/e1;-><init>()V")
+            module.contains("invoke-direct {v4}, Li40/e1;-><init>()V")
         )
         assertTrue(
             "the supervisor is merged into the dispatcher context",
-            module.contains("Lb10/h;->B(Lb10/h;)Lb10/h;")
+            module.contains("Lz00/h;->V(Lz00/h;)Lz00/h;")
         )
         assertTrue(
             "the supervisor is merged before the scope is created",
-            module.indexOf("Lk40/t1;") < module.indexOf("Lk40/z;->b(Lb10/h;)Lp40/d;")
+            module.indexOf("Li40/t1;") < module.indexOf("Li40/z;->b(Lz00/h;)Ln40/d;")
         )
 
         // Foreground: both window gates are gone; the fallback computation and the other
@@ -280,8 +280,8 @@ class MediaCallPatchesTest {
         // Reassembly renumbers the address-based try labels, so count the catch types rather
         // than pin a label spelling that changes when the gates above shrink.
         assertEquals(
-            "all three service-type attempts catch a refusal",
-            3,
+            "all four service-type attempts catch a refusal",
+            4,
             occurrences(foreground, ".catch Ljava/lang/Exception;")
         )
         assertEquals(
